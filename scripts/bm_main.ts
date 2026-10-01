@@ -408,8 +408,6 @@ const GPendingTimers: FPendingTimer[] = [];
 let GUberedPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 let GGlowingPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 let GLastThinkTime: number = 0;
-let GIsMatchSetupDone: boolean = false;
-let GLastWarmupEndTime: number = -999;
 
 function GetPlayerState(Slot: number): FPlayerState
 {
@@ -443,7 +441,7 @@ function ApplyMatchSettings(): void
 		Commands.push("mp_roundtime 60", "mp_roundtime_defuse 60", "mp_roundtime_hostage 60", "mp_timelimit 0", "mp_maxrounds 0");
 		Commands.push("mp_ignore_round_win_conditions 1", "mp_respawn_on_death_t 1", "mp_respawn_on_death_ct 1");
 		Commands.push("sv_infinite_ammo 1");
-		Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any", "bot_join_after_player 0", "bot_stop 1");
+		Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any", "bot_stop 1");
 	}
 	
 	for (const Command of Commands)
@@ -454,9 +452,8 @@ function ApplyMatchSettings(): void
 
 function TickMatch(Now: number): void
 {
-	if (bDebug && Instance.IsWarmupPeriod() && Now - GLastWarmupEndTime > 2)
+	if (bDebug && Instance.IsWarmupPeriod())
 	{
-		GLastWarmupEndTime = Now;
 		Instance.ServerCommand("mp_warmup_end");
 	}
 }
