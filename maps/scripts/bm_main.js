@@ -1,6 +1,7 @@
 import { Instance, CSInputs, CSDamageTypes, CSWeaponType, CSGearSlot } from "cs_script/point_script";
 const bDebug = true;
 const TickInterval = 1 / 64;
+const Gravity = 800;
 var EPlayerClass;
 (function (EPlayerClass) {
     EPlayerClass["None"] = "none";
@@ -16,19 +17,15 @@ var ETeam;
 })(ETeam || (ETeam = {}));
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 const DemoSettings = {
-    Launcher: "weapon_nova",
+    Primary: "weapon_nova",
     DetonateKey: CSInputs.ATTACK2,
     MaxStickies: 8,
     ArmTime: 0.8,
     LaunchSpeed: 900,
     LaunchUp: 150,
-    Gravity: 800,
-    MaxFlightTime: 10,
     Radius: 160,
     Damage: 100,
-    SelfDamageScale: 0.35,
     Knockback: 450,
-    SelfKnockback: 850,
 };
 const MedicSettings = {
     Primary: "weapon_mp7",
@@ -181,7 +178,7 @@ function HandleGunFire(Event) {
     const Weapon = Event.weapon;
     const Pawn = Weapon.GetOwner();
     const Slot = GetPlayerSlot(Pawn);
-    if (!Pawn || Slot === INDEX_NONE || GClassBySlot.get(Slot) !== EPlayerClass.Demoman || !IsWeapon(Weapon, DemoSettings.Launcher)) {
+    if (!Pawn || Slot === INDEX_NONE || GClassBySlot.get(Slot) !== EPlayerClass.Demoman || !IsWeapon(Weapon, DemoSettings.Primary)) {
         return;
     }
     const Now = Instance.GetGameTime();
@@ -218,7 +215,7 @@ function HandleModifyPlayerDamage(Event) {
     }
     const AttackerClass = GClassBySlot.get(AttackerSlot);
     const bIsBlast = (Event.damageTypes & CSDamageTypes.BLAST) !== 0;
-    if (AttackerClass === EPlayerClass.Demoman && !bIsBlast && IsWeapon(Event.weapon, DemoSettings.Launcher)) {
+    if (AttackerClass === EPlayerClass.Demoman && !bIsBlast && IsWeapon(Event.weapon, DemoSettings.Primary)) {
         return { abort: true };
     }
     if (AttackerClass === EPlayerClass.Medic && Event.weapon && Event.weapon.GetData().GetType() === CSWeaponType.KNIFE) {
@@ -233,8 +230,6 @@ const GPendingTimers = [];
 let GUberedPawns = new Set();
 let GGlowingPawns = new Set();
 let GLastThinkTime = 0;
-let GIsMatchSetupDone = false;
-let GLastWarmupEndTime = -999;
 function GetPlayerState(Slot) {
     let State = GPlayerStates.get(Slot);
     if (!State) {
@@ -260,15 +255,14 @@ function ApplyMatchSettings() {
         Commands.push("mp_roundtime 60", "mp_roundtime_defuse 60", "mp_roundtime_hostage 60", "mp_timelimit 0", "mp_maxrounds 0");
         Commands.push("mp_ignore_round_win_conditions 1", "mp_respawn_on_death_t 1", "mp_respawn_on_death_ct 1");
         Commands.push("sv_infinite_ammo 1");
-        Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any", "bot_join_after_player 0", "bot_stop 1");
+        Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any", "bot_stop 1");
     }
     for (const Command of Commands) {
         Instance.ServerCommand(Command);
     }
 }
 function TickMatch(Now) {
-    if (bDebug && Instance.IsWarmupPeriod() && Now - GLastWarmupEndTime > 2) {
-        GLastWarmupEndTime = Now;
+    if (bDebug && Instance.IsWarmupPeriod()) {
         Instance.ServerCommand("mp_warmup_end");
     }
 }
@@ -289,7 +283,7 @@ function GiveLoadout(Pawn, PlayerClass) {
     switch (PlayerClass) {
         case EPlayerClass.Demoman:
             {
-                Pawn.GiveNamedItem(DemoSettings.Launcher, true);
+                Pawn.GiveNamedItem(DemoSettings.Primary, true);
                 break;
             }
         case EPlayerClass.Medic:
@@ -303,7 +297,6 @@ function GiveLoadout(Pawn, PlayerClass) {
             }
         default:
             {
-                // Compile error here if a class is added to EPlayerClass without a loadout
                 const Unhandled = PlayerClass;
                 Instance.Msg(`${LogPrefix} no loadout for class ${String(Unhandled)}`);
                 break;
@@ -333,10 +326,7 @@ function StepSticky(Sticky, DeltaTime, Now) {
     if (Sticky.bStuck) {
         return true;
     }
-    if (Now - Sticky.SpawnedAt > DemoSettings.MaxFlightTime) {
-        return false;
-    }
-    Sticky.Velocity = { x: Sticky.Velocity.x, y: Sticky.Velocity.y, z: Sticky.Velocity.z - DemoSettings.Gravity * DeltaTime };
+    Sticky.Velocity = { x: Sticky.Velocity.x, y: Sticky.Velocity.y, z: Sticky.Velocity.z - Gravity * DeltaTime };
     const NextPosition = FVectorMath.Add(Sticky.Position, FVectorMath.Scale(Sticky.Velocity, DeltaTime));
     const IgnoredEntities = IsValid(Sticky.Model) ? [Sticky.Owner, Sticky.Model] : [Sticky.Owner];
     const Trace = Instance.TraceLine({
@@ -381,19 +371,30 @@ function Explode(Position, Attacker) {
             return;
         }
         const Falloff = 1 - 0.5 * (Distance / DemoSettings.Radius);
+        let CalculatedDmg = DemoSettings.Damage * Falloff;
+        if (bIsSelf) {
+            CalculatedDmg *= 0.33;
+        }
         // do knockback 
+        const IsCrouched = Victim.IsDucking() || Victim.IsDucked();
         let Direction = Distance > 1 ? FVectorMath.GetSafeNormal(Offset) : UpVector;
         if (Victim.GetGroundEntity()) {
             Direction = FVectorMath.GetSafeNormal(FVectorMath.Add(Direction, GroundedKnockbackLift));
         }
-        const Push = (bIsSelf ? DemoSettings.SelfKnockback : DemoSettings.Knockback) * Falloff;
-        Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Direction, Push)) });
+        const CrouchFactor = IsCrouched ? 62 : 82;
+        let KBStrength = DemoSettings.Knockback;
+        if (!Victim.GetGroundEntity() && bIsSelf) {
+            KBStrength *= 1.33;
+        }
+        const CalculatedKb = CalculatedDmg * (KBStrength / CrouchFactor);
+        Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Direction, CalculatedKb)) });
         Victim.TakeDamage({
-            damage: DemoSettings.Damage * Falloff * (bIsSelf ? DemoSettings.SelfDamageScale : 1),
+            damage: CalculatedDmg,
             damageTypes: CSDamageTypes.BLAST,
             attacker: Attacker,
             inflictor: Attacker,
         });
+        Instance.Msg(`${LogPrefix} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f`);
     });
 }
 function TickDemoman(Pawn, Slot, Now, DeltaTime) {

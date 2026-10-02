@@ -15,14 +15,13 @@ import type
 
 const bDebug: boolean = true;
 const TickInterval: number = 1 / 64;
+const Gravity: number = 800
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
 type FVector = Vector;
 type FRotator = QAngle;
 type FColor = ColorArg;
-
-type FWeaponName = `weapon_${string}`;
 
 // Pulls the event struct out of an Instance.OnXxx(Callback) binder, so these never drift from Valve's typings
 type TEventOf<TBinder> = TBinder extends (Callback: infer TCallback) => void
@@ -56,24 +55,20 @@ enum ETeam
 
 interface FDemoSettings
 {
-	readonly Launcher: FWeaponName;
+	readonly Primary: string;
 	readonly DetonateKey: CSInputs;
 	readonly MaxStickies: number;
 	readonly ArmTime: number;
 	readonly LaunchSpeed: number;
 	readonly LaunchUp: number;
-	readonly Gravity: number;
-	readonly MaxFlightTime: number;
 	readonly Radius: number;
 	readonly Damage: number;
-	readonly SelfDamageScale: number;
 	readonly Knockback: number;
-	readonly SelfKnockback: number;
 }
 
 interface FMedicSettings
 {
-	readonly Primary: FWeaponName;
+	readonly Primary: string;
 	readonly Range: number;
 	readonly BreakRange: number;
 	readonly HealPerSec: number;
@@ -89,9 +84,9 @@ interface FStickyBomb
 	Position: FVector;
 	Velocity: FVector;
 	bStuck: boolean;
-	ArmedAt: number;                  // game time when it can be detonated
+	ArmedAt: number;
 	SpawnedAt: number;
-	Model: Entity | undefined;        // undefined when the map has no sticky_template
+	Model: Entity | undefined;
 }
 
 interface FPlayerState
@@ -101,7 +96,7 @@ interface FPlayerState
 	HealTarget: CSPlayerPawn | undefined;
 	HealAccumulator: number;
 	DecayAccumulator: number;
-	UberCharge: number;               // 0 - 100
+	UberCharge: number;
 	UberEndTime: number;
 }
 
@@ -115,19 +110,16 @@ interface FPendingTimer
 
 const DemoSettings: FDemoSettings =
 {
-	Launcher: "weapon_nova",          
+	Primary: "weapon_nova",          
 	DetonateKey: CSInputs.ATTACK2,    
 	MaxStickies: 8,                   
-	ArmTime: 0.8,                     
+	ArmTime: 0.8,
+
 	LaunchSpeed: 900,
 	LaunchUp: 150,                    
-	Gravity: 800,
-	MaxFlightTime: 10,                
 	Radius: 160,
-	Damage: 100,                      
-	SelfDamageScale: 0.35,
+	Damage: 100,
 	Knockback: 450,
-	SelfKnockback: 850,
 };
 
 const MedicSettings: FMedicSettings =
@@ -337,7 +329,7 @@ function HandleGunFire(Event: FGunFireEvent): void
 	const Weapon: CSWeaponBase = Event.weapon;
 	const Pawn: CSPlayerPawn | undefined = Weapon.GetOwner();
 	const Slot: number = GetPlayerSlot(Pawn);
-	if (!Pawn || Slot === INDEX_NONE || GClassBySlot.get(Slot) !== EPlayerClass.Demoman || !IsWeapon(Weapon, DemoSettings.Launcher))
+	if (!Pawn || Slot === INDEX_NONE || GClassBySlot.get(Slot) !== EPlayerClass.Demoman || !IsWeapon(Weapon, DemoSettings.Primary))
 	{
 		return;
 	}
@@ -388,7 +380,7 @@ function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResul
 	const AttackerClass: EPlayableClass | undefined = GClassBySlot.get(AttackerSlot);
 	const bIsBlast: boolean = (Event.damageTypes & CSDamageTypes.BLAST) !== 0;
 
-	if (AttackerClass === EPlayerClass.Demoman && !bIsBlast && IsWeapon(Event.weapon, DemoSettings.Launcher))
+	if (AttackerClass === EPlayerClass.Demoman && !bIsBlast && IsWeapon(Event.weapon, DemoSettings.Primary))
 	{
 		return { abort: true };
 	}
@@ -483,7 +475,7 @@ function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void
 	{
 		case EPlayerClass.Demoman:
 		{
-			Pawn.GiveNamedItem(DemoSettings.Launcher, true);
+			Pawn.GiveNamedItem(DemoSettings.Primary, true);
 			break;
 		}
 		case EPlayerClass.Medic:
@@ -498,7 +490,6 @@ function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void
 		}
 		default:
 		{
-			// Compile error here if a class is added to EPlayerClass without a loadout
 			const Unhandled: never = PlayerClass;
 			Instance.Msg(`${LogPrefix} no loadout for class ${String(Unhandled)}`);
 			break;
@@ -539,12 +530,8 @@ function StepSticky(Sticky: FStickyBomb, DeltaTime: number, Now: number): boolea
 	{
 		return true;
 	}
-	if (Now - Sticky.SpawnedAt > DemoSettings.MaxFlightTime)
-	{
-		return false;
-	}
 
-	Sticky.Velocity = { x: Sticky.Velocity.x, y: Sticky.Velocity.y, z: Sticky.Velocity.z - DemoSettings.Gravity * DeltaTime };
+	Sticky.Velocity = { x: Sticky.Velocity.x, y: Sticky.Velocity.y, z: Sticky.Velocity.z - Gravity * DeltaTime };
 	const NextPosition: FVector = FVectorMath.Add(Sticky.Position, FVectorMath.Scale(Sticky.Velocity, DeltaTime));
 	const IgnoredEntities: Entity[] = IsValid(Sticky.Model) ? [Sticky.Owner, Sticky.Model] : [Sticky.Owner];
 	const Trace: TraceResult = Instance.TraceLine(
@@ -608,23 +595,39 @@ function Explode(Position: FVector, Attacker: CSPlayerPawn): void
 		}
 
 		const Falloff: number = 1 - 0.5 * (Distance / DemoSettings.Radius);
+		let CalculatedDmg: number = DemoSettings.Damage * Falloff;
+		if (bIsSelf)
+		{
+			CalculatedDmg *= 0.33;	
+		}
 
 		// do knockback 
-		let Direction: FVector = Distance > 1 ? FVectorMath.GetSafeNormal(Offset) : UpVector;
-		if (Victim.GetGroundEntity())
-		{
-			Direction = FVectorMath.GetSafeNormal(FVectorMath.Add(Direction, GroundedKnockbackLift));
-		}
-		const Push: number = (bIsSelf ? DemoSettings.SelfKnockback : DemoSettings.Knockback) * Falloff;
-		Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Direction, Push)) });
+        const IsCrouched: boolean = Victim.IsDucking() || Victim.IsDucked();
+        let Direction: FVector = Distance > 1 ? FVectorMath.GetSafeNormal(Offset) : UpVector;
+        if (Victim.GetGroundEntity())
+        {
+            Direction = FVectorMath.GetSafeNormal(FVectorMath.Add(Direction, GroundedKnockbackLift));
+        }
 
+        const CrouchFactor: number = IsCrouched ? 62 : 82;
+        let KBStrength: number = DemoSettings.Knockback;
+        if (!Victim.GetGroundEntity() && bIsSelf)
+        {
+            KBStrength *= 1.33;
+        }
+
+        const CalculatedKb: number = CalculatedDmg * (KBStrength / CrouchFactor);
+        Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Direction, CalculatedKb)) });
+		
 		Victim.TakeDamage(
 		{
-			damage: DemoSettings.Damage * Falloff * (bIsSelf ? DemoSettings.SelfDamageScale : 1),
+			damage: CalculatedDmg,
 			damageTypes: CSDamageTypes.BLAST,
 			attacker: Attacker,
 			inflictor: Attacker,
 		});
+
+		Instance.Msg(`${LogPrefix} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f`);
 	});
 }
 
@@ -908,7 +911,7 @@ function GetPlayerSlot(Ent: Entity | undefined): number
 	return Controller ? Controller.GetPlayerSlot() : INDEX_NONE;
 }
 
-function IsWeapon(Weapon: CSWeaponBase | undefined, Name: FWeaponName): boolean
+function IsWeapon(Weapon: CSWeaponBase | undefined, Name: string): boolean
 {
 	if (!Weapon)
 	{
