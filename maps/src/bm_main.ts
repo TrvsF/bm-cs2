@@ -12,11 +12,11 @@ import type
 	QAngle,
 	ColorArg,
 } from "cs_script/point_script";
-import { EPlayerClass, DemoSettings, MedicSettings, GiveLoadout, RestoreDefaultBody } from "./bm_classes";
+import { EPlayerClass, DemoSettings, MedicSettings, ClassDefinitions, GiveLoadout, RestoreDefaultBody } from "./bm_classes";
 import type { EPlayableClass } from "./bm_classes";
 
-const bDebug: boolean = true;
-const TickInterval: number = 1 / 64;
+export const bDebug: boolean = true;
+export const TickInterval: number = 1 / 64;
 const Gravity: number = 800
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -35,8 +35,8 @@ type FPlayerResetEvent = TEventOf<typeof Instance.OnPlayerReset>;
 type FPlayerKillEvent = TEventOf<typeof Instance.OnPlayerKill>;
 type FPlayerDisconnectEvent = TEventOf<typeof Instance.OnPlayerDisconnect>;
 type FGunFireEvent = TEventOf<typeof Instance.OnGunFire>;
-type FModifyDamageEvent = TEventOf<typeof Instance.OnModifyPlayerDamage>;
-type FModifyDamageResult = ReturnType<Parameters<typeof Instance.OnModifyPlayerDamage>[0]>;
+export type FModifyDamageEvent = TEventOf<typeof Instance.OnModifyPlayerDamage>;
+export type FModifyDamageResult = ReturnType<Parameters<typeof Instance.OnModifyPlayerDamage>[0]>;
 
 enum ETeam
 {
@@ -46,18 +46,23 @@ enum ETeam
 	CounterTerrorist = 3,
 }
 
-interface FStickyBomb
+export interface FProjectile
 {
 	Owner: CSPlayerPawn;
 	Position: FVector;
 	Velocity: FVector;
-	bStuck: boolean;
-	ArmedAt: number;
+	GravityScale: number;
 	SpawnedAt: number;
 	Model: Entity | undefined;
 }
 
-interface FPlayerState
+export interface FStickyBomb extends FProjectile
+{
+	bStuck: boolean;
+	ArmedAt: number;
+}
+
+export interface FPlayerState
 {
 	Stickies: FStickyBomb[];
 	bDetonateHeld: boolean;
@@ -79,12 +84,11 @@ interface FPendingTimer
 const INDEX_NONE: number = -1;
 const MaxPlayerSlots: number = 64;
 const LogPrefix: string = "[BM]";
-const StickyTemplateName: string = "sticky_template";
 const ExplosionTemplateName: string = "boom_template";
 
 const UpVector: FVector = { x: 0, y: 0, z: 1 };
 const ChestOffset: FVector = { x: 0, y: 0, z: 40 };
-const StickyLaunchOffset: FVector = { x: 0, y: 0, z: -8 };
+const ProjectileLaunchOffset: FVector = { x: 0, y: 0, z: -8 };
 const ExplosionOffset: FVector = { x: 0, y: 0, z: 6 };
 const GroundedKnockbackLift: FVector = { x: 0, y: 0, z: 0.6 };
 const BeamStartDrop: FVector = { x: 0, y: 0, z: 12 };
@@ -130,6 +134,11 @@ function Tick(): void
 	{
 		TickMatch(Now);
 		TickTimers(Now);
+
+		for (const Definition of Object.values(ClassDefinitions))
+		{
+			Definition.TickWorld(Now, DeltaTime);
+		}
 
 		const HealedPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 		const UberedPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
@@ -184,7 +193,6 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 		return;
 	}
 
-	// A Map lookup, so only these exact commands match
 	const Command: string = Event.text.trim().toLowerCase();
 	const PlayerClass: EPlayerClass | undefined = ClassChatCommands.get(Command);
 	if (PlayerClass === undefined)
@@ -265,6 +273,10 @@ function HandleRoundStart(): void
 	{
 		ClearPlayer(Slot);
 	}
+	for (const Definition of Object.values(ClassDefinitions))
+	{
+		Definition.OnRoundStart();
+	}
 	ApplyMatchSettings();
 	Instance.Msg(`${LogPrefix} match settings applied`);
 }
@@ -274,39 +286,16 @@ function HandleGunFire(Event: FGunFireEvent): void
 	const Weapon: CSWeaponBase = Event.weapon;
 	const Pawn: CSPlayerPawn | undefined = Weapon.GetOwner();
 	const Slot: number = GetPlayerSlot(Pawn);
-	if (!Pawn || Slot === INDEX_NONE || GClassBySlot.get(Slot) !== EPlayerClass.Demoman || !IsWeapon(Weapon, DemoSettings.Primary))
+	const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
+	if (!Pawn || PlayerClass === undefined)
 	{
 		return;
 	}
 
-	const Now: number = Instance.GetGameTime();
-	const Direction: FVector = FVectorMath.GetForwardVector(Pawn.GetEyeAngles());
-	const Start: FVector = FVectorMath.Add(Pawn.GetEyePosition(), StickyLaunchOffset);
-	const LaunchVelocity: FVector = FVectorMath.Add(FVectorMath.Scale(Direction, DemoSettings.LaunchSpeed), { x: 0, y: 0, z: DemoSettings.LaunchUp });
-
-	const Sticky: FStickyBomb =
+	const Definition = ClassDefinitions[PlayerClass];
+	if (IsWeapon(Weapon, Definition.Settings.Primary))
 	{
-		Owner: Pawn,
-		Position: Start,
-		Velocity: LaunchVelocity,
-		bStuck: false,
-		ArmedAt: Now + DemoSettings.ArmTime,
-		SpawnedAt: Now,
-		Model: SpawnFromTemplate(StickyTemplateName, Start),
-	};
-
-	const State: FPlayerState = GetPlayerState(Slot);
-	State.Stickies.push(Sticky);
-	if (!bDebug)
-	{
-		while (State.Stickies.length > DemoSettings.MaxStickies)
-		{
-			const Oldest: FStickyBomb | undefined = State.Stickies.shift(); // oldest fizzles
-			if (Oldest)
-			{
-				DestroySticky(Oldest);
-			}
-		}
+		Definition.OnPrimaryFire(Pawn, Slot, Instance.GetGameTime());
 	}
 }
 
@@ -318,23 +307,12 @@ function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResul
 	}
 
 	const AttackerSlot: number = GetPlayerSlot(Event.attacker);
-	if (AttackerSlot === INDEX_NONE)
+	const AttackerClass: EPlayableClass | undefined = GClassBySlot.get(AttackerSlot);
+	if (AttackerClass === undefined)
 	{
 		return;
 	}
-	const AttackerClass: EPlayableClass | undefined = GClassBySlot.get(AttackerSlot);
-	const bIsBlast: boolean = (Event.damageTypes & CSDamageTypes.BLAST) !== 0;
-
-	if (AttackerClass === EPlayerClass.Demoman && !bIsBlast && IsWeapon(Event.weapon, DemoSettings.Primary))
-	{
-		return { abort: true };
-	}
-
-	if (AttackerClass === EPlayerClass.Medic && Event.weapon && Event.weapon.GetData().GetType() === CSWeaponType.KNIFE)
-	{
-		return { abort: true };
-	}
-	return;
+	return ClassDefinitions[AttackerClass].ModifyOutgoingDamage(Event);
 }
 
 // Globals ////////////////////////////////////////////////////////////////////////////////////////
@@ -346,7 +324,7 @@ let GUberedPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 let GGlowingPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 let GLastThinkTime: number = 0;
 
-function GetPlayerState(Slot: number): FPlayerState
+export function GetPlayerState(Slot: number): FPlayerState
 {
 	let State: FPlayerState | undefined = GPlayerStates.get(Slot);
 	if (!State)
@@ -397,14 +375,6 @@ function TickMatch(Now: number): void
 
 // Player //////////////////////////////////////////////////////////////////////////////////////////
 
-function DestroySticky(Sticky: FStickyBomb): void
-{
-	if (IsValid(Sticky.Model))
-	{
-		Sticky.Model.Remove();
-	}
-}
-
 function ClearPlayer(Slot: number): void
 {
 	const State: FPlayerState | undefined = GPlayerStates.get(Slot);
@@ -414,7 +384,7 @@ function ClearPlayer(Slot: number): void
 	}
 	for (const Sticky of State.Stickies)
 	{
-		DestroySticky(Sticky);
+		DestroyProjectile(Sticky);
 	}
 	State.Stickies = [];
 	State.HealTarget = undefined;
@@ -422,50 +392,70 @@ function ClearPlayer(Slot: number): void
 	State.UberEndTime = 0;
 }
 
-// Demo //////////////////////////////////////////////////////////////////////////////////////////
+// Projectile //////////////////////////////////////////////////////////////////////////////////////
 
-function StepSticky(Sticky: FStickyBomb, DeltaTime: number, Now: number): boolean
+export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: number, GravityScale: number, TemplateName: string): FProjectile
 {
-	if (Sticky.bStuck)
+	const Direction: FVector = FVectorMath.GetForwardVector(Owner.GetEyeAngles());
+	const Start: FVector = FVectorMath.Add(Owner.GetEyePosition(), ProjectileLaunchOffset);
+	const Projectile: FProjectile =
 	{
-		return true;
-	}
+		Owner: Owner,
+		Position: Start,
+		Velocity: FVectorMath.Add(FVectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed }),
+		GravityScale: GravityScale,
+		SpawnedAt: Instance.GetGameTime(),
+		Model: SpawnFromTemplate(TemplateName, Start),
+	};
+	return Projectile;
+}
 
-	Sticky.Velocity = { x: Sticky.Velocity.x, y: Sticky.Velocity.y, z: Sticky.Velocity.z - Gravity * DeltaTime };
-	const NextPosition: FVector = FVectorMath.Add(Sticky.Position, FVectorMath.Scale(Sticky.Velocity, DeltaTime));
-	const IgnoredEntities: Entity[] = IsValid(Sticky.Model) ? [Sticky.Owner, Sticky.Model] : [Sticky.Owner];
+// Moves a projectile one tick. Returns the trace if it hit something.
+export function MoveProjectile(Projectile: FProjectile, DeltaTime: number, bHitPlayers: boolean): TraceResult | undefined
+{
+	const Velocity: FVector = Projectile.Velocity;
+	Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
+	const NextPosition: FVector = FVectorMath.Add(Projectile.Position, FVectorMath.Scale(Projectile.Velocity, DeltaTime));
+	const IgnoredEntities: Entity[] = IsValid(Projectile.Model) ? [Projectile.Owner, Projectile.Model] : [Projectile.Owner];
 	const Trace: TraceResult = Instance.TraceLine(
 	{
-		start: Sticky.Position,
+		start: Projectile.Position,
 		end: NextPosition,
 		ignoreEntity: IgnoredEntities,
-		ignorePlayers: true,
+		ignorePlayers: !bHitPlayers,
 	});
 
 	if (Trace.didHit)
 	{
-		Sticky.Position = FVectorMath.Add(Trace.end, FVectorMath.Scale(Trace.normal, 2)); // sit just off the surface
-		Sticky.bStuck = true;
+		Projectile.Position = FVectorMath.Add(Trace.end, FVectorMath.Scale(Trace.normal, 2)); // sit just off the surface
 	}
 	else
 	{
-		Sticky.Position = NextPosition;
+		Projectile.Position = NextPosition;
 	}
 
-	if (IsValid(Sticky.Model))
+	if (IsValid(Projectile.Model))
 	{
-		Sticky.Model.Teleport({ position: Sticky.Position });
+		Projectile.Model.Teleport({ position: Projectile.Position });
 	}
-	return true;
+	return Trace.didHit ? Trace : undefined;
 }
 
-function Explode(Position: FVector, Attacker: CSPlayerPawn): void
+export function DestroyProjectile(Projectile: FProjectile): void
+{
+	if (IsValid(Projectile.Model))
+	{
+		Projectile.Model.Remove();
+	}
+}
+
+export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number): void
 {
 	const Origin: FVector = FVectorMath.Add(Position, ExplosionOffset);
 
 	if (!SpawnFromTemplate(ExplosionTemplateName, Origin))
 	{
-		Instance.DebugSphere({ center: Origin, radius: DemoSettings.Radius, duration: 0.3, color: ExplosionDebugColor });
+		Instance.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
 	}
 	if (!Attacker.IsValid())
 	{
@@ -477,7 +467,7 @@ function Explode(Position: FVector, Attacker: CSPlayerPawn): void
 		const Target: FVector = GetChestPosition(Victim);
 		const Offset: FVector = FVectorMath.Subtract(Target, Origin);
 		const Distance: number = FVectorMath.Size(Offset);
-		if (Distance > DemoSettings.Radius)
+		if (Distance > Radius)
 		{
 			return;
 		}
@@ -494,8 +484,8 @@ function Explode(Position: FVector, Attacker: CSPlayerPawn): void
 			return;
 		}
 
-		const Falloff: number = 1 - 0.5 * (Distance / DemoSettings.Radius);
-		let CalculatedDmg: number = DemoSettings.Damage * Falloff;
+		const Falloff: number = 1 - 0.5 * (Distance / Radius);
+		let CalculatedDmg: number = Damage * Falloff;
 		if (bIsSelf)
 		{
 			CalculatedDmg *= 0.33;	
@@ -510,7 +500,7 @@ function Explode(Position: FVector, Attacker: CSPlayerPawn): void
         }
 
         const CrouchFactor: number = IsCrouched ? 62 : 82;
-        let KBStrength: number = DemoSettings.Knockback;
+        let KBStrength: number = Knockback;
         if (!Victim.GetGroundEntity() && bIsSelf)
         {
             KBStrength *= 1.33;
@@ -531,6 +521,17 @@ function Explode(Position: FVector, Attacker: CSPlayerPawn): void
 	});
 }
 
+// Demo //////////////////////////////////////////////////////////////////////////////////////////
+
+function StepSticky(Sticky: FStickyBomb, DeltaTime: number, Now: number): boolean
+{
+	if (!Sticky.bStuck && MoveProjectile(Sticky, DeltaTime, false))
+	{
+		Sticky.bStuck = true;
+	}
+	return true;
+}
+
 function TickDemoman(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
 {
 	const State: FPlayerState = GetPlayerState(Slot);
@@ -539,7 +540,7 @@ function TickDemoman(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: n
 		const bKeep: boolean = StepSticky(Sticky, DeltaTime, Now);
 		if (!bKeep)
 		{
-			DestroySticky(Sticky);
+			DestroyProjectile(Sticky);
 		}
 		return bKeep;
 	});
@@ -569,8 +570,8 @@ function TickDemoman(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: n
 			StillArming.push(Sticky);
 			continue;
 		}
-		DestroySticky(Sticky);
-		Explode(Sticky.Position, Pawn);
+		DestroyProjectile(Sticky);
+		Explode(Sticky.Position, Pawn, DemoSettings.Radius, DemoSettings.Damage, DemoSettings.Knockback);
 	}
 	State.Stickies = StillArming;
 }
@@ -796,7 +797,7 @@ function GetChestPosition(Pawn: CSPlayerPawn): FVector
 	return FVectorMath.Add(Pawn.GetAbsOrigin(), ChestOffset);
 }
 
-function GetTeamColor(Ent: Entity): FColor
+export function GetTeamColor(Ent: Entity): FColor
 {
 	return Ent.GetTeamNumber() === ETeam.Terrorist ? TerroristColor : CounterTerroristColor;
 }
@@ -811,7 +812,7 @@ function GetPlayerSlot(Ent: Entity | undefined): number
 	return Controller ? Controller.GetPlayerSlot() : INDEX_NONE;
 }
 
-function IsWeapon(Weapon: CSWeaponBase | undefined, Name: string): boolean
+export function IsWeapon(Weapon: CSWeaponBase | undefined, Name: string): boolean
 {
 	if (!Weapon)
 	{
