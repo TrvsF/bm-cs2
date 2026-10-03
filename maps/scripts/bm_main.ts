@@ -40,6 +40,7 @@ enum EPlayerClass
 {
 	None = "none",
 	Demoman = "demo",
+	Solider = "soldier",
 	Medic = "medic",
 }
 
@@ -53,9 +54,23 @@ enum ETeam
 	CounterTerrorist = 3,
 }
 
-interface FDemoSettings
+interface FClassSettings
 {
 	readonly Primary: string;
+	readonly Secondary: string;
+	readonly Health: number;
+	readonly SizeScale: number;
+}
+
+interface FSoliderSettings extends FClassSettings
+{
+	readonly RocketSpeed: number;
+	readonly RocketDamage: number;
+	readonly RocketRadius: number;
+}
+
+interface FDemoSettings extends FClassSettings
+{
 	readonly DetonateKey: CSInputs;
 	readonly MaxStickies: number;
 	readonly ArmTime: number;
@@ -66,9 +81,8 @@ interface FDemoSettings
 	readonly Knockback: number;
 }
 
-interface FMedicSettings
+interface FMedicSettings extends FClassSettings
 {
-	readonly Primary: string;
 	readonly Range: number;
 	readonly BreakRange: number;
 	readonly HealPerSec: number;
@@ -108,13 +122,27 @@ interface FPendingTimer
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
+const SoldierSettings: FSoliderSettings =
+{
+	Primary: "weapon_nova",
+	Secondary: "",
+	Health: 150,
+	SizeScale: 1.25,
+	RocketDamage: 100,
+	RocketRadius: 160,
+	RocketSpeed: 1200,
+}
+
 const DemoSettings: FDemoSettings =
 {
-	Primary: "weapon_nova",          
-	DetonateKey: CSInputs.ATTACK2,    
+	Primary: "weapon_nova",
+	Secondary: "",
+	Health: 130,
+	SizeScale: 1.0,
+
+	DetonateKey: CSInputs.ATTACK2,
 	MaxStickies: 8,                   
 	ArmTime: 0.8,
-
 	LaunchSpeed: 900,
 	LaunchUp: 150,                    
 	Radius: 160,
@@ -124,7 +152,11 @@ const DemoSettings: FDemoSettings =
 
 const MedicSettings: FMedicSettings =
 {
-	Primary: "weapon_mp7",            
+	Primary: "weapon_mp7",
+	Secondary: "",
+	Health: 150,
+	SizeScale: 0.9,    
+	
 	Range: 450,                       
 	BreakRange: 540,                  
 	HealPerSec: 24,
@@ -486,6 +518,10 @@ function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void
 			{
 				Pawn.SwitchToWeapon(Knife);
 			}
+			break;
+		}
+		case EPlayerClass.Solider:
+		{
 			break;
 		}
 		default:

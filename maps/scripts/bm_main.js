@@ -6,6 +6,7 @@ var EPlayerClass;
 (function (EPlayerClass) {
     EPlayerClass["None"] = "none";
     EPlayerClass["Demoman"] = "demo";
+    EPlayerClass["Solider"] = "soldier";
     EPlayerClass["Medic"] = "medic";
 })(EPlayerClass || (EPlayerClass = {}));
 var ETeam;
@@ -16,8 +17,20 @@ var ETeam;
     ETeam[ETeam["CounterTerrorist"] = 3] = "CounterTerrorist";
 })(ETeam || (ETeam = {}));
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
+const SoldierSettings = {
+    Primary: "weapon_nova",
+    Secondary: "",
+    Health: 150,
+    SizeScale: 1.25,
+    RocketDamage: 100,
+    RocketRadius: 160,
+    RocketSpeed: 1200,
+};
 const DemoSettings = {
     Primary: "weapon_nova",
+    Secondary: "",
+    Health: 130,
+    SizeScale: 1.0,
     DetonateKey: CSInputs.ATTACK2,
     MaxStickies: 8,
     ArmTime: 0.8,
@@ -29,6 +42,9 @@ const DemoSettings = {
 };
 const MedicSettings = {
     Primary: "weapon_mp7",
+    Secondary: "",
+    Health: 150,
+    SizeScale: 0.9,
     Range: 450,
     BreakRange: 540,
     HealPerSec: 24,
@@ -293,6 +309,10 @@ function GiveLoadout(Pawn, PlayerClass) {
                 if (Knife) {
                     Pawn.SwitchToWeapon(Knife);
                 }
+                break;
+            }
+        case EPlayerClass.Solider:
+            {
                 break;
             }
         default:
