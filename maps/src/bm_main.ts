@@ -1,4 +1,4 @@
-import { Instance, CSInputs, CSDamageTypes, CSWeaponType, CSGearSlot } from "cs_script/point_script";
+import { Instance, CSInputs, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type
 {
 	Entity,
@@ -12,6 +12,8 @@ import type
 	QAngle,
 	ColorArg,
 } from "cs_script/point_script";
+import { EPlayerClass, DemoSettings, MedicSettings, GiveLoadout, RestoreDefaultBody } from "./bm_classes";
+import type { EPlayableClass } from "./bm_classes";
 
 const bDebug: boolean = true;
 const TickInterval: number = 1 / 64;
@@ -36,60 +38,12 @@ type FGunFireEvent = TEventOf<typeof Instance.OnGunFire>;
 type FModifyDamageEvent = TEventOf<typeof Instance.OnModifyPlayerDamage>;
 type FModifyDamageResult = ReturnType<Parameters<typeof Instance.OnModifyPlayerDamage>[0]>;
 
-enum EPlayerClass
-{
-	None = "none",
-	Demoman = "demo",
-	Solider = "soldier",
-	Medic = "medic",
-}
-
-type EPlayableClass = Exclude<EPlayerClass, EPlayerClass.None>;
-
 enum ETeam
 {
 	Unassigned = 0,
 	Spectator = 1,
 	Terrorist = 2,
 	CounterTerrorist = 3,
-}
-
-interface FClassSettings
-{
-	readonly Primary: string;
-	readonly Secondary: string;
-	readonly Health: number;
-	readonly SizeScale: number;
-}
-
-interface FSoliderSettings extends FClassSettings
-{
-	readonly RocketSpeed: number;
-	readonly RocketDamage: number;
-	readonly RocketRadius: number;
-}
-
-interface FDemoSettings extends FClassSettings
-{
-	readonly DetonateKey: CSInputs;
-	readonly MaxStickies: number;
-	readonly ArmTime: number;
-	readonly LaunchSpeed: number;
-	readonly LaunchUp: number;
-	readonly Radius: number;
-	readonly Damage: number;
-	readonly Knockback: number;
-}
-
-interface FMedicSettings extends FClassSettings
-{
-	readonly Range: number;
-	readonly BreakRange: number;
-	readonly HealPerSec: number;
-	readonly OverhealMult: number;
-	readonly OverhealDecayPerSec: number;
-	readonly UberSecondsToFill: number;
-	readonly UberDuration: number;
 }
 
 interface FStickyBomb
@@ -122,50 +76,6 @@ interface FPendingTimer
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
-const SoldierSettings: FSoliderSettings =
-{
-	Primary: "weapon_nova",
-	Secondary: "",
-	Health: 150,
-	SizeScale: 1.25,
-	RocketDamage: 100,
-	RocketRadius: 160,
-	RocketSpeed: 1200,
-}
-
-const DemoSettings: FDemoSettings =
-{
-	Primary: "weapon_nova",
-	Secondary: "",
-	Health: 130,
-	SizeScale: 1.0,
-
-	DetonateKey: CSInputs.ATTACK2,
-	MaxStickies: 8,                   
-	ArmTime: 0.8,
-	LaunchSpeed: 900,
-	LaunchUp: 150,                    
-	Radius: 160,
-	Damage: 100,
-	Knockback: 450,
-};
-
-const MedicSettings: FMedicSettings =
-{
-	Primary: "weapon_mp7",
-	Secondary: "",
-	Health: 150,
-	SizeScale: 0.9,    
-	
-	Range: 450,                       
-	BreakRange: 540,                  
-	HealPerSec: 24,
-	OverhealMult: 1.5,
-	OverhealDecayPerSec: 3.3,
-	UberSecondsToFill: 40,
-	UberDuration: 8,
-};
-
 const INDEX_NONE: number = -1;
 const MaxPlayerSlots: number = 64;
 const LogPrefix: string = "[BM]";
@@ -185,12 +95,11 @@ const UnarmedStickyColor: FColor = { r: 120, g: 120, b: 120 };
 const ExplosionDebugColor: FColor = { r: 255, g: 140, b: 0 };
 const UberReadyColor: FColor = { r: 255, g: 255, b: 255 };
 
-const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.GRENADES];
-
 const ClassChatCommands: ReadonlyMap<string, EPlayerClass> = new Map<string, EPlayerClass>(
 	[
 		["!demo", EPlayerClass.Demoman],
 		["!medic", EPlayerClass.Medic],
+		["!solider", EPlayerClass.Solider],
 		["!none", EPlayerClass.None],
 	]
 );
@@ -213,7 +122,7 @@ function TickTimers(Now: number): void
 function Tick(): void
 {
 	const Now: number = Instance.GetGameTime();
-	Instance.SetNextThink(Now + TickInterval); // schedule first so an error can't stop the loop
+	Instance.SetNextThink(Now + TickInterval);
 	const DeltaTime: number = Math.min(0.1, Math.max(0, Now - GLastThinkTime)) || TickInterval;
 	GLastThinkTime = Now;
 
@@ -286,14 +195,18 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 	const Slot: number = Player.GetPlayerSlot();
 	ClearPlayer(Slot);
 
+	const Pawn: CSPlayerPawn | undefined = Player.GetPlayerPawn();
 	if (PlayerClass === EPlayerClass.None)
 	{
 		GClassBySlot.delete(Slot);
+		if (Pawn && Pawn.IsAlive())
+		{
+			RestoreDefaultBody(Pawn);
+		}
 	}
 	else
 	{
 		GClassBySlot.set(Slot, PlayerClass);
-		const Pawn: CSPlayerPawn | undefined = Player.GetPlayerPawn();
 		if (Pawn && Pawn.IsAlive())
 		{
 			GiveLoadout(Pawn, PlayerClass);
@@ -335,7 +248,7 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 	const Slot: number = GetPlayerSlot(Event.player);
 	if (Slot !== INDEX_NONE)
 	{
-		ClearPlayer(Slot); // stickies vanish and über resets on death, like TF2
+		ClearPlayer(Slot);
 	}
 }
 
@@ -482,56 +395,7 @@ function TickMatch(Now: number): void
 	}
 }
 
-// Class //////////////////////////////////////////////////////////////////////////////////////////
-
-function StripGuns(Pawn: CSPlayerPawn): void
-{
-	for (const GearSlot of StrippedGearSlots)
-	{
-		for (let Attempt: number = 0; Attempt < 6; Attempt++)
-		{
-			const Weapon: CSWeaponBase | undefined = Pawn.FindWeaponBySlot(GearSlot);
-			if (!Weapon)
-			{
-				break;
-			}
-			Pawn.DestroyWeapon(Weapon);
-		}
-	}
-}
-
-function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void
-{
-	StripGuns(Pawn);
-	switch (PlayerClass)
-	{
-		case EPlayerClass.Demoman:
-		{
-			Pawn.GiveNamedItem(DemoSettings.Primary, true);
-			break;
-		}
-		case EPlayerClass.Medic:
-		{
-			Pawn.GiveNamedItem(MedicSettings.Primary);
-			const Knife: CSWeaponBase | undefined = Pawn.FindWeaponBySlot(CSGearSlot.KNIFE);
-			if (Knife)
-			{
-				Pawn.SwitchToWeapon(Knife);
-			}
-			break;
-		}
-		case EPlayerClass.Solider:
-		{
-			break;
-		}
-		default:
-		{
-			const Unhandled: never = PlayerClass;
-			Instance.Msg(`${LogPrefix} no loadout for class ${String(Unhandled)}`);
-			break;
-		}
-	}
-}
+// Player //////////////////////////////////////////////////////////////////////////////////////////
 
 function DestroySticky(Sticky: FStickyBomb): void
 {
