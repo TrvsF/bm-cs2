@@ -87,6 +87,21 @@ export interface FPlayerState
 	bDamagePopA: boolean;
 }
 
+enum EBotMode
+{
+	Still,
+	Run,
+	Jump,
+}
+
+interface FBotAssignment
+{
+	Marker: Entity;
+	Mode: EBotMode;
+	Yaw: number;
+	bPlaced: boolean;    // false until the bot has been moved onto its marker (again, after each respawn)
+}
+
 interface FPendingTimer
 {
 	FireTime: number;
@@ -99,12 +114,32 @@ const INDEX_NONE: number = -1;
 const MaxPlayerSlots: number = 64;
 const LogPrefix: string = "[BM]";
 const ExplosionTemplateName: string = "boom_template";
+const ScorchTemplateName: string = "scorch_template";
+const BloodTemplateName: string = "blood_template";
+const MaxDecals: number = 48;                 // past this, the oldest decal is removed
+const ScorchSearchDistance: number = 16;      // explosions further than this from any surface leave no scorch
+const BloodSplatterDistance: number = 128;    // how far behind (or below) a victim their blood can land
+
+// Name an info_target one of these in Hammer and a bot will be placed on it, facing the same way, in that mode
+const BotMarkerModes: ReadonlyMap<string, EBotMode> = new Map<string, EBotMode>(
+	[
+		["bot_still", EBotMode.Still],
+		["bot_run", EBotMode.Run],
+		["bot_jump", EBotMode.Jump],
+	]
+);
+const BotRunSpeed: number = 250;              // knife speed
+const BotJumpSpeed: number = 301;             // CS2's normal jump
+const BotSpawnSettleTime: number = 0.1;       // wait after a bot spawns before moving it to its marker
+const BotTurnCheckDistance: number = 40;      // runners turn around this close to a wall or a drop
+const BotLedgeCheckDepth: number = 64;        // a drop deeper than this counts as a ledge
 const DamageHudName: string = "damage_hud";
 const DamageLabelId: string = "DamageNumber";
 const DamageBatchWindow: number = 0.6;
 const DamageShowTime: number = 0.85;
 
 const UpVector: FVector = { x: 0, y: 0, z: 1 };
+const ZeroVector: FVector = { x: 0, y: 0, z: 0 };
 const ChestOffset: FVector = { x: 0, y: 0, z: 40 };
 const ProjectileLaunchOffset: FVector = { x: 0, y: 0, z: -8 };
 const ExplosionOffset: FVector = { x: 0, y: 0, z: 6 };
@@ -176,6 +211,7 @@ function Tick(): void
 		TickOverhealDecay(HealedPawns, DeltaTime);
 		UpdateUberGlows(UberedPawns);
 		GUberedPawns = UberedPawns;
+		TickBots(Now); // last, so a problem here can't stop the gameplay above
 	}
 	catch (Exception: unknown)
 	{
@@ -260,6 +296,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 	}
 
 	ClearPlayer(Slot);
+	ResetBotMode(Slot);
 	const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
 	if (PlayerClass === undefined)
 	{
@@ -288,6 +325,8 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 {
 	ClearPlayer(Event.playerSlot);
+	ReleaseBotMarker(Event.playerSlot);
+	GBotReadyAt.delete(Event.playerSlot);
 	ResetDamageNumbers(Event.playerSlot);
 	GClassBySlot.delete(Event.playerSlot);
 	GPlayerStates.delete(Event.playerSlot);
@@ -303,6 +342,7 @@ function HandleRoundStart(): void
 	{
 		Definition.OnRoundStart();
 	}
+	ClearDecals();
 	ApplyMatchSettings();
 	Instance.Msg(`${LogPrefix} match settings applied`);
 }
@@ -374,6 +414,9 @@ let GUberedPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 let GGlowingPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 let GLastThinkTime: number = 0;
 let GbWarnedNoDamageHud: boolean = false;
+let GDecals: Entity[][] = [];
+const GBotAssignments: Map<number, FBotAssignment> = new Map<number, FBotAssignment>();
+const GBotReadyAt: Map<number, number> = new Map<number, number>();
 
 export function GetPlayerState(Slot: number): FPlayerState
 {
@@ -511,6 +554,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 	{
 		Instance.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
 	}
+	SpawnScorchMark(Position);
 	if (!Attacker.IsValid())
 	{
 		return;
@@ -540,6 +584,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 
 		const Falloff: number = 1 - 0.5 * (Distance / Radius);
 
+		// Distance between the two players, not to the explosion. Never applies to yourself, so blast jumps stay consistent.
 		const RangeScale: number = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
 		let CalculatedDmg: number = Damage * Falloff * RangeScale;
 
@@ -566,7 +611,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 			CalculatedDmg *= 0.33;	
 		}
 
-		Victim.TakeDamage(
+		const DamageDealt: number = Victim.TakeDamage(
 		{
 			damage: CalculatedDmg,
 			damageTypes: CSDamageTypes.BLAST,
@@ -574,12 +619,19 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 			inflictor: Attacker,
 		});
 
+		// No blood for blast jumps, or for hits that über (or anything else) blocked
+		if (!bIsSelf && DamageDealt > 0)
+		{
+			SpawnBloodSplatter(Origin, Victim);
+		}
+
 		Instance.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
 	});
 }
 
 // Damage Falloff /////////////////////////////////////////////////////////////////////////////////
 
+// TF2's curve: a smooth S between FallOff (far) and RampUp (close), crossing 100% at OptimalDistance
 export function GetDistanceDamageScale(Distance: number, Falloff: FDamageFalloff): number
 {
 	const Closeness: number = Math.min(1, Math.max(0, 1 - Distance / (2 * Falloff.OptimalDistance)));
@@ -601,6 +653,7 @@ function GetRangeDamageScale(Attacker: CSPlayerPawn, Victim: CSPlayerPawn, Fallo
 	return GetDistanceDamageScale(Distance, Falloff);
 }
 
+// For hitscan classes to call from ModifyOutgoingDamage. Swaps CS2's own range drop-off for the TF2 curve, so the two don't stack.
 export function ApplyBulletFalloff(Event: FModifyDamageEvent, Falloff: FDamageFalloff | undefined): FModifyDamageResult
 {
 	const Attacker: Entity | undefined = Event.attacker;
@@ -615,7 +668,7 @@ export function ApplyBulletFalloff(Event: FModifyDamageEvent, Falloff: FDamageFa
 		return;
 	}
 
-	// CS2 already scaled the damage by RangeModifier ^ (distance / 500). undo that first
+	// CS2 already scaled the damage by RangeModifier ^ (distance / 500), so undo that first
 	const BulletTravel: number = FVectorMath.Size(FVectorMath.Subtract(GetChestPosition(Event.player), Attacker.GetEyePosition()));
 	const CsRangeScale: number = Math.pow(Weapon.GetData().GetRangeModifier(), BulletTravel / 500);
 	const RangeScale: number = GetRangeDamageScale(Attacker, Event.player, Falloff);
@@ -846,6 +899,263 @@ function UpdateUberGlows(UberedPawns: ReadonlySet<CSPlayerPawn>): void
 	GGlowingPawns = new Set<CSPlayerPawn>(UberedPawns);
 }
 
+// Bots ////////////////////////////////////////////////////////////////////////////////////////////
+
+function TickBots(Now: number): void
+{
+	const FreeMarkers: Map<Entity, EBotMode> = FindFreeBotMarkers();
+
+	ForEachLivePawn((Pawn: CSPlayerPawn, Slot: number): void =>
+	{
+		const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
+		if (!Controller || !Controller.IsBot())
+		{
+			return;
+		}
+
+		const ReadyAt: number | undefined = GBotReadyAt.get(Slot);
+		if (ReadyAt !== undefined && Now < ReadyAt)
+		{
+			return;
+		}
+
+		let Assignment: FBotAssignment | undefined = GBotAssignments.get(Slot);
+		if (!Assignment)
+		{
+			Assignment = ClaimBotMarker(Slot, FreeMarkers);
+			if (!Assignment)
+			{
+				return;
+			}
+		}
+		if (!Assignment.bPlaced)
+		{
+			PlaceBotOnMarker(Pawn, Assignment);
+		}
+		DriveBot(Pawn, Assignment);
+	});
+}
+
+function FindFreeBotMarkers(): Map<Entity, EBotMode>
+{
+	const Claimed: Set<Entity> = new Set<Entity>();
+	for (const Assignment of GBotAssignments.values())
+	{
+		Claimed.add(Assignment.Marker);
+	}
+
+	const FreeMarkers: Map<Entity, EBotMode> = new Map<Entity, EBotMode>();
+	for (const [MarkerName, Mode] of BotMarkerModes)
+	{
+		for (const Marker of Instance.FindEntitiesByName(MarkerName))
+		{
+			if (Marker.IsValid() && !Claimed.has(Marker))
+			{
+				FreeMarkers.set(Marker, Mode);
+			}
+		}
+	}
+	return FreeMarkers;
+}
+
+function ClaimBotMarker(Slot: number, FreeMarkers: Map<Entity, EBotMode>): FBotAssignment | undefined
+{
+	for (const [Marker, Mode] of FreeMarkers)
+	{
+		FreeMarkers.delete(Marker);
+		const Assignment: FBotAssignment = { Marker: Marker, Mode: Mode, Yaw: 0, bPlaced: false };
+		GBotAssignments.set(Slot, Assignment);
+		return Assignment;
+	}
+	return undefined;
+}
+
+function PlaceBotOnMarker(Pawn: CSPlayerPawn, Assignment: FBotAssignment): void
+{
+	if (!Assignment.Marker.IsValid())
+	{
+		return;
+	}
+	Assignment.Yaw = Assignment.Marker.GetAbsAngles().yaw;
+	Assignment.bPlaced = true;
+	Pawn.Teleport({ position: Assignment.Marker.GetAbsOrigin(), angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 }, velocity: ZeroVector });
+	Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
+	Pawn.SetHealth(1000);
+}
+
+function DriveBot(Pawn: CSPlayerPawn, Assignment: FBotAssignment): void
+{
+	if (Assignment.Mode === EBotMode.Still || !Pawn.GetGroundEntity())
+	{
+		return;
+	}
+
+	if (Assignment.Mode === EBotMode.Jump)
+	{
+		Pawn.Teleport({ velocity: { x: 0, y: 0, z: BotJumpSpeed } });
+		return;
+	}
+
+	if (IsBotPathBlocked(Pawn, Assignment.Yaw))
+	{
+		Assignment.Yaw = (Assignment.Yaw + 180) % 360;
+		Pawn.Teleport({ angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 } });
+		Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
+	}
+	const Forward: FVector = FVectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
+	Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
+}
+
+function IsBotPathBlocked(Pawn: CSPlayerPawn, Yaw: number): boolean
+{
+	const Forward: FVector = FVectorMath.GetForwardVector({ pitch: 0, yaw: Yaw, roll: 0 });
+	const Knee: FVector = FVectorMath.Add(Pawn.GetAbsOrigin(), { x: 0, y: 0, z: 24 });
+	const Ahead: FVector = FVectorMath.Add(Knee, FVectorMath.Scale(Forward, BotTurnCheckDistance));
+
+	const Wall: TraceResult = Instance.TraceLine({ start: Knee, end: Ahead, ignorePlayers: true });
+	if (Wall.didHit)
+	{
+		return true;
+	}
+
+	const Floor: TraceResult = Instance.TraceLine(
+	{
+		start: Ahead,
+		end: FVectorMath.Add(Ahead, { x: 0, y: 0, z: -(24 + BotLedgeCheckDepth) }),
+		ignorePlayers: true,
+	});
+	return !Floor.didHit;
+}
+
+function ResetBotMode(Slot: number): void
+{
+	const Assignment: FBotAssignment | undefined = GBotAssignments.get(Slot);
+	if (Assignment)
+	{
+		Assignment.bPlaced = false;
+	}
+	GBotReadyAt.set(Slot, Instance.GetGameTime() + BotSpawnSettleTime);
+}
+
+function ReleaseBotMarker(Slot: number): void
+{
+	GBotAssignments.delete(Slot);
+}
+
+// Decals //////////////////////////////////////////////////////////////////////////////////////////
+
+function SpawnScorchMark(Position: FVector): void
+{
+	const Surface: TraceResult | undefined = FindNearbySurface(Position, ScorchSearchDistance);
+	if (Surface)
+	{
+		SpawnDecal(ScorchTemplateName, Surface.end, Surface.normal);
+	}
+}
+
+function SpawnBloodSplatter(ExplosionOrigin: FVector, Victim: CSPlayerPawn): void
+{
+	const Chest: FVector = GetChestPosition(Victim);
+	const Away: FVector = FVectorMath.GetSafeNormal(FVectorMath.Subtract(Chest, ExplosionOrigin));
+	const Behind: TraceResult = Instance.TraceLine(
+	{
+		start: Chest,
+		end: FVectorMath.Add(Chest, FVectorMath.Scale(Away, BloodSplatterDistance)),
+		ignorePlayers: true,
+	});
+	if (Behind.didHit && !Behind.startedInSolid)
+	{
+		SpawnDecal(BloodTemplateName, Behind.end, Behind.normal);
+		return;
+	}
+
+	const Below: TraceResult = Instance.TraceLine(
+	{
+		start: Chest,
+		end: FVectorMath.Add(Chest, FVectorMath.Scale(UpVector, -BloodSplatterDistance)),
+		ignorePlayers: true,
+	});
+	if (Below.didHit && !Below.startedInSolid)
+	{
+		SpawnDecal(BloodTemplateName, Below.end, Below.normal);
+	}
+}
+
+function SpawnDecal(TemplateName: string, Position: FVector, SurfaceNormal: FVector): void
+{
+	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
+	if (!IsPointTemplate(Template))
+	{
+		return;
+	}
+
+	const Rotation: FRotator = FVectorMath.GetRotation(FVectorMath.Scale(SurfaceNormal, -1), Math.random() * 360);
+	const Spawned: Entity[] | undefined = Template.ForceSpawn(Position, Rotation);
+	if (!Spawned || Spawned.length === 0)
+	{
+		return;
+	}
+
+	GDecals.push(Spawned);
+	while (GDecals.length > MaxDecals)
+	{
+		const Oldest: Entity[] | undefined = GDecals.shift();
+		if (Oldest)
+		{
+			RemoveEntities(Oldest);
+		}
+	}
+}
+
+function ClearDecals(): void
+{
+	for (const Decal of GDecals)
+	{
+		RemoveEntities(Decal);
+	}
+	GDecals = [];
+}
+
+function FindNearbySurface(Position: FVector, MaxDistance: number): TraceResult | undefined
+{
+	const Directions: readonly FVector[] =
+	[
+		{ x: 0, y: 0, z: -1 },
+		{ x: 0, y: 0, z: 1 },
+		{ x: 1, y: 0, z: 0 },
+		{ x: -1, y: 0, z: 0 },
+		{ x: 0, y: 1, z: 0 },
+		{ x: 0, y: -1, z: 0 },
+	];
+
+	let Closest: TraceResult | undefined = undefined;
+	for (const Direction of Directions)
+	{
+		const Trace: TraceResult = Instance.TraceLine(
+		{
+			start: Position,
+			end: FVectorMath.Add(Position, FVectorMath.Scale(Direction, MaxDistance)),
+			ignorePlayers: true,
+		});
+		if (Trace.didHit && !Trace.startedInSolid && (!Closest || Trace.fraction < Closest.fraction))
+		{
+			Closest = Trace;
+		}
+	}
+	return Closest;
+}
+
+function RemoveEntities(Entities: readonly Entity[]): void
+{
+	for (const Ent of Entities)
+	{
+		if (Ent.IsValid())
+		{
+			Ent.Remove();
+		}
+	}
+}
+
 // Hud /////////////////////////////////////////////////////////////////////////////////////////////
 
 function ShowDamageNumber(Slot: number, Damage: number): void
@@ -938,6 +1248,15 @@ abstract class FVectorMath
 		const Pitch: number = (Rotation.pitch * Math.PI) / 180;
 		const Yaw: number = (Rotation.yaw * Math.PI) / 180;
 		return { x: Math.cos(Pitch) * Math.cos(Yaw), y: Math.cos(Pitch) * Math.sin(Yaw), z: -Math.sin(Pitch) };
+	}
+
+	// The rotation whose forward vector points along Direction (the inverse of GetForwardVector)
+	public static GetRotation(Direction: FVector, Roll: number = 0): FRotator
+	{
+		const Normal: FVector = FVectorMath.GetSafeNormal(Direction);
+		const Pitch: number = (-Math.asin(Math.max(-1, Math.min(1, Normal.z))) * 180) / Math.PI;
+		const Yaw: number = (Math.atan2(Normal.y, Normal.x) * 180) / Math.PI;
+		return { pitch: Pitch, yaw: Yaw, roll: Roll };
 	}
 }
 

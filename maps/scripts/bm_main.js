@@ -218,11 +218,29 @@ var INDEX_NONE = -1;
 var MaxPlayerSlots = 64;
 var LogPrefix = "[BM]";
 var ExplosionTemplateName = "boom_template";
+var ScorchTemplateName = "scorch_template";
+var BloodTemplateName = "blood_template";
+var MaxDecals = 48;
+var ScorchSearchDistance = 16;
+var BloodSplatterDistance = 128;
+var BotMarkerModes = /* @__PURE__ */ new Map(
+  [
+    ["bot_still", 0 /* Still */],
+    ["bot_run", 1 /* Run */],
+    ["bot_jump", 2 /* Jump */]
+  ]
+);
+var BotRunSpeed = 250;
+var BotJumpSpeed = 301;
+var BotSpawnSettleTime = 0.1;
+var BotTurnCheckDistance = 40;
+var BotLedgeCheckDepth = 64;
 var DamageHudName = "damage_hud";
 var DamageLabelId = "DamageNumber";
 var DamageBatchWindow = 0.6;
 var DamageShowTime = 0.85;
 var UpVector = { x: 0, y: 0, z: 1 };
+var ZeroVector = { x: 0, y: 0, z: 0 };
 var ChestOffset = { x: 0, y: 0, z: 40 };
 var ProjectileLaunchOffset = { x: 0, y: 0, z: -8 };
 var ExplosionOffset = { x: 0, y: 0, z: 6 };
@@ -275,6 +293,7 @@ function Tick() {
     TickOverhealDecay(HealedPawns, DeltaTime);
     UpdateUberGlows(UberedPawns);
     GUberedPawns = UberedPawns;
+    TickBots(Now);
   } catch (Exception) {
     Instance2.Msg(`${LogPrefix} error: ${String(Exception)}`);
   }
@@ -331,6 +350,7 @@ function HandlePlayerReset(Event) {
     return;
   }
   ClearPlayer(Slot);
+  ResetBotMode(Slot);
   const PlayerClass = GClassBySlot.get(Slot);
   if (PlayerClass === void 0) {
     return;
@@ -349,6 +369,8 @@ function HandlePlayerKill(Event) {
 }
 function HandlePlayerDisconnect(Event) {
   ClearPlayer(Event.playerSlot);
+  ReleaseBotMarker(Event.playerSlot);
+  GBotReadyAt.delete(Event.playerSlot);
   ResetDamageNumbers(Event.playerSlot);
   GClassBySlot.delete(Event.playerSlot);
   GPlayerStates.delete(Event.playerSlot);
@@ -360,6 +382,7 @@ function HandleRoundStart() {
   for (const Definition of Object.values(ClassDefinitions)) {
     Definition.OnRoundStart();
   }
+  ClearDecals();
   ApplyMatchSettings();
   Instance2.Msg(`${LogPrefix} match settings applied`);
 }
@@ -404,6 +427,9 @@ var GUberedPawns = /* @__PURE__ */ new Set();
 var GGlowingPawns = /* @__PURE__ */ new Set();
 var GLastThinkTime = 0;
 var GbWarnedNoDamageHud = false;
+var GDecals = [];
+var GBotAssignments = /* @__PURE__ */ new Map();
+var GBotReadyAt = /* @__PURE__ */ new Map();
 function GetPlayerState(Slot) {
   let State = GPlayerStates.get(Slot);
   if (!State) {
@@ -500,6 +526,7 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff) {
   if (!SpawnFromTemplate(ExplosionTemplateName, Origin)) {
     Instance2.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
   }
+  SpawnScorchMark(Position);
   if (!Attacker.IsValid()) {
     return;
   }
@@ -536,7 +563,7 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff) {
     if (bIsSelf) {
       CalculatedDmg *= 0.33;
     }
-    Victim.TakeDamage(
+    const DamageDealt = Victim.TakeDamage(
       {
         damage: CalculatedDmg,
         damageTypes: CSDamageTypes2.BLAST,
@@ -544,6 +571,9 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff) {
         inflictor: Attacker
       }
     );
+    if (!bIsSelf && DamageDealt > 0) {
+      SpawnBloodSplatter(Origin, Victim);
+    }
     Instance2.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
   });
 }
@@ -736,6 +766,193 @@ function UpdateUberGlows(UberedPawns) {
   }
   GGlowingPawns = new Set(UberedPawns);
 }
+function TickBots(Now) {
+  const FreeMarkers = FindFreeBotMarkers();
+  ForEachLivePawn((Pawn, Slot) => {
+    const Controller = Pawn.GetPlayerController();
+    if (!Controller || !Controller.IsBot()) {
+      return;
+    }
+    const ReadyAt = GBotReadyAt.get(Slot);
+    if (ReadyAt !== void 0 && Now < ReadyAt) {
+      return;
+    }
+    let Assignment = GBotAssignments.get(Slot);
+    if (!Assignment) {
+      Assignment = ClaimBotMarker(Slot, FreeMarkers);
+      if (!Assignment) {
+        return;
+      }
+    }
+    if (!Assignment.bPlaced) {
+      PlaceBotOnMarker(Pawn, Assignment);
+    }
+    DriveBot(Pawn, Assignment);
+  });
+}
+function FindFreeBotMarkers() {
+  const Claimed = /* @__PURE__ */ new Set();
+  for (const Assignment of GBotAssignments.values()) {
+    Claimed.add(Assignment.Marker);
+  }
+  const FreeMarkers = /* @__PURE__ */ new Map();
+  for (const [MarkerName, Mode] of BotMarkerModes) {
+    for (const Marker of Instance2.FindEntitiesByName(MarkerName)) {
+      if (Marker.IsValid() && !Claimed.has(Marker)) {
+        FreeMarkers.set(Marker, Mode);
+      }
+    }
+  }
+  return FreeMarkers;
+}
+function ClaimBotMarker(Slot, FreeMarkers) {
+  for (const [Marker, Mode] of FreeMarkers) {
+    FreeMarkers.delete(Marker);
+    const Assignment = { Marker, Mode, Yaw: 0, bPlaced: false };
+    GBotAssignments.set(Slot, Assignment);
+    return Assignment;
+  }
+  return void 0;
+}
+function PlaceBotOnMarker(Pawn, Assignment) {
+  if (!Assignment.Marker.IsValid()) {
+    return;
+  }
+  Assignment.Yaw = Assignment.Marker.GetAbsAngles().yaw;
+  Assignment.bPlaced = true;
+  Pawn.Teleport({ position: Assignment.Marker.GetAbsOrigin(), angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 }, velocity: ZeroVector });
+  Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
+  Pawn.SetHealth(1e3);
+}
+function DriveBot(Pawn, Assignment) {
+  if (Assignment.Mode === 0 /* Still */ || !Pawn.GetGroundEntity()) {
+    return;
+  }
+  if (Assignment.Mode === 2 /* Jump */) {
+    Pawn.Teleport({ velocity: { x: 0, y: 0, z: BotJumpSpeed } });
+    return;
+  }
+  if (IsBotPathBlocked(Pawn, Assignment.Yaw)) {
+    Assignment.Yaw = (Assignment.Yaw + 180) % 360;
+    Pawn.Teleport({ angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 } });
+    Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
+  }
+  const Forward = FVectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
+  Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
+}
+function IsBotPathBlocked(Pawn, Yaw) {
+  const Forward = FVectorMath.GetForwardVector({ pitch: 0, yaw: Yaw, roll: 0 });
+  const Knee = FVectorMath.Add(Pawn.GetAbsOrigin(), { x: 0, y: 0, z: 24 });
+  const Ahead = FVectorMath.Add(Knee, FVectorMath.Scale(Forward, BotTurnCheckDistance));
+  const Wall = Instance2.TraceLine({ start: Knee, end: Ahead, ignorePlayers: true });
+  if (Wall.didHit) {
+    return true;
+  }
+  const Floor = Instance2.TraceLine(
+    {
+      start: Ahead,
+      end: FVectorMath.Add(Ahead, { x: 0, y: 0, z: -(24 + BotLedgeCheckDepth) }),
+      ignorePlayers: true
+    }
+  );
+  return !Floor.didHit;
+}
+function ResetBotMode(Slot) {
+  const Assignment = GBotAssignments.get(Slot);
+  if (Assignment) {
+    Assignment.bPlaced = false;
+  }
+  GBotReadyAt.set(Slot, Instance2.GetGameTime() + BotSpawnSettleTime);
+}
+function ReleaseBotMarker(Slot) {
+  GBotAssignments.delete(Slot);
+}
+function SpawnScorchMark(Position) {
+  const Surface = FindNearbySurface(Position, ScorchSearchDistance);
+  if (Surface) {
+    SpawnDecal(ScorchTemplateName, Surface.end, Surface.normal);
+  }
+}
+function SpawnBloodSplatter(ExplosionOrigin, Victim) {
+  const Chest = GetChestPosition(Victim);
+  const Away = FVectorMath.GetSafeNormal(FVectorMath.Subtract(Chest, ExplosionOrigin));
+  const Behind = Instance2.TraceLine(
+    {
+      start: Chest,
+      end: FVectorMath.Add(Chest, FVectorMath.Scale(Away, BloodSplatterDistance)),
+      ignorePlayers: true
+    }
+  );
+  if (Behind.didHit && !Behind.startedInSolid) {
+    SpawnDecal(BloodTemplateName, Behind.end, Behind.normal);
+    return;
+  }
+  const Below = Instance2.TraceLine(
+    {
+      start: Chest,
+      end: FVectorMath.Add(Chest, FVectorMath.Scale(UpVector, -BloodSplatterDistance)),
+      ignorePlayers: true
+    }
+  );
+  if (Below.didHit && !Below.startedInSolid) {
+    SpawnDecal(BloodTemplateName, Below.end, Below.normal);
+  }
+}
+function SpawnDecal(TemplateName, Position, SurfaceNormal) {
+  const Template = Instance2.FindEntityByName(TemplateName);
+  if (!IsPointTemplate(Template)) {
+    return;
+  }
+  const Rotation = FVectorMath.GetRotation(FVectorMath.Scale(SurfaceNormal, -1), Math.random() * 360);
+  const Spawned = Template.ForceSpawn(Position, Rotation);
+  if (!Spawned || Spawned.length === 0) {
+    return;
+  }
+  GDecals.push(Spawned);
+  while (GDecals.length > MaxDecals) {
+    const Oldest = GDecals.shift();
+    if (Oldest) {
+      RemoveEntities(Oldest);
+    }
+  }
+}
+function ClearDecals() {
+  for (const Decal of GDecals) {
+    RemoveEntities(Decal);
+  }
+  GDecals = [];
+}
+function FindNearbySurface(Position, MaxDistance) {
+  const Directions = [
+    { x: 0, y: 0, z: -1 },
+    { x: 0, y: 0, z: 1 },
+    { x: 1, y: 0, z: 0 },
+    { x: -1, y: 0, z: 0 },
+    { x: 0, y: 1, z: 0 },
+    { x: 0, y: -1, z: 0 }
+  ];
+  let Closest = void 0;
+  for (const Direction of Directions) {
+    const Trace = Instance2.TraceLine(
+      {
+        start: Position,
+        end: FVectorMath.Add(Position, FVectorMath.Scale(Direction, MaxDistance)),
+        ignorePlayers: true
+      }
+    );
+    if (Trace.didHit && !Trace.startedInSolid && (!Closest || Trace.fraction < Closest.fraction)) {
+      Closest = Trace;
+    }
+  }
+  return Closest;
+}
+function RemoveEntities(Entities) {
+  for (const Ent of Entities) {
+    if (Ent.IsValid()) {
+      Ent.Remove();
+    }
+  }
+}
 function ShowDamageNumber(Slot, Damage) {
   const Hud = FindDamageHud();
   if (!Hud || Damage <= 0) {
@@ -775,7 +992,7 @@ function FindDamageHud() {
   }
   return void 0;
 }
-var FVectorMath = class {
+var FVectorMath = class _FVectorMath {
   static Add(A, B) {
     return { x: A.x + B.x, y: A.y + B.y, z: A.z + B.z };
   }
@@ -796,6 +1013,13 @@ var FVectorMath = class {
     const Pitch = Rotation.pitch * Math.PI / 180;
     const Yaw = Rotation.yaw * Math.PI / 180;
     return { x: Math.cos(Pitch) * Math.cos(Yaw), y: Math.cos(Pitch) * Math.sin(Yaw), z: -Math.sin(Pitch) };
+  }
+  // The rotation whose forward vector points along Direction (the inverse of GetForwardVector)
+  static GetRotation(Direction, Roll = 0) {
+    const Normal = _FVectorMath.GetSafeNormal(Direction);
+    const Pitch = -Math.asin(Math.max(-1, Math.min(1, Normal.z))) * 180 / Math.PI;
+    const Yaw = Math.atan2(Normal.y, Normal.x) * 180 / Math.PI;
+    return { pitch: Pitch, yaw: Yaw, roll: Roll };
   }
 };
 function IsValid(Ent) {
