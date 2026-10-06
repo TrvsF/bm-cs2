@@ -58,6 +58,15 @@ export interface FProjectile
 	Model: Entity | undefined;
 }
 
+// TF2-style damage scaling by attacker-to-victim distance.
+// Damage is 100% at OptimalDistance, RampUp at point blank, and FallOff at twice OptimalDistance or further.
+export interface FDamageFalloff
+{
+	readonly RampUp: number;
+	readonly FallOff: number;
+	readonly OptimalDistance: number;
+}
+
 export interface FStickyBomb extends FProjectile
 {
 	bStuck: boolean;
@@ -494,7 +503,7 @@ export function DestroyProjectile(Projectile: FProjectile): void
 	}
 }
 
-export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number): void
+export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined): void
 {
 	const Origin: FVector = FVectorMath.Add(Position, ExplosionOffset);
 
@@ -530,7 +539,9 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		}
 
 		const Falloff: number = 1 - 0.5 * (Distance / Radius);
-		let CalculatedDmg: number = Damage * Falloff;
+
+		const RangeScale: number = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
+		let CalculatedDmg: number = Damage * Falloff * RangeScale;
 
 		// do knockback 
         const IsCrouched: boolean = Victim.IsDucking() || Victim.IsDucked();
@@ -563,8 +574,58 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 			inflictor: Attacker,
 		});
 
-		Instance.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f`);
+		Instance.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
 	});
+}
+
+// Damage Falloff /////////////////////////////////////////////////////////////////////////////////
+
+export function GetDistanceDamageScale(Distance: number, Falloff: FDamageFalloff): number
+{
+	const Closeness: number = Math.min(1, Math.max(0, 1 - Distance / (2 * Falloff.OptimalDistance)));
+	const Curve: number = Closeness * Closeness * (3 - 2 * Closeness);
+	if (Curve >= 0.5)
+	{
+		return 1 + (Falloff.RampUp - 1) * (2 * Curve - 1);
+	}
+	return 1 - (1 - Falloff.FallOff) * (1 - 2 * Curve);
+}
+
+function GetRangeDamageScale(Attacker: CSPlayerPawn, Victim: CSPlayerPawn, Falloff: FDamageFalloff | undefined): number
+{
+	if (!Falloff)
+	{
+		return 1;
+	}
+	const Distance: number = FVectorMath.Size(FVectorMath.Subtract(GetChestPosition(Victim), GetChestPosition(Attacker)));
+	return GetDistanceDamageScale(Distance, Falloff);
+}
+
+export function ApplyBulletFalloff(Event: FModifyDamageEvent, Falloff: FDamageFalloff | undefined): FModifyDamageResult
+{
+	const Attacker: Entity | undefined = Event.attacker;
+	const Weapon: CSWeaponBase | undefined = Event.weapon;
+	const bIsBullet: boolean = (Event.damageTypes & (CSDamageTypes.BULLET | CSDamageTypes.BUCKSHOT)) !== 0;
+	if (!Falloff || !Weapon || !bIsBullet || !IsPlayerPawn(Attacker) || Attacker === Event.player)
+	{
+		return;
+	}
+	if (Weapon.GetData().GetType() === CSWeaponType.KNIFE)
+	{
+		return;
+	}
+
+	// CS2 already scaled the damage by RangeModifier ^ (distance / 500). undo that first
+	const BulletTravel: number = FVectorMath.Size(FVectorMath.Subtract(GetChestPosition(Event.player), Attacker.GetEyePosition()));
+	const CsRangeScale: number = Math.pow(Weapon.GetData().GetRangeModifier(), BulletTravel / 500);
+	const RangeScale: number = GetRangeDamageScale(Attacker, Event.player, Falloff);
+	const Damage: number = Math.max(1, Math.round((Event.damage / CsRangeScale) * RangeScale));
+
+	if (bDebug)
+	{
+		Instance.Msg(`${LogPrefix} bullet falloff: ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)} (${Math.round(Event.damage)} -> ${Damage})`);
+	}
+	return { damage: Damage };
 }
 
 // Demo //////////////////////////////////////////////////////////////////////////////////////////
@@ -617,7 +678,9 @@ function TickDemoman(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: n
 			continue;
 		}
 		DestroyProjectile(Sticky);
-		Explode(Sticky.Position, Pawn, DemoSettings.Radius, DemoSettings.Damage, DemoSettings.Knockback);
+		const bYoungSticky: boolean = Now - Sticky.SpawnedAt < DemoSettings.StickyFalloffTime;
+		const RangeFalloff: FDamageFalloff | undefined = bYoungSticky ? DemoSettings.StickyFalloff : undefined;
+		Explode(Sticky.Position, Pawn, DemoSettings.Radius, DemoSettings.Damage, DemoSettings.Knockback, RangeFalloff);
 	}
 	State.Stickies = StillArming;
 }

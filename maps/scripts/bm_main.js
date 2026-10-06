@@ -3,17 +3,21 @@ import { Instance as Instance2, CSInputs as CSInputs2, CSDamageTypes as CSDamage
 
 // src/bm_classes.ts
 import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
+var TF2HitscanFalloff = { RampUp: 1.5, FallOff: 0.5, OptimalDistance: 512 };
+var TF2RocketFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
+var TF2StickyFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDistance: 512 };
 var SoldierSettings = {
   Primary: "weapon_scar20",
   Secondary: "",
   Melee: "weapon_knife",
   Health: 150,
   SizeScale: 1.25,
-  RocketDamage: 100,
+  RocketDamage: 80,
   RocketRadius: 160,
   RocketSpeed: 1200,
   RocketKnockback: 400,
-  RocketLifetime: 10
+  RocketLifetime: 10,
+  RocketFalloff: TF2RocketFalloff
 };
 var DemoSettings = {
   Primary: "weapon_nova",
@@ -27,8 +31,10 @@ var DemoSettings = {
   LaunchSpeed: 900,
   LaunchUp: 150,
   Radius: 160,
-  Damage: 100,
-  Knockback: 600
+  Damage: 90,
+  Knockback: 600,
+  StickyFalloff: TF2StickyFalloff,
+  StickyFalloffTime: 5
 };
 var MedicSettings = {
   Primary: "weapon_mp7",
@@ -36,6 +42,7 @@ var MedicSettings = {
   Melee: "weapon_knife",
   Health: 150,
   SizeScale: 0.9,
+  BulletFalloff: TF2HitscanFalloff,
   Range: 450,
   BreakRange: 540,
   HealPerSec: 24,
@@ -140,7 +147,7 @@ var USoldierClass = class extends UPlayerClass {
     }
     if (MoveProjectile(Rocket, DeltaTime, true)) {
       DestroyProjectile(Rocket);
-      Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback);
+      Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff);
       return false;
     }
     if (!Rocket.Model) {
@@ -191,7 +198,7 @@ var UMedicClass = class extends UPlayerClass {
     if (Event.weapon && Event.weapon.GetData().GetType() === CSWeaponType.KNIFE) {
       return { abort: true };
     }
-    return;
+    return ApplyBulletFalloff(Event, this.Settings.BulletFalloff);
   }
 };
 var ClassDefinitions = {
@@ -488,7 +495,7 @@ function DestroyProjectile(Projectile) {
     Projectile.Model.Remove();
   }
 }
-function Explode(Position, Attacker, Radius, Damage, Knockback) {
+function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff) {
   const Origin = FVectorMath.Add(Position, ExplosionOffset);
   if (!SpawnFromTemplate(ExplosionTemplateName, Origin)) {
     Instance2.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
@@ -512,7 +519,8 @@ function Explode(Position, Attacker, Radius, Damage, Knockback) {
       return;
     }
     const Falloff = 1 - 0.5 * (Distance / Radius);
-    let CalculatedDmg = Damage * Falloff;
+    const RangeScale = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
+    let CalculatedDmg = Damage * Falloff * RangeScale;
     const IsCrouched = Victim.IsDucking() || Victim.IsDucked();
     let Direction = Distance > 1 ? FVectorMath.GetSafeNormal(Offset) : UpVector;
     if (Victim.GetGroundEntity()) {
@@ -536,8 +544,42 @@ function Explode(Position, Attacker, Radius, Damage, Knockback) {
         inflictor: Attacker
       }
     );
-    Instance2.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f`);
+    Instance2.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
   });
+}
+function GetDistanceDamageScale(Distance, Falloff) {
+  const Closeness = Math.min(1, Math.max(0, 1 - Distance / (2 * Falloff.OptimalDistance)));
+  const Curve = Closeness * Closeness * (3 - 2 * Closeness);
+  if (Curve >= 0.5) {
+    return 1 + (Falloff.RampUp - 1) * (2 * Curve - 1);
+  }
+  return 1 - (1 - Falloff.FallOff) * (1 - 2 * Curve);
+}
+function GetRangeDamageScale(Attacker, Victim, Falloff) {
+  if (!Falloff) {
+    return 1;
+  }
+  const Distance = FVectorMath.Size(FVectorMath.Subtract(GetChestPosition(Victim), GetChestPosition(Attacker)));
+  return GetDistanceDamageScale(Distance, Falloff);
+}
+function ApplyBulletFalloff(Event, Falloff) {
+  const Attacker = Event.attacker;
+  const Weapon = Event.weapon;
+  const bIsBullet = (Event.damageTypes & (CSDamageTypes2.BULLET | CSDamageTypes2.BUCKSHOT)) !== 0;
+  if (!Falloff || !Weapon || !bIsBullet || !IsPlayerPawn(Attacker) || Attacker === Event.player) {
+    return;
+  }
+  if (Weapon.GetData().GetType() === CSWeaponType2.KNIFE) {
+    return;
+  }
+  const BulletTravel = FVectorMath.Size(FVectorMath.Subtract(GetChestPosition(Event.player), Attacker.GetEyePosition()));
+  const CsRangeScale = Math.pow(Weapon.GetData().GetRangeModifier(), BulletTravel / 500);
+  const RangeScale = GetRangeDamageScale(Attacker, Event.player, Falloff);
+  const Damage = Math.max(1, Math.round(Event.damage / CsRangeScale * RangeScale));
+  if (bDebug) {
+    Instance2.Msg(`${LogPrefix} bullet falloff: ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)} (${Math.round(Event.damage)} -> ${Damage})`);
+  }
+  return { damage: Damage };
 }
 function StepSticky(Sticky, DeltaTime, Now) {
   if (!Sticky.bStuck && MoveProjectile(Sticky, DeltaTime, false)) {
@@ -573,7 +615,9 @@ function TickDemoman(Pawn, Slot, Now, DeltaTime) {
       continue;
     }
     DestroyProjectile(Sticky);
-    Explode(Sticky.Position, Pawn, DemoSettings.Radius, DemoSettings.Damage, DemoSettings.Knockback);
+    const bYoungSticky = Now - Sticky.SpawnedAt < DemoSettings.StickyFalloffTime;
+    const RangeFalloff = bYoungSticky ? DemoSettings.StickyFalloff : void 0;
+    Explode(Sticky.Position, Pawn, DemoSettings.Radius, DemoSettings.Damage, DemoSettings.Knockback, RangeFalloff);
   }
   State.Stickies = StillArming;
 }
@@ -813,8 +857,10 @@ function ForEachLivePawn(Visitor) {
   }
 }
 export {
+  ApplyBulletFalloff,
   DestroyProjectile,
   Explode,
+  GetDistanceDamageScale,
   GetPlayerState,
   GetTeamColor,
   IsWeapon,

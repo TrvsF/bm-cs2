@@ -1,7 +1,7 @@
 import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { bDebug, TickInterval, GetPlayerState, GetTeamColor, IsWeapon, LaunchProjectile, MoveProjectile, DestroyProjectile, Explode } from "./bm_main";
-import type { FProjectile, FStickyBomb, FPlayerState, FModifyDamageEvent, FModifyDamageResult } from "./bm_main";
+import { bDebug, TickInterval, GetPlayerState, GetTeamColor, IsWeapon, LaunchProjectile, MoveProjectile, DestroyProjectile, Explode, ApplyBulletFalloff } from "./bm_main";
+import type { FProjectile, FStickyBomb, FPlayerState, FModifyDamageEvent, FModifyDamageResult, FDamageFalloff } from "./bm_main";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,6 +24,12 @@ export interface FClassSettings
 	readonly SizeScale: number;
 }
 
+// Only for classes whose guns actually deal bullet damage
+export interface FHitscanSettings
+{
+	readonly BulletFalloff: FDamageFalloff | undefined;   // undefined = CS2's normal range drop-off
+}
+
 export interface FSoliderSettings extends FClassSettings
 {
 	readonly RocketSpeed: number;
@@ -31,6 +37,7 @@ export interface FSoliderSettings extends FClassSettings
 	readonly RocketRadius: number;
 	readonly RocketKnockback: number;
 	readonly RocketLifetime: number;
+	readonly RocketFalloff: FDamageFalloff | undefined;
 }
 
 export interface FDemoSettings extends FClassSettings
@@ -43,9 +50,11 @@ export interface FDemoSettings extends FClassSettings
 	readonly Radius: number;
 	readonly Damage: number;
 	readonly Knockback: number;
+	readonly StickyFalloff: FDamageFalloff | undefined;
+	readonly StickyFalloffTime: number;   // older stickies do flat damage, like TF2
 }
 
-export interface FMedicSettings extends FClassSettings
+export interface FMedicSettings extends FClassSettings, FHitscanSettings
 {
 	readonly Range: number;
 	readonly BreakRange: number;
@@ -62,6 +71,10 @@ export interface FRocket extends FProjectile
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
+const TF2HitscanFalloff: FDamageFalloff = { RampUp: 1.5, FallOff: 0.5, OptimalDistance: 512 };
+const TF2RocketFalloff: FDamageFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
+const TF2StickyFalloff: FDamageFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDistance: 512 };
+
 export const SoldierSettings: FSoliderSettings =
 {
 	Primary: "weapon_scar20",
@@ -70,11 +83,12 @@ export const SoldierSettings: FSoliderSettings =
 	Health: 150,
 	SizeScale: 1.25,
 
-	RocketDamage: 100,
+	RocketDamage: 80,
 	RocketRadius: 160,
 	RocketSpeed: 1200,
 	RocketKnockback: 400,
 	RocketLifetime: 10,
+	RocketFalloff: TF2RocketFalloff,
 };
 
 export const DemoSettings: FDemoSettings =
@@ -91,8 +105,10 @@ export const DemoSettings: FDemoSettings =
 	LaunchSpeed: 900,
 	LaunchUp: 150,
 	Radius: 160,
-	Damage: 100,
+	Damage: 90,
 	Knockback: 600,
+	StickyFalloff: TF2StickyFalloff,
+	StickyFalloffTime: 5,
 };
 
 export const MedicSettings: FMedicSettings =
@@ -102,6 +118,7 @@ export const MedicSettings: FMedicSettings =
 	Melee: "weapon_knife",
 	Health: 150,
 	SizeScale: 0.9,
+	BulletFalloff: TF2HitscanFalloff,
 
 	Range: 450,
 	BreakRange: 540,
@@ -264,7 +281,7 @@ class USoldierClass extends UPlayerClass<FSoliderSettings>
 		if (MoveProjectile(Rocket, DeltaTime, true))
 		{
 			DestroyProjectile(Rocket);
-			Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback);
+			Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff);
 			return false;
 		}
 
@@ -342,7 +359,7 @@ class UMedicClass extends UPlayerClass<FMedicSettings>
 		{
 			return { abort: true };
 		}
-		return;
+		return ApplyBulletFalloff(Event, this.Settings.BulletFalloff);
 	}
 }
 
