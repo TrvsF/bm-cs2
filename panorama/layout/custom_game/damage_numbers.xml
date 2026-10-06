@@ -1,0 +1,8 @@
+<root>
+	<styles>
+		<include src="s2r://panorama/styles/custom_game/damage_numbers.vcss_c" />
+	</styles>
+	<Panel class="DamageScreen" hittest="false">
+		<Label id="DamageNumber" class="DamageNumber" text="{s:damage}" hittest="false" />
+	</Panel>
+</root>

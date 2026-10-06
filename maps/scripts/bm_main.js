@@ -12,7 +12,7 @@ var SoldierSettings = {
   RocketDamage: 100,
   RocketRadius: 160,
   RocketSpeed: 1200,
-  RocketKnockback: 450,
+  RocketKnockback: 400,
   RocketLifetime: 10
 };
 var DemoSettings = {
@@ -22,13 +22,13 @@ var DemoSettings = {
   Health: 130,
   SizeScale: 1,
   DetonateKey: CSInputs.ATTACK2,
-  MaxStickies: 8,
+  MaxStickies: 6,
   ArmTime: 0.8,
   LaunchSpeed: 900,
   LaunchUp: 150,
   Radius: 160,
   Damage: 100,
-  Knockback: 450
+  Knockback: 600
 };
 var MedicSettings = {
   Primary: "weapon_mp7",
@@ -211,6 +211,10 @@ var INDEX_NONE = -1;
 var MaxPlayerSlots = 64;
 var LogPrefix = "[BM]";
 var ExplosionTemplateName = "boom_template";
+var DamageHudName = "damage_hud";
+var DamageLabelId = "DamageNumber";
+var DamageBatchWindow = 0.6;
+var DamageShowTime = 0.85;
 var UpVector = { x: 0, y: 0, z: 1 };
 var ChestOffset = { x: 0, y: 0, z: 40 };
 var ProjectileLaunchOffset = { x: 0, y: 0, z: -8 };
@@ -275,10 +279,11 @@ function BeginPlay() {
   Instance2.OnPlayerDisconnect(HandlePlayerDisconnect);
   Instance2.OnRoundStart(HandleRoundStart);
   Instance2.OnGunFire(HandleGunFire);
+  Instance2.OnPlayerDamage(HandlePlayerDamage);
   Instance2.OnModifyPlayerDamage(HandleModifyPlayerDamage);
   Instance2.SetThink(Tick);
   Instance2.SetNextThink(Instance2.GetGameTime());
-  Instance2.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}. Type !demo or !medic in chat.`);
+  Instance2.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
 }
 BeginPlay();
 function HandlePlayerChat(Event) {
@@ -287,6 +292,10 @@ function HandlePlayerChat(Event) {
     return;
   }
   const Command = Event.text.trim().toLowerCase();
+  if (bDebug && Command === "!hudtest") {
+    ShowDamageNumber(Player.GetPlayerSlot(), 123);
+    return;
+  }
   const PlayerClass = ClassChatCommands.get(Command);
   if (PlayerClass === void 0) {
     return;
@@ -333,6 +342,7 @@ function HandlePlayerKill(Event) {
 }
 function HandlePlayerDisconnect(Event) {
   ClearPlayer(Event.playerSlot);
+  ResetDamageNumbers(Event.playerSlot);
   GClassBySlot.delete(Event.playerSlot);
   GPlayerStates.delete(Event.playerSlot);
 }
@@ -359,8 +369,18 @@ function HandleGunFire(Event) {
     Definition.OnPrimaryFire(Pawn, Slot, Instance2.GetGameTime());
   }
 }
+function HandlePlayerDamage(Event) {
+  const AttackerSlot = GetPlayerSlot(Event.attacker);
+  if (AttackerSlot === INDEX_NONE || Event.attacker === Event.player) {
+    return;
+  }
+  ShowDamageNumber(AttackerSlot, Event.damage);
+}
 function HandleModifyPlayerDamage(Event) {
   if (GUberedPawns.has(Event.player)) {
+    return { abort: true };
+  }
+  if ((Event.damageTypes & CSDamageTypes2.FALL) !== 0 && GClassBySlot.has(GetPlayerSlot(Event.player))) {
     return { abort: true };
   }
   const AttackerSlot = GetPlayerSlot(Event.attacker);
@@ -376,6 +396,7 @@ var GPendingTimers = [];
 var GUberedPawns = /* @__PURE__ */ new Set();
 var GGlowingPawns = /* @__PURE__ */ new Set();
 var GLastThinkTime = 0;
+var GbWarnedNoDamageHud = false;
 function GetPlayerState(Slot) {
   let State = GPlayerStates.get(Slot);
   if (!State) {
@@ -386,7 +407,10 @@ function GetPlayerState(Slot) {
       HealAccumulator: 0,
       DecayAccumulator: 0,
       UberCharge: 0,
-      UberEndTime: 0
+      UberEndTime: 0,
+      DamageTotal: 0,
+      LastDamageTime: 0,
+      bDamagePopA: false
     };
     GPlayerStates.set(Slot, State);
   }
@@ -489,9 +513,6 @@ function Explode(Position, Attacker, Radius, Damage, Knockback) {
     }
     const Falloff = 1 - 0.5 * (Distance / Radius);
     let CalculatedDmg = Damage * Falloff;
-    if (bIsSelf) {
-      CalculatedDmg *= 0.33;
-    }
     const IsCrouched = Victim.IsDucking() || Victim.IsDucked();
     let Direction = Distance > 1 ? FVectorMath.GetSafeNormal(Offset) : UpVector;
     if (Victim.GetGroundEntity()) {
@@ -504,6 +525,9 @@ function Explode(Position, Attacker, Radius, Damage, Knockback) {
     }
     const CalculatedKb = CalculatedDmg * (KBStrength / CrouchFactor);
     Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Direction, CalculatedKb)) });
+    if (bIsSelf) {
+      CalculatedDmg *= 0.33;
+    }
     Victim.TakeDamage(
       {
         damage: CalculatedDmg,
@@ -512,7 +536,7 @@ function Explode(Position, Attacker, Radius, Damage, Knockback) {
         inflictor: Attacker
       }
     );
-    Instance2.Msg(`${LogPrefix} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f`);
+    Instance2.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f`);
   });
 }
 function StepSticky(Sticky, DeltaTime, Now) {
@@ -668,6 +692,45 @@ function UpdateUberGlows(UberedPawns) {
   }
   GGlowingPawns = new Set(UberedPawns);
 }
+function ShowDamageNumber(Slot, Damage) {
+  const Hud = FindDamageHud();
+  if (!Hud || Damage <= 0) {
+    return;
+  }
+  const State = GetPlayerState(Slot);
+  const Now = Instance2.GetGameTime();
+  if (Now - State.LastDamageTime > DamageBatchWindow) {
+    State.DamageTotal = 0;
+  }
+  State.DamageTotal += Damage;
+  State.LastDamageTime = Now;
+  State.bDamagePopA = !State.bDamagePopA;
+  Hud.SetDialogVariableStringForPlayer(Slot, DamageLabelId, "damage", `-${Math.round(State.DamageTotal)}`);
+  SetTimer(DamageShowTime, () => {
+    const LaterHud = FindDamageHud();
+    if (LaterHud && Instance2.GetGameTime() - State.LastDamageTime >= DamageShowTime - 0.01) {
+      LaterHud.SetDialogVariableStringForPlayer(Slot, DamageLabelId, "damage", "");
+    }
+  });
+}
+function ResetDamageNumbers(Slot) {
+  const Hud = FindDamageHud();
+  if (Hud) {
+    Hud.ResetForPlayer(Slot);
+  }
+}
+function FindDamageHud() {
+  const Hud = Instance2.FindEntityByName(DamageHudName);
+  if (IsCustomHudLayout(Hud)) {
+    return Hud;
+  }
+  if (!GbWarnedNoDamageHud) {
+    GbWarnedNoDamageHud = true;
+    const Problem = Hud ? "exists but isn't a custom_hud_layout" : "wasn't found";
+    Instance2.Msg(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+  }
+  return void 0;
+}
 var FVectorMath = class {
   static Add(A, B) {
     return { x: A.x + B.x, y: A.y + B.y, z: A.z + B.z };
@@ -696,6 +759,9 @@ function IsValid(Ent) {
 }
 function IsPlayerPawn(Ent) {
   return Ent !== void 0 && "GetPlayerController" in Ent && typeof Ent.GetPlayerController === "function" && "IsInputPressed" in Ent && typeof Ent.IsInputPressed === "function";
+}
+function IsCustomHudLayout(Ent) {
+  return Ent !== void 0 && "SetDialogVariableStringForPlayer" in Ent && typeof Ent.SetDialogVariableStringForPlayer === "function";
 }
 function IsPointTemplate(Ent) {
   return Ent !== void 0 && "ForceSpawn" in Ent && typeof Ent.ForceSpawn === "function";

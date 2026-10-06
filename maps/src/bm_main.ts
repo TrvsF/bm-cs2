@@ -7,6 +7,7 @@ import type
 	CSWeaponBase,
 	CSWeaponData,
 	PointTemplate,
+	CustomHudLayout,
 	TraceResult,
 	Vector,
 	QAngle,
@@ -35,6 +36,7 @@ type FPlayerResetEvent = TEventOf<typeof Instance.OnPlayerReset>;
 type FPlayerKillEvent = TEventOf<typeof Instance.OnPlayerKill>;
 type FPlayerDisconnectEvent = TEventOf<typeof Instance.OnPlayerDisconnect>;
 type FGunFireEvent = TEventOf<typeof Instance.OnGunFire>;
+type FPlayerDamageEvent = TEventOf<typeof Instance.OnPlayerDamage>;
 export type FModifyDamageEvent = TEventOf<typeof Instance.OnModifyPlayerDamage>;
 export type FModifyDamageResult = ReturnType<Parameters<typeof Instance.OnModifyPlayerDamage>[0]>;
 
@@ -71,6 +73,9 @@ export interface FPlayerState
 	DecayAccumulator: number;
 	UberCharge: number;
 	UberEndTime: number;
+	DamageTotal: number;
+	LastDamageTime: number;
+	bDamagePopA: boolean;
 }
 
 interface FPendingTimer
@@ -85,6 +90,10 @@ const INDEX_NONE: number = -1;
 const MaxPlayerSlots: number = 64;
 const LogPrefix: string = "[BM]";
 const ExplosionTemplateName: string = "boom_template";
+const DamageHudName: string = "damage_hud";
+const DamageLabelId: string = "DamageNumber";
+const DamageBatchWindow: number = 0.6;
+const DamageShowTime: number = 0.85;
 
 const UpVector: FVector = { x: 0, y: 0, z: 1 };
 const ChestOffset: FVector = { x: 0, y: 0, z: 40 };
@@ -173,11 +182,12 @@ function BeginPlay(): void
 	Instance.OnPlayerDisconnect(HandlePlayerDisconnect);
 	Instance.OnRoundStart(HandleRoundStart);
 	Instance.OnGunFire(HandleGunFire);
+	Instance.OnPlayerDamage(HandlePlayerDamage);
 	Instance.OnModifyPlayerDamage(HandleModifyPlayerDamage);
 
 	Instance.SetThink(Tick);
 	Instance.SetNextThink(Instance.GetGameTime());
-	Instance.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}. Type !demo or !medic in chat.`);
+	Instance.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
 }
 
 BeginPlay(); // !
@@ -194,6 +204,12 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 	}
 
 	const Command: string = Event.text.trim().toLowerCase();
+	if (bDebug && Command === "!hudtest")
+	{
+		ShowDamageNumber(Player.GetPlayerSlot(), 123);
+		return;
+	}
+
 	const PlayerClass: EPlayerClass | undefined = ClassChatCommands.get(Command);
 	if (PlayerClass === undefined)
 	{
@@ -263,6 +279,7 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 {
 	ClearPlayer(Event.playerSlot);
+	ResetDamageNumbers(Event.playerSlot);
 	GClassBySlot.delete(Event.playerSlot);
 	GPlayerStates.delete(Event.playerSlot);
 }
@@ -299,6 +316,16 @@ function HandleGunFire(Event: FGunFireEvent): void
 	}
 }
 
+function HandlePlayerDamage(Event: FPlayerDamageEvent): void
+{
+	const AttackerSlot: number = GetPlayerSlot(Event.attacker);
+	if (AttackerSlot === INDEX_NONE || Event.attacker === Event.player)
+	{
+		return;
+	}
+	ShowDamageNumber(AttackerSlot, Event.damage);
+}
+
 function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResult
 {
 	if (GUberedPawns.has(Event.player))
@@ -306,12 +333,26 @@ function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResul
 		return { abort: true };
 	}
 
+	// fall-damage
+	if ((Event.damageTypes & CSDamageTypes.FALL) !== 0 && GClassBySlot.has(GetPlayerSlot(Event.player)))
+	{
+		// const FallSpeed: number = 580 + Event.damage * (1024 - 580) / 100; // undoes cs2's fall formula
+		// if (FallSpeed <= 650)
+		// {
+		// 	return { abort: true };
+		// }
+		// return { damage: Math.round(5 * (FallSpeed / 300) * (Event.player.GetMaxHealth() / 100)) };
+		
+		return { abort: true };
+	}
+	
 	const AttackerSlot: number = GetPlayerSlot(Event.attacker);
 	const AttackerClass: EPlayableClass | undefined = GClassBySlot.get(AttackerSlot);
 	if (AttackerClass === undefined)
 	{
 		return;
 	}
+
 	return ClassDefinitions[AttackerClass].ModifyOutgoingDamage(Event);
 }
 
@@ -323,6 +364,7 @@ const GPendingTimers: FPendingTimer[] = [];
 let GUberedPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 let GGlowingPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 let GLastThinkTime: number = 0;
+let GbWarnedNoDamageHud: boolean = false;
 
 export function GetPlayerState(Slot: number): FPlayerState
 {
@@ -338,6 +380,9 @@ export function GetPlayerState(Slot: number): FPlayerState
 			DecayAccumulator: 0,
 			UberCharge: 0,
 			UberEndTime: 0,
+			DamageTotal: 0,
+			LastDamageTime: 0,
+			bDamagePopA: false,
 		};
 		GPlayerStates.set(Slot, State);
 	}
@@ -486,10 +531,6 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 
 		const Falloff: number = 1 - 0.5 * (Distance / Radius);
 		let CalculatedDmg: number = Damage * Falloff;
-		if (bIsSelf)
-		{
-			CalculatedDmg *= 0.33;	
-		}
 
 		// do knockback 
         const IsCrouched: boolean = Victim.IsDucking() || Victim.IsDucked();
@@ -509,6 +550,11 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
         const CalculatedKb: number = CalculatedDmg * (KBStrength / CrouchFactor);
         Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Direction, CalculatedKb)) });
 		
+		if (bIsSelf)
+		{
+			CalculatedDmg *= 0.33;	
+		}
+
 		Victim.TakeDamage(
 		{
 			damage: CalculatedDmg,
@@ -517,7 +563,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 			inflictor: Attacker,
 		});
 
-		Instance.Msg(`${LogPrefix} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f`);
+		Instance.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f`);
 	});
 }
 
@@ -737,6 +783,63 @@ function UpdateUberGlows(UberedPawns: ReadonlySet<CSPlayerPawn>): void
 	GGlowingPawns = new Set<CSPlayerPawn>(UberedPawns);
 }
 
+// Hud /////////////////////////////////////////////////////////////////////////////////////////////
+
+function ShowDamageNumber(Slot: number, Damage: number): void
+{
+	const Hud: CustomHudLayout | undefined = FindDamageHud();
+	if (!Hud || Damage <= 0)
+	{
+		return;
+	}
+
+	const State: FPlayerState = GetPlayerState(Slot);
+	const Now: number = Instance.GetGameTime();
+	if (Now - State.LastDamageTime > DamageBatchWindow)
+	{
+		State.DamageTotal = 0;
+	}
+	State.DamageTotal += Damage;
+	State.LastDamageTime = Now;
+
+	State.bDamagePopA = !State.bDamagePopA;
+	Hud.SetDialogVariableStringForPlayer(Slot, DamageLabelId, "damage", `-${Math.round(State.DamageTotal)}`);
+
+	SetTimer(DamageShowTime, (): void =>
+	{
+		const LaterHud: CustomHudLayout | undefined = FindDamageHud();
+		if (LaterHud && Instance.GetGameTime() - State.LastDamageTime >= DamageShowTime - 0.01)
+		{
+			LaterHud.SetDialogVariableStringForPlayer(Slot, DamageLabelId, "damage", "");
+		}
+	});
+}
+
+function ResetDamageNumbers(Slot: number): void
+{
+	const Hud: CustomHudLayout | undefined = FindDamageHud();
+	if (Hud)
+	{
+		Hud.ResetForPlayer(Slot);
+	}
+}
+
+function FindDamageHud(): CustomHudLayout | undefined
+{
+	const Hud: Entity | undefined = Instance.FindEntityByName(DamageHudName);
+	if (IsCustomHudLayout(Hud))
+	{
+		return Hud;
+	}
+	if (!GbWarnedNoDamageHud)
+	{
+		GbWarnedNoDamageHud = true;
+		const Problem: string = Hud ? "exists but isn't a custom_hud_layout" : "wasn't found";
+		Instance.Msg(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+	}
+	return undefined;
+}
+
 // Util ///////////////////////////////////////////////////////////////////////////////////////////
 
 abstract class FVectorMath
@@ -785,6 +888,11 @@ function IsPlayerPawn(Ent: Entity | undefined): Ent is CSPlayerPawn
 	return Ent !== undefined
 		&& "GetPlayerController" in Ent && typeof Ent.GetPlayerController === "function"
 		&& "IsInputPressed" in Ent && typeof Ent.IsInputPressed === "function";
+}
+
+function IsCustomHudLayout(Ent: Entity | undefined): Ent is CustomHudLayout
+{
+	return Ent !== undefined && "SetDialogVariableStringForPlayer" in Ent && typeof Ent.SetDialogVariableStringForPlayer === "function";
 }
 
 function IsPointTemplate(Ent: Entity | undefined): Ent is PointTemplate

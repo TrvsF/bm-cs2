@@ -73,7 +73,7 @@ export const SoldierSettings: FSoliderSettings =
 	RocketDamage: 100,
 	RocketRadius: 160,
 	RocketSpeed: 1200,
-	RocketKnockback: 450,
+	RocketKnockback: 400,
 	RocketLifetime: 10,
 };
 
@@ -86,13 +86,13 @@ export const DemoSettings: FDemoSettings =
 	SizeScale: 1.0,
 
 	DetonateKey: CSInputs.ATTACK2,
-	MaxStickies: 8,
+	MaxStickies: 6,
 	ArmTime: 0.8,
 	LaunchSpeed: 900,
 	LaunchUp: 150,
 	Radius: 160,
 	Damage: 100,
-	Knockback: 450,
+	Knockback: 600,
 };
 
 export const MedicSettings: FMedicSettings =
