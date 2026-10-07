@@ -19,6 +19,7 @@ export type EPlayableClass = Exclude<EPlayerClass, EPlayerClass.None>;
 
 export interface FClassSettings
 {
+	readonly DisplayName: string;
 	readonly Primary: string;
 	readonly Secondary: string;
 	readonly Melee: string;
@@ -52,7 +53,7 @@ export interface FDemoSettings extends FClassSettings
 	readonly Damage: number;
 	readonly Knockback: number;
 	readonly StickyFalloff: FDamageFalloff | undefined;
-	readonly StickyFalloffTime: number;
+	readonly StickyFalloffTime: number;   // older stickies do flat damage, like TF2
 }
 
 export interface FMedicSettings extends FClassSettings, FHitscanSettings
@@ -98,6 +99,7 @@ const TF2StickyFalloff: FDamageFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDis
 
 export const SoldierSettings: FSoliderSettings =
 {
+	DisplayName: "Soldier",
 	Primary: "weapon_scar20",
 	Secondary: "",
 	Melee: "weapon_knife",
@@ -114,6 +116,7 @@ export const SoldierSettings: FSoliderSettings =
 
 export const DemoSettings: FDemoSettings =
 {
+	DisplayName: "Demoman",
 	Primary: "weapon_nova",
 	Secondary: "weapon_glock",
 	Melee: "",
@@ -134,6 +137,7 @@ export const DemoSettings: FDemoSettings =
 
 export const MedicSettings: FMedicSettings =
 {
+	DisplayName: "Medic",
 	Primary: "weapon_mp7",
 	Secondary: "",
 	Melee: "weapon_knife",

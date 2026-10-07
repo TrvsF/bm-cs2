@@ -32,6 +32,7 @@ export type FPlayerKillEvent = TEventOf<typeof Instance.OnPlayerKill>;
 export type FPlayerDisconnectEvent = TEventOf<typeof Instance.OnPlayerDisconnect>;
 export type FGunFireEvent = TEventOf<typeof Instance.OnGunFire>;
 export type FPlayerDamageEvent = TEventOf<typeof Instance.OnPlayerDamage>;
+export type FCustomHudClickedEvent = TEventOf<typeof Instance.OnCustomHudClicked>;
 export type FModifyDamageEvent = TEventOf<typeof Instance.OnModifyPlayerDamage>;
 export type FModifyDamageResult = ReturnType<Parameters<typeof Instance.OnModifyPlayerDamage>[0]>;
 

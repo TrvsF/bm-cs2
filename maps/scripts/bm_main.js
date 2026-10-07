@@ -1,5 +1,5 @@
 // src/bm_main.ts
-import { Instance as Instance7, CSDamageTypes as CSDamageTypes3 } from "cs_script/point_script";
+import { Instance as Instance8, CSDamageTypes as CSDamageTypes3 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance } from "cs_script/point_script";
@@ -350,10 +350,18 @@ function ApplyBulletFalloff(Event, Falloff) {
 }
 
 // src/bm_classes.ts
+var EPlayerClass = /* @__PURE__ */ ((EPlayerClass2) => {
+  EPlayerClass2["None"] = "none";
+  EPlayerClass2["Demoman"] = "demo";
+  EPlayerClass2["Solider"] = "soldier";
+  EPlayerClass2["Medic"] = "medic";
+  return EPlayerClass2;
+})(EPlayerClass || {});
 var TF2HitscanFalloff = { RampUp: 1.5, FallOff: 0.5, OptimalDistance: 512 };
 var TF2RocketFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
 var TF2StickyFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDistance: 512 };
 var SoldierSettings = {
+  DisplayName: "Soldier",
   Primary: "weapon_scar20",
   Secondary: "",
   Melee: "weapon_knife",
@@ -367,6 +375,7 @@ var SoldierSettings = {
   RocketFalloff: TF2RocketFalloff
 };
 var DemoSettings = {
+  DisplayName: "Demoman",
   Primary: "weapon_nova",
   Secondary: "weapon_glock",
   Melee: "",
@@ -384,6 +393,7 @@ var DemoSettings = {
   StickyFalloffTime: 5
 };
 var MedicSettings = {
+  DisplayName: "Medic",
   Primary: "weapon_mp7",
   Secondary: "",
   Melee: "weapon_knife",
@@ -962,6 +972,125 @@ function IsBotPathBlocked(Pawn, Yaw) {
   return !Floor.didHit;
 }
 
+// src/bm_class_ui.ts
+import { Instance as Instance7, CSInputs as CSInputs2 } from "cs_script/point_script";
+var ClassUiName = "class_hud";
+var MenuPanelId = "ClassMenu";
+var IndicatorPanelId = "ClassIndicator";
+var ClassNameLabelId = "ClassName";
+var PickButtonPrefix = "Pick_";
+var CloseButtonId = "CloseMenu";
+var MenuToggleKey = CSInputs2.LOOK_AT_WEAPON;
+var NoClassName = "No class";
+var AllClasses = Object.values(EPlayerClass);
+var GOpenMenus = /* @__PURE__ */ new Set();
+var GOfferedMenus = /* @__PURE__ */ new Set();
+var GbWarnedNoClassUi = false;
+function OpenClassMenu(Slot) {
+  const Ui = FindClassUi();
+  if (!Ui) {
+    return;
+  }
+  GOpenMenus.add(Slot);
+  Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", true);
+  Ui.SetInputCaptureEnabled(Slot, true);
+}
+function CloseClassMenu(Slot) {
+  GOpenMenus.delete(Slot);
+  const Ui = FindClassUi();
+  if (!Ui) {
+    return;
+  }
+  Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", false);
+  Ui.SetInputCaptureEnabled(Slot, false);
+}
+function ToggleClassMenu(Slot) {
+  if (GOpenMenus.has(Slot)) {
+    CloseClassMenu(Slot);
+  } else {
+    OpenClassMenu(Slot);
+  }
+}
+function OfferClassMenu(Slot, PlayerClass) {
+  if (GOfferedMenus.has(Slot) || PlayerClass !== "none" /* None */) {
+    return;
+  }
+  GOfferedMenus.add(Slot);
+  OpenClassMenu(Slot);
+}
+function TickClassMenuKey() {
+  ForEachLivePawn((Pawn, Slot) => {
+    const Controller = Pawn.GetPlayerController();
+    if (!Controller || Controller.IsBot()) {
+      return;
+    }
+    if (Pawn.WasInputJustPressed(MenuToggleKey)) {
+      ToggleClassMenu(Slot);
+    }
+  });
+}
+function ReadClassMenuClick(Layout, ButtonId) {
+  if (Layout.GetEntityName() !== ClassUiName) {
+    return void 0;
+  }
+  if (ButtonId === CloseButtonId) {
+    return "close";
+  }
+  if (!ButtonId.startsWith(PickButtonPrefix)) {
+    return void 0;
+  }
+  const ClassValue = ButtonId.substring(PickButtonPrefix.length);
+  for (const PlayerClass of AllClasses) {
+    if (PlayerClass === ClassValue) {
+      return PlayerClass;
+    }
+  }
+  return void 0;
+}
+function ShowClassIndicator(Slot, PlayerClass) {
+  const Ui = FindClassUi();
+  if (!Ui) {
+    return;
+  }
+  const DisplayName = PlayerClass === "none" /* None */ ? NoClassName : ClassDefinitions[PlayerClass].Settings.DisplayName;
+  Ui.SetDialogVariableStringForPlayer(Slot, ClassNameLabelId, "classname", DisplayName);
+  Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Shown", true);
+  for (const Other of AllClasses) {
+    const bIsCurrent = Other === PlayerClass;
+    Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, `Class_${Other}`, bIsCurrent);
+    Ui.SetHasClassForPlayer(Slot, `${PickButtonPrefix}${Other}`, "Selected", bIsCurrent);
+  }
+  if (GOpenMenus.has(Slot)) {
+    Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", true);
+    Ui.SetInputCaptureEnabled(Slot, true);
+  }
+}
+function ResetClassUi(Slot) {
+  GOpenMenus.delete(Slot);
+  GOfferedMenus.delete(Slot);
+  const Ui = FindClassUi();
+  if (!Ui) {
+    return;
+  }
+  Ui.SetInputCaptureEnabled(Slot, false);
+  Ui.ResetForPlayer(Slot);
+}
+function FindClassUi() {
+  const Ui = Instance7.FindEntityByName(ClassUiName);
+  if (IsCustomHudLayout2(Ui)) {
+    return Ui;
+  }
+  if (!GbWarnedNoClassUi) {
+    GbWarnedNoClassUi = true;
+    const Problem = Ui ? "exists but isn't a custom_hud_layout" : "wasn't found";
+    Instance7.Msg(`${LogPrefix} class menu: an entity named "${ClassUiName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+  }
+  return void 0;
+}
+function IsCustomHudLayout2(Ent) {
+  return Ent !== void 0 && "SetInputCaptureEnabled" in Ent && typeof Ent.SetInputCaptureEnabled === "function";
+}
+
 // src/bm_main.ts
 var ClassChatCommands = /* @__PURE__ */ new Map(
   [
@@ -972,8 +1101,8 @@ var ClassChatCommands = /* @__PURE__ */ new Map(
   ]
 );
 function Tick() {
-  const Now = Instance7.GetGameTime();
-  Instance7.SetNextThink(Now + TickInterval);
+  const Now = Instance8.GetGameTime();
+  Instance8.SetNextThink(Now + TickInterval);
   const DeltaTime = Math.min(0.1, Math.max(0, Now - GLastThinkTime)) || TickInterval;
   GLastThinkTime = Now;
   try {
@@ -991,23 +1120,25 @@ function Tick() {
     for (const Definition of Object.values(ClassDefinitions)) {
       Definition.TickWorldLate(Now, DeltaTime);
     }
+    TickClassMenuKey();
     TickBots(Now);
   } catch (Exception) {
-    Instance7.Msg(`${LogPrefix} error: ${String(Exception)}`);
+    Instance8.Msg(`${LogPrefix} error: ${String(Exception)}`);
   }
 }
 function BeginPlay() {
-  Instance7.OnPlayerChat(HandlePlayerChat);
-  Instance7.OnPlayerReset(HandlePlayerReset);
-  Instance7.OnPlayerKill(HandlePlayerKill);
-  Instance7.OnPlayerDisconnect(HandlePlayerDisconnect);
-  Instance7.OnRoundStart(HandleRoundStart);
-  Instance7.OnGunFire(HandleGunFire);
-  Instance7.OnPlayerDamage(HandlePlayerDamage);
-  Instance7.OnModifyPlayerDamage(HandleModifyPlayerDamage);
-  Instance7.SetThink(Tick);
-  Instance7.SetNextThink(Instance7.GetGameTime());
-  Instance7.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
+  Instance8.OnPlayerChat(HandlePlayerChat);
+  Instance8.OnPlayerReset(HandlePlayerReset);
+  Instance8.OnPlayerKill(HandlePlayerKill);
+  Instance8.OnPlayerDisconnect(HandlePlayerDisconnect);
+  Instance8.OnRoundStart(HandleRoundStart);
+  Instance8.OnGunFire(HandleGunFire);
+  Instance8.OnPlayerDamage(HandlePlayerDamage);
+  Instance8.OnModifyPlayerDamage(HandleModifyPlayerDamage);
+  Instance8.OnCustomHudClicked(HandleCustomHudClicked);
+  Instance8.SetThink(Tick);
+  Instance8.SetNextThink(Instance8.GetGameTime());
+  Instance8.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
 }
 BeginPlay();
 function HandlePlayerChat(Event) {
@@ -1020,26 +1151,14 @@ function HandlePlayerChat(Event) {
     ShowDamageNumber(Player.GetPlayerSlot(), 123);
     return;
   }
-  const PlayerClass = ClassChatCommands.get(Command);
-  if (PlayerClass === void 0) {
+  if (Command === "!class") {
+    OpenClassMenu(Player.GetPlayerSlot());
     return;
   }
-  const Slot = Player.GetPlayerSlot();
-  ClearPlayer(Slot);
-  const Pawn = Player.GetPlayerPawn();
-  if (PlayerClass === "none" /* None */) {
-    GClassBySlot.delete(Slot);
-    if (Pawn && Pawn.IsAlive()) {
-      RestoreDefaultBody(Pawn);
-    }
-  } else {
-    GClassBySlot.set(Slot, PlayerClass);
-    if (Pawn && Pawn.IsAlive()) {
-      GiveLoadout(Pawn, PlayerClass);
-    }
+  const PlayerClass = ClassChatCommands.get(Command);
+  if (PlayerClass !== void 0) {
+    SetPlayerClass(Player, PlayerClass);
   }
-  const ClassLabel = PlayerClass === "none" /* None */ ? "normal" : PlayerClass;
-  Instance7.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
 }
 function HandlePlayerReset(Event) {
   const Pawn = Event.player;
@@ -1049,6 +1168,7 @@ function HandlePlayerReset(Event) {
   }
   ClearPlayer(Slot);
   ResetBotMode(Slot);
+  RefreshClassUi(Pawn, Slot);
   const PlayerClass = GClassBySlot.get(Slot);
   if (PlayerClass === void 0) {
     return;
@@ -1069,6 +1189,7 @@ function HandlePlayerDisconnect(Event) {
   ClearPlayer(Event.playerSlot);
   ForgetBot(Event.playerSlot);
   ResetDamageNumbers(Event.playerSlot);
+  ResetClassUi(Event.playerSlot);
   GClassBySlot.delete(Event.playerSlot);
 }
 function HandleRoundStart() {
@@ -1077,7 +1198,7 @@ function HandleRoundStart() {
   }
   ClearDecals();
   ApplyMatchSettings();
-  Instance7.Msg(`${LogPrefix} match settings applied`);
+  Instance8.Msg(`${LogPrefix} match settings applied`);
 }
 function HandleGunFire(Event) {
   const Weapon = Event.weapon;
@@ -1089,7 +1210,7 @@ function HandleGunFire(Event) {
   }
   const Definition = ClassDefinitions[PlayerClass];
   if (IsWeapon(Weapon, Definition.Settings.Primary)) {
-    Definition.OnPrimaryFire(Pawn, Slot, Instance7.GetGameTime());
+    Definition.OnPrimaryFire(Pawn, Slot, Instance8.GetGameTime());
   }
 }
 function HandlePlayerDamage(Event) {
@@ -1098,6 +1219,16 @@ function HandlePlayerDamage(Event) {
     return;
   }
   ShowDamageNumber(AttackerSlot, Event.damage);
+}
+function HandleCustomHudClicked(Event) {
+  const Choice = ReadClassMenuClick(Event.layout, Event.buttonId);
+  if (Choice === void 0) {
+    return;
+  }
+  CloseClassMenu(Event.player.GetPlayerSlot());
+  if (Choice !== "close") {
+    SetPlayerClass(Event.player, Choice);
+  }
 }
 function HandleModifyPlayerDamage(Event) {
   for (const Definition of Object.values(ClassDefinitions)) {
@@ -1128,13 +1259,45 @@ function ApplyMatchSettings() {
     Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any", "bot_stop 1");
   }
   for (const Command of Commands) {
-    Instance7.ServerCommand(Command);
+    Instance8.ServerCommand(Command);
   }
 }
 function TickMatch(Now) {
-  if (bDebug && Instance7.IsWarmupPeriod()) {
-    Instance7.ServerCommand("mp_warmup_end");
+  if (bDebug && Instance8.IsWarmupPeriod()) {
+    Instance8.ServerCommand("mp_warmup_end");
   }
+}
+function SetPlayerClass(Player, PlayerClass) {
+  const Slot = Player.GetPlayerSlot();
+  ClearPlayer(Slot);
+  const Pawn = Player.GetPlayerPawn();
+  if (PlayerClass === "none" /* None */) {
+    GClassBySlot.delete(Slot);
+    if (Pawn && Pawn.IsAlive()) {
+      RestoreDefaultBody(Pawn);
+    }
+  } else {
+    GClassBySlot.set(Slot, PlayerClass);
+    if (Pawn && Pawn.IsAlive()) {
+      GiveLoadout(Pawn, PlayerClass);
+    }
+  }
+  ShowClassIndicator(Slot, PlayerClass);
+  const ClassLabel = PlayerClass === "none" /* None */ ? "normal" : PlayerClass;
+  Instance8.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
+}
+function RefreshClassUi(Pawn, Slot) {
+  const Controller = Pawn.GetPlayerController();
+  if (!Controller || Controller.IsBot()) {
+    return;
+  }
+  const PlayerClass = GClassBySlot.get(Slot) ?? "none" /* None */;
+  ShowClassIndicator(Slot, PlayerClass);
+  SetTimer(0.5, () => {
+    if (Pawn.IsValid() && Pawn.IsAlive()) {
+      OfferClassMenu(Slot, GClassBySlot.get(Slot) ?? "none" /* None */);
+    }
+  });
 }
 function ClearPlayer(Slot) {
   for (const Definition of Object.values(ClassDefinitions)) {

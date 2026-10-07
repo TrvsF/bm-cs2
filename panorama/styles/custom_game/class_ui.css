@@ -1,0 +1,181 @@
+.ClassScreen
+{
+	width: 100%;
+	height: 100%;
+	z-index: 99998;
+}
+
+.ClassIndicator
+{
+	visibility: collapse;
+	horizontal-align: right;
+	vertical-align: bottom;
+
+	flow-children: down;
+	padding: 6px 14px 6px 10px;
+	border-right: 3px solid #9aa2ac;
+	background-color: #0b0f14b0;
+}
+
+.ClassIndicator.Shown
+{
+	visibility: visible;
+}
+
+.ClassIndicator.Class_soldier
+{
+	border-left-color: #d9b26a;
+}
+
+.ClassIndicator.Class_demo
+{
+	border-left-color: #e8823a;
+}
+
+.ClassIndicator.Class_medic
+{
+	border-left-color: #ee5a5a;
+}
+
+.ClassName
+{
+	font-family: Stratum2 Medium Condensed;
+	font-size: 22px;
+	color: #ffffff;
+	text-transform: uppercase;
+	letter-spacing: 1.2px;
+}
+
+.ClassHint
+{
+	font-size: 12px;
+	color: #9aa2ac;
+	margin-top: 2px;
+}
+
+/* Menu */
+
+.ClassMenu
+{
+	visibility: collapse;
+	horizontal-align: center;
+	vertical-align: center;
+	flow-children: down;
+	width: 620px;
+	padding: 18px;
+	border-radius: 4px;
+	background-color: #0b0f14ee;
+	box-shadow: #000000c0 0px 8px 30px 0px;
+}
+
+.ClassMenu.Open
+{
+	visibility: visible;
+}
+
+.MenuTitle
+{
+	horizontal-align: center;
+	margin-bottom: 14px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 26px;
+	color: #ffffff;
+	text-transform: uppercase;
+	letter-spacing: 1.5px;
+}
+
+.ClassButtons
+{
+	width: 100%;
+	flow-children: right;
+}
+
+.ClassButton
+{
+	width: fill-parent-flow( 1.0 );
+	height: 130px;
+	margin: 0px 5px;
+	padding: 12px;
+	flow-children: down;
+	border-radius: 3px;
+	border: 2px solid #ffffff14;
+	background-color: #ffffff0d;
+}
+
+.ClassButton:hover
+{
+	background-color: #ffffff22;
+}
+
+.ClassButton.Selected
+{
+	border: 2px solid #ffffffaa;
+}
+
+.ClassButtonName
+{
+	width: 100%;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 24px;
+	text-transform: uppercase;
+	letter-spacing: 1.2px;
+	color: #ffffff;
+}
+
+.SoldierButton .ClassButtonName
+{
+	color: #d9b26a;
+}
+
+.DemoButton .ClassButtonName
+{
+	color: #e8823a;
+}
+
+.MedicButton .ClassButtonName
+{
+	color: #ee5a5a;
+}
+
+.ClassButtonInfo
+{
+	width: 100%;
+	margin-top: 8px;
+	font-size: 13px;
+	color: #b8bcc2;
+	white-space: normal;
+}
+
+.MenuFooter
+{
+	horizontal-align: right;
+	margin-top: 14px;
+	flow-children: right;
+}
+
+.FooterButton
+{
+	width: 120px;
+	height: 34px;
+	margin-left: 8px;
+	border-radius: 3px;
+	border: 1px solid #ffffff14;
+	background-color: #ffffff0d;
+}
+
+.FooterButton:hover
+{
+	background-color: #ffffff22;
+}
+
+.FooterButtonText
+{
+	width: 100%;
+	horizontal-align: center;
+	vertical-align: center;
+	text-align: center;
+	font-size: 14px;
+	color: #f2f4f7;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+}

@@ -9,6 +9,7 @@ import type
 	FPlayerDisconnectEvent,
 	FGunFireEvent,
 	FPlayerDamageEvent,
+	FCustomHudClickedEvent,
 	FModifyDamageEvent,
 	FModifyDamageResult,
 } from "./bm_core";
@@ -17,6 +18,8 @@ import type { EPlayableClass } from "./bm_classes";
 import { ClearDecals } from "./bm_effects";
 import { ShowDamageNumber, ResetDamageNumbers } from "./bm_hud";
 import { TickBots, ResetBotMode, ForgetBot } from "./bm_bots";
+import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ResetClassUi } from "./bm_class_ui";
+import type { FClassMenuChoice } from "./bm_class_ui";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -60,6 +63,7 @@ function Tick(): void
 			Definition.TickWorldLate(Now, DeltaTime);
 		}
 
+		TickClassMenuKey(); // after the gameplay, so a problem here can't stop it
 		TickBots(Now); // last, so a problem here can't stop the gameplay above
 	}
 	catch (Exception: unknown)
@@ -78,6 +82,7 @@ function BeginPlay(): void
 	Instance.OnGunFire(HandleGunFire);
 	Instance.OnPlayerDamage(HandlePlayerDamage);
 	Instance.OnModifyPlayerDamage(HandleModifyPlayerDamage);
+	Instance.OnCustomHudClicked(HandleCustomHudClicked);
 
 	Instance.SetThink(Tick);
 	Instance.SetNextThink(Instance.GetGameTime());
@@ -102,36 +107,17 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 		ShowDamageNumber(Player.GetPlayerSlot(), 123);
 		return;
 	}
-
-	const PlayerClass: EPlayerClass | undefined = ClassChatCommands.get(Command);
-	if (PlayerClass === undefined)
+	if (Command === "!class")
 	{
+		OpenClassMenu(Player.GetPlayerSlot());
 		return;
 	}
 
-	const Slot: number = Player.GetPlayerSlot();
-	ClearPlayer(Slot);
-
-	const Pawn: CSPlayerPawn | undefined = Player.GetPlayerPawn();
-	if (PlayerClass === EPlayerClass.None)
+	const PlayerClass: EPlayerClass | undefined = ClassChatCommands.get(Command);
+	if (PlayerClass !== undefined)
 	{
-		GClassBySlot.delete(Slot);
-		if (Pawn && Pawn.IsAlive())
-		{
-			RestoreDefaultBody(Pawn);
-		}
+		SetPlayerClass(Player, PlayerClass);
 	}
-	else
-	{
-		GClassBySlot.set(Slot, PlayerClass);
-		if (Pawn && Pawn.IsAlive())
-		{
-			GiveLoadout(Pawn, PlayerClass);
-		}
-	}
-
-	const ClassLabel: string = PlayerClass === EPlayerClass.None ? "normal" : PlayerClass;
-	Instance.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
 }
 
 function HandlePlayerReset(Event: FPlayerResetEvent): void
@@ -145,6 +131,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 
 	ClearPlayer(Slot);
 	ResetBotMode(Slot);
+	RefreshClassUi(Pawn, Slot);
 	const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
 	if (PlayerClass === undefined)
 	{
@@ -174,6 +161,7 @@ function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 	ClearPlayer(Event.playerSlot);
 	ForgetBot(Event.playerSlot);
 	ResetDamageNumbers(Event.playerSlot);
+	ResetClassUi(Event.playerSlot);
 	GClassBySlot.delete(Event.playerSlot);
 }
 
@@ -214,6 +202,21 @@ function HandlePlayerDamage(Event: FPlayerDamageEvent): void
 		return;
 	}
 	ShowDamageNumber(AttackerSlot, Event.damage);
+}
+
+function HandleCustomHudClicked(Event: FCustomHudClickedEvent): void
+{
+	const Choice: FClassMenuChoice = ReadClassMenuClick(Event.layout, Event.buttonId);
+	if (Choice === undefined)
+	{
+		return;
+	}
+
+	CloseClassMenu(Event.player.GetPlayerSlot());
+	if (Choice !== "close")
+	{
+		SetPlayerClass(Event.player, Choice);
+	}
 }
 
 function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResult
@@ -285,6 +288,53 @@ function TickMatch(Now: number): void
 }
 
 // Player //////////////////////////////////////////////////////////////////////////////////////////
+
+function SetPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): void
+{
+	const Slot: number = Player.GetPlayerSlot();
+	ClearPlayer(Slot);
+
+	const Pawn: CSPlayerPawn | undefined = Player.GetPlayerPawn();
+	if (PlayerClass === EPlayerClass.None)
+	{
+		GClassBySlot.delete(Slot);
+		if (Pawn && Pawn.IsAlive())
+		{
+			RestoreDefaultBody(Pawn);
+		}
+	}
+	else
+	{
+		GClassBySlot.set(Slot, PlayerClass);
+		if (Pawn && Pawn.IsAlive())
+		{
+			GiveLoadout(Pawn, PlayerClass);
+		}
+	}
+	ShowClassIndicator(Slot, PlayerClass);
+
+	const ClassLabel: string = PlayerClass === EPlayerClass.None ? "normal" : PlayerClass;
+	Instance.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
+}
+
+function RefreshClassUi(Pawn: CSPlayerPawn, Slot: number): void
+{
+	const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
+	if (!Controller || Controller.IsBot())
+	{
+		return;
+	}
+
+	const PlayerClass: EPlayerClass = GClassBySlot.get(Slot) ?? EPlayerClass.None;
+	ShowClassIndicator(Slot, PlayerClass);
+	SetTimer(0.5, (): void =>
+	{
+		if (Pawn.IsValid() && Pawn.IsAlive())
+		{
+			OfferClassMenu(Slot, GClassBySlot.get(Slot) ?? EPlayerClass.None);
+		}
+	});
+}
 
 function ClearPlayer(Slot: number): void
 {

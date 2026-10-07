@@ -1,0 +1,39 @@
+<root>
+	<styles>
+		<include src="s2r://panorama/styles/custom_game/class_ui.vcss_c" />
+	</styles>
+	<Panel class="ClassScreen" hittest="false">
+
+		<Panel id="ClassIndicator" class="ClassIndicator" hittest="false">
+			<Label id="ClassName" class="ClassName" text="{s:classname}" hittest="false" />
+			<Label class="ClassHint" text="F: change class" hittest="false" />
+		</Panel>
+
+		<Panel id="ClassMenu" class="ClassMenu">
+			<Label class="MenuTitle" text="Choose your class" hittest="false" />
+			<Panel class="ClassButtons">
+				<Button id="Pick_soldier" class="ClassButton SoldierButton">
+					<Label class="ClassButtonName" text="Soldier" hittest="false" />
+					<Label class="ClassButtonInfo" text="Rocket launcher. Shoot the floor to rocket jump." hittest="false" />
+				</Button>
+				<Button id="Pick_demo" class="ClassButton DemoButton">
+					<Label class="ClassButtonName" text="Demoman" hittest="false" />
+					<Label class="ClassButtonInfo" text="Sticky bombs. Right-click to detonate." hittest="false" />
+				</Button>
+				<Button id="Pick_medic" class="ClassButton MedicButton">
+					<Label class="ClassButtonName" text="Medic" hittest="false" />
+					<Label class="ClassButtonInfo" text="Knife heals teammates. Right-click for Uber when full." hittest="false" />
+				</Button>
+			</Panel>
+			<Panel class="MenuFooter">
+				<Button id="Pick_none" class="FooterButton">
+					<Label class="FooterButtonText" text="No class" hittest="false" />
+				</Button>
+				<Button id="CloseMenu" class="FooterButton">
+					<Label class="FooterButtonText" text="Close" hittest="false" />
+				</Button>
+			</Panel>
+		</Panel>
+
+	</Panel>
+</root>
