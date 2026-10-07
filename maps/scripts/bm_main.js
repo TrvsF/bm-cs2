@@ -1122,7 +1122,7 @@ function ApplyMatchSettings() {
   const Commands = [];
   if (bDebug) {
     Commands.push("mp_do_warmup_period 0", "mp_warmuptime 0", "mp_freezetime 0");
-    Commands.push("mp_roundtime 60", "mp_roundtime_defuse 60", "mp_roundtime_hostage 60", "mp_timelimit 0", "mp_maxrounds 0");
+    Commands.push("mp_roundtime 60", "mp_roundtime_defuse 60", "mp_roundtime_hostage 60");
     Commands.push("mp_ignore_round_win_conditions 1", "mp_respawn_on_death_t 1", "mp_respawn_on_death_ct 1");
     Commands.push("sv_infinite_ammo 1");
     Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any", "bot_stop 1");
