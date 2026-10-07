@@ -1,4 +1,4 @@
-import { Instance, CSDamageTypes } from "cs_script/point_script";
+import { Instance, CSDamageTypes, CSGearSlot } from "cs_script/point_script";
 import type { CSPlayerPawn, CSPlayerController, CSWeaponBase } from "cs_script/point_script";
 import { bDebug, TickInterval, LogPrefix, INDEX_NONE, GetPlayerSlot, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
 import type
@@ -8,12 +8,14 @@ import type
 	FPlayerKillEvent,
 	FPlayerDisconnectEvent,
 	FGunFireEvent,
+	FWeaponPickupEvent,
+	FWeaponDropEvent,
 	FPlayerDamageEvent,
 	FCustomHudClickedEvent,
 	FModifyDamageEvent,
 	FModifyDamageResult,
 } from "./bm_core";
-import { EPlayerClass, ClassDefinitions, GiveLoadout, RestoreDefaultBody } from "./bm_classes";
+import { EPlayerClass, ClassDefinitions, GiveLoadout, GiveNoClassLoadout, IsWeaponAllowed, RestoreDefaultBody } from "./bm_classes";
 import type { EPlayableClass } from "./bm_classes";
 import { ClearDecals } from "./bm_effects";
 import { ShowDamageNumber, ResetDamageNumbers } from "./bm_hud";
@@ -63,8 +65,9 @@ function Tick(): void
 			Definition.TickWorldLate(Now, DeltaTime);
 		}
 
-		TickClassMenuKey(); // after the gameplay, so a problem here can't stop it
-		TickBots(Now); // last, so a problem here can't stop the gameplay above
+		TickClassMenuKey();
+		TickNoBuying();
+		TickBots(Now);
 	}
 	catch (Exception: unknown)
 	{
@@ -80,6 +83,8 @@ function BeginPlay(): void
 	Instance.OnPlayerDisconnect(HandlePlayerDisconnect);
 	Instance.OnRoundStart(HandleRoundStart);
 	Instance.OnGunFire(HandleGunFire);
+	Instance.OnWeaponPickup(HandleWeaponPickup);
+	Instance.OnWeaponDrop(HandleWeaponDrop);
 	Instance.OnPlayerDamage(HandlePlayerDamage);
 	Instance.OnModifyPlayerDamage(HandleModifyPlayerDamage);
 	Instance.OnCustomHudClicked(HandleCustomHudClicked);
@@ -116,7 +121,7 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 	const PlayerClass: EPlayerClass | undefined = ClassChatCommands.get(Command);
 	if (PlayerClass !== undefined)
 	{
-		SetPlayerClass(Player, PlayerClass);
+		RequestPlayerClass(Player, PlayerClass);
 	}
 }
 
@@ -131,16 +136,26 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 
 	ClearPlayer(Slot);
 	ResetBotMode(Slot);
+	const bHadClass: boolean = GClassBySlot.has(Slot);
+	ApplyPendingClass(Slot);
 	RefreshClassUi(Pawn, Slot);
 	const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
-	if (PlayerClass === undefined)
-	{
-		return;
-	}
 
 	SetTimer(0.1, (): void =>
 	{
-		if (Pawn.IsValid() && Pawn.IsAlive())
+		if (!Pawn.IsValid() || !Pawn.IsAlive())
+		{
+			return;
+		}
+		if (PlayerClass === undefined)
+		{
+			if (bHadClass)
+			{
+				RestoreDefaultBody(Pawn);
+			}
+			GiveNoClassLoadout(Pawn);
+		}
+		else
 		{
 			GiveLoadout(Pawn, PlayerClass);
 		}
@@ -163,6 +178,7 @@ function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 	ResetDamageNumbers(Event.playerSlot);
 	ResetClassUi(Event.playerSlot);
 	GClassBySlot.delete(Event.playerSlot);
+	GPendingClassBySlot.delete(Event.playerSlot);
 }
 
 function HandleRoundStart(): void
@@ -192,6 +208,29 @@ function HandleGunFire(Event: FGunFireEvent): void
 	{
 		Definition.OnPrimaryFire(Pawn, Slot, Instance.GetGameTime());
 	}
+	else if (IsWeapon(Weapon, Definition.Settings.Secondary))
+	{
+		Definition.OnSecondaryFire(Pawn, Slot, Instance.GetGameTime());
+	}
+}
+
+function HandleWeaponPickup(Event: FWeaponPickupEvent): void
+{
+	const Weapon: CSWeaponBase = Event.weapon;
+	SetTimer(0, (): void =>
+	{
+		RemoveIfNotAllowed(Weapon);
+	});
+}
+
+function HandleWeaponDrop(Event: FWeaponDropEvent): void
+{
+	const Weapon: CSWeaponBase = Event.weapon;
+	const Dropper: CSPlayerPawn = Event.dropper;
+	SetTimer(0, (): void =>
+	{
+		RemoveDeathDrop(Weapon, Dropper);
+	});
 }
 
 function HandlePlayerDamage(Event: FPlayerDamageEvent): void
@@ -215,7 +254,7 @@ function HandleCustomHudClicked(Event: FCustomHudClickedEvent): void
 	CloseClassMenu(Event.player.GetPlayerSlot());
 	if (Choice !== "close")
 	{
-		SetPlayerClass(Event.player, Choice);
+		RequestPlayerClass(Event.player, Choice);
 	}
 }
 
@@ -256,6 +295,7 @@ function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResul
 // Globals ////////////////////////////////////////////////////////////////////////////////////////
 
 const GClassBySlot: Map<number, EPlayableClass> = new Map<number, EPlayableClass>();
+const GPendingClassBySlot: Map<number, EPlayerClass> = new Map<number, EPlayerClass>();
 let GLastThinkTime: number = 0;
 
 // Match //////////////////////////////////////////////////////////////////////////////////////////
@@ -289,6 +329,51 @@ function TickMatch(Now: number): void
 
 // Player //////////////////////////////////////////////////////////////////////////////////////////
 
+function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): void
+{
+	const Slot: number = Player.GetPlayerSlot();
+	const CurrentClass: EPlayerClass = GClassBySlot.get(Slot) ?? EPlayerClass.None;
+	const Pawn: CSPlayerPawn | undefined = Player.GetPlayerPawn();
+	const bAlive: boolean = Pawn !== undefined && Pawn.IsValid() && Pawn.IsAlive();
+
+	if (!bAlive || CurrentClass === EPlayerClass.None)
+	{
+		GPendingClassBySlot.delete(Slot);
+		SetPlayerClass(Player, PlayerClass);
+		return;
+	}
+
+	if (PlayerClass === CurrentClass)
+	{
+		GPendingClassBySlot.delete(Slot);
+	}
+	else
+	{
+		GPendingClassBySlot.set(Slot, PlayerClass);
+	}
+	ShowClassIndicator(Slot, CurrentClass);
+	Instance.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass} on respawn`);
+}
+
+function ApplyPendingClass(Slot: number): void
+{
+	const NextClass: EPlayerClass | undefined = GPendingClassBySlot.get(Slot);
+	if (NextClass === undefined)
+	{
+		return;
+	}
+
+	GPendingClassBySlot.delete(Slot);
+	if (NextClass === EPlayerClass.None)
+	{
+		GClassBySlot.delete(Slot);
+	}
+	else
+	{
+		GClassBySlot.set(Slot, NextClass);
+	}
+}
+
 function SetPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): void
 {
 	const Slot: number = Player.GetPlayerSlot();
@@ -301,6 +386,7 @@ function SetPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): 
 		if (Pawn && Pawn.IsAlive())
 		{
 			RestoreDefaultBody(Pawn);
+			GiveNoClassLoadout(Pawn);
 		}
 	}
 	else
@@ -342,4 +428,84 @@ function ClearPlayer(Slot: number): void
 	{
 		Definition.ClearPlayer(Slot);
 	}
+}
+
+// Weapons /////////////////////////////////////////////////////////////////////////////////////////
+
+function RemoveIfNotAllowed(Weapon: CSWeaponBase): void
+{
+	if (!Weapon.IsValid())
+	{
+		return;
+	}
+	const Pawn: CSPlayerPawn | undefined = Weapon.GetOwner();
+	const Slot: number = GetPlayerSlot(Pawn);
+	if (!Pawn || Slot === INDEX_NONE || !Pawn.IsAlive())
+	{
+		return;
+	}
+
+	const PlayerClass: EPlayerClass = GClassBySlot.get(Slot) ?? EPlayerClass.None;
+	if (IsWeaponAllowed(PlayerClass, Weapon))
+	{
+		return;
+	}
+	Pawn.DestroyWeapon(Weapon);
+
+	SetTimer(0, (): void =>
+	{
+		EnsureWeaponInHand(Pawn);
+	});
+}
+
+function RemoveDeathDrop(Weapon: CSWeaponBase, Dropper: CSPlayerPawn): void
+{
+	if (!Weapon.IsValid() || Weapon.GetOwner())
+	{
+		return;
+	}
+	if (Dropper.IsValid() && Dropper.IsAlive())
+	{
+		return;
+	}
+	Weapon.Remove();
+}
+
+function EnsureWeaponInHand(Pawn: CSPlayerPawn): void
+{
+	if (!Pawn.IsValid() || !Pawn.IsAlive())
+	{
+		return;
+	}
+	const Active: CSWeaponBase | undefined = Pawn.GetActiveWeapon();
+	if (Active && Active.IsValid())
+	{
+		return;
+	}
+	for (const GearSlot of [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE])
+	{
+		const Weapon: CSWeaponBase | undefined = Pawn.FindWeaponBySlot(GearSlot);
+		if (Weapon)
+		{
+			Pawn.SwitchToWeapon(Weapon);
+			return;
+		}
+	}
+}
+
+function TickNoBuying(): void
+{
+	ForEachLivePawn((Pawn: CSPlayerPawn): void =>
+	{
+		const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
+		if (!Controller)
+		{
+			return;
+		}
+		const Money: number = Controller.GetMoneySpendableNow();
+		if (Money > 0)
+		{
+			Controller.AddMoneySpendableNow(-Money);
+		}
+	});
 }

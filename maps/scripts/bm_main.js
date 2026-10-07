@@ -1,5 +1,5 @@
 // src/bm_main.ts
-import { Instance as Instance8, CSDamageTypes as CSDamageTypes3 } from "cs_script/point_script";
+import { Instance as Instance8, CSDamageTypes as CSDamageTypes3, CSGearSlot as CSGearSlot2 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance } from "cs_script/point_script";
@@ -362,7 +362,7 @@ var TF2RocketFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
 var TF2StickyFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDistance: 512 };
 var SoldierSettings = {
   DisplayName: "Soldier",
-  Primary: "weapon_scar20",
+  Primary: "weapon_awp",
   Secondary: "",
   Melee: "weapon_knife",
   Health: 150,
@@ -376,25 +376,31 @@ var SoldierSettings = {
 };
 var DemoSettings = {
   DisplayName: "Demoman",
-  Primary: "weapon_nova",
-  Secondary: "weapon_glock",
+  Primary: "weapon_sawedoff",
+  Secondary: "weapon_deagle",
   Melee: "",
   Health: 130,
   SizeScale: 1,
-  DetonateKey: CSInputs.ATTACK2,
-  MaxStickies: 6,
-  ArmTime: 0.8,
-  LaunchSpeed: 900,
-  LaunchUp: 150,
-  Radius: 160,
-  Damage: 90,
-  Knockback: 600,
+  StickyDetonateKey: CSInputs.ATTACK2,
+  StickyMax: 6,
+  StickyArmTime: 0.8,
+  StickyLaunchSpeed: 900,
+  StickyLaunchUp: 150,
+  StickyRadius: 160,
+  StickyDamage: 90,
+  StickyKnockback: 600,
   StickyFalloff: TF2StickyFalloff,
-  StickyFalloffTime: 5
+  StickyFalloffTime: 5,
+  PipeLaunchSpeed: 1337,
+  PipeLaunchUp: 150,
+  PipeRadius: 160,
+  PipeDamage: 100,
+  PipeKnockback: 1e3,
+  PipeFalloff: TF2RocketFalloff
 };
 var MedicSettings = {
   DisplayName: "Medic",
-  Primary: "weapon_mp7",
+  Primary: "weapon_nova",
   Secondary: "",
   Melee: "weapon_knife",
   Health: 150,
@@ -413,6 +419,8 @@ var RocketTemplateName = "rocket_template";
 var DefaultHealth = 100;
 var DefaultSizeScale = 1;
 var StrippedGearSlots = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
+var NoClassStrippedGearSlots = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.GRENADES];
+var NoClassMelee = "weapon_knife";
 var BeamStartDrop = { x: 0, y: 0, z: 12 };
 var UnarmedStickyColor = { r: 120, g: 120, b: 120 };
 var UberReadyColor = { r: 255, g: 255, b: 255 };
@@ -424,8 +432,8 @@ function ApplyBody(Pawn, Health, SizeScale) {
 function RestoreDefaultBody(Pawn) {
   ApplyBody(Pawn, DefaultHealth, DefaultSizeScale);
 }
-function StripGuns(Pawn) {
-  for (const GearSlot of StrippedGearSlots) {
+function StripGearSlots(Pawn, GearSlots) {
+  for (const GearSlot of GearSlots) {
     for (let Attempt = 0; Attempt < 6; Attempt++) {
       const Weapon = Pawn.FindWeaponBySlot(GearSlot);
       if (!Weapon) {
@@ -441,7 +449,7 @@ var UPlayerClass = class {
     this.Settings = Settings;
   }
   ApplyLoadout(Pawn) {
-    StripGuns(Pawn);
+    StripGearSlots(Pawn, StrippedGearSlots);
     ApplyBody(Pawn, this.Settings.Health, this.Settings.SizeScale);
     if (this.Settings.Melee !== "") {
       Pawn.GiveNamedItem(this.Settings.Melee);
@@ -458,6 +466,9 @@ var UPlayerClass = class {
   }
   // Called when someone playing this class fires their primary
   OnPrimaryFire(Pawn, Slot, Now) {
+  }
+  // Called when someone playing this class fires their primary
+  OnSecondaryFire(Pawn, Slot, Now) {
   }
   // Called every tick, whether or not anyone is playing this class
   TickWorld(Now, DeltaTime) {
@@ -493,17 +504,17 @@ var USoldierClass = class extends UPlayerClass {
     super(SoldierSettings);
   }
   OnPrimaryFire(Pawn, Slot, Now) {
-    const Rocket = LaunchProjectile(Pawn, this.Settings.RocketSpeed, 0, 0, RocketTemplateName);
-    this.Rockets.push(Rocket);
+    const Rocket2 = LaunchProjectile(Pawn, this.Settings.RocketSpeed, 0, 0, RocketTemplateName);
+    this.Rockets.push(Rocket2);
   }
   TickWorld(Now, DeltaTime) {
-    this.Rockets = this.Rockets.filter((Rocket) => {
-      return this.StepRocket(Rocket, Now, DeltaTime);
+    this.Rockets = this.Rockets.filter((Rocket2) => {
+      return this.StepRocket(Rocket2, Now, DeltaTime);
     });
   }
   OnRoundStart() {
-    for (const Rocket of this.Rockets) {
-      DestroyProjectile(Rocket);
+    for (const Rocket2 of this.Rockets) {
+      DestroyProjectile(Rocket2);
     }
     this.Rockets = [];
   }
@@ -513,18 +524,18 @@ var USoldierClass = class extends UPlayerClass {
     }
     return;
   }
-  StepRocket(Rocket, Now, DeltaTime) {
-    if (!Rocket.Owner.IsValid() || Now - Rocket.SpawnedAt > this.Settings.RocketLifetime) {
-      DestroyProjectile(Rocket);
+  StepRocket(Rocket2, Now, DeltaTime) {
+    if (!Rocket2.Owner.IsValid() || Now - Rocket2.SpawnedAt > this.Settings.RocketLifetime) {
+      DestroyProjectile(Rocket2);
       return false;
     }
-    if (MoveProjectile(Rocket, DeltaTime, true)) {
-      DestroyProjectile(Rocket);
-      Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff);
+    if (MoveProjectile(Rocket2, DeltaTime, true)) {
+      DestroyProjectile(Rocket2);
+      Explode(Rocket2.Position, Rocket2.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff);
       return false;
     }
-    if (!Rocket.Model) {
-      Instance4.DebugSphere({ center: Rocket.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Rocket.Owner) });
+    if (!Rocket2.Model) {
+      Instance4.DebugSphere({ center: Rocket2.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Rocket2.Owner) });
     }
     return true;
   }
@@ -536,20 +547,24 @@ var UDemomanClass = class extends UPlayerClass {
   }
   OnPrimaryFire(Pawn, Slot, Now) {
     const Sticky = {
-      ...LaunchProjectile(Pawn, this.Settings.LaunchSpeed, this.Settings.LaunchUp, 1, StickyTemplateName),
+      ...LaunchProjectile(Pawn, this.Settings.StickyLaunchSpeed, this.Settings.StickyLaunchUp, 1, StickyTemplateName),
       bStuck: false,
-      ArmedAt: Now + this.Settings.ArmTime
+      ArmedAt: Now + this.Settings.StickyArmTime
     };
     const State = this.GetPlayerState(Slot);
     State.Stickies.push(Sticky);
     if (!bDebug) {
-      while (State.Stickies.length > this.Settings.MaxStickies) {
+      while (State.Stickies.length > this.Settings.StickyMax) {
         const Oldest = State.Stickies.shift();
         if (Oldest) {
           DestroyProjectile(Oldest);
         }
       }
     }
+  }
+  OnSecondaryFire(Pawn, Slot, Now) {
+    const Pipe = LaunchProjectile(Pawn, this.Settings.RocketSpeed, 0, 0, RocketTemplateName);
+    this.Rockets.push(Rocket);
   }
   TickPlayer(Pawn, Slot, Now, DeltaTime) {
     const State = this.GetPlayerState(Slot);
@@ -564,7 +579,7 @@ var UDemomanClass = class extends UPlayerClass {
         Instance4.DebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: Color });
       }
     }
-    const bDown = Pawn.IsInputPressed(this.Settings.DetonateKey);
+    const bDown = Pawn.IsInputPressed(this.Settings.StickyDetonateKey);
     const bPressed = bDown && !State.bDetonateHeld;
     State.bDetonateHeld = bDown;
     if (!bPressed) {
@@ -579,7 +594,7 @@ var UDemomanClass = class extends UPlayerClass {
       DestroyProjectile(Sticky);
       const bYoungSticky = Now - Sticky.SpawnedAt < this.Settings.StickyFalloffTime;
       const RangeFalloff = bYoungSticky ? this.Settings.StickyFalloff : void 0;
-      Explode(Sticky.Position, Pawn, this.Settings.Radius, this.Settings.Damage, this.Settings.Knockback, RangeFalloff);
+      Explode(Sticky.Position, Pawn, this.Settings.StickyRadius, this.Settings.StickyDamage, this.Settings.StickyKnockback, RangeFalloff);
     }
     State.Stickies = StillArming;
   }
@@ -791,6 +806,35 @@ var ClassDefinitions = {
 };
 function GiveLoadout(Pawn, PlayerClass) {
   ClassDefinitions[PlayerClass].ApplyLoadout(Pawn);
+}
+function GiveNoClassLoadout(Pawn) {
+  StripGearSlots(Pawn, NoClassStrippedGearSlots);
+  const Knife = Pawn.FindWeaponBySlot(CSGearSlot.KNIFE);
+  if (Knife) {
+    Pawn.SwitchToWeapon(Knife);
+  } else {
+    Pawn.GiveNamedItem(NoClassMelee, true);
+  }
+}
+function IsWeaponAllowed(PlayerClass, Weapon) {
+  const Data = Weapon.GetData();
+  if (!Data || Data.GetGearSlot() === CSGearSlot.C4) {
+    return true;
+  }
+  const bIsKnife = Data.GetType() === CSWeaponType2.KNIFE;
+  if (PlayerClass === "none" /* None */) {
+    return bIsKnife;
+  }
+  const Settings = ClassDefinitions[PlayerClass].Settings;
+  if (bIsKnife && Settings.Melee !== "") {
+    return true;
+  }
+  for (const Allowed of [Settings.Primary, Settings.Secondary, Settings.Melee]) {
+    if (Allowed !== "" && IsWeapon(Weapon, Allowed)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // src/bm_hud.ts
@@ -1121,6 +1165,7 @@ function Tick() {
       Definition.TickWorldLate(Now, DeltaTime);
     }
     TickClassMenuKey();
+    TickNoBuying();
     TickBots(Now);
   } catch (Exception) {
     Instance8.Msg(`${LogPrefix} error: ${String(Exception)}`);
@@ -1133,6 +1178,8 @@ function BeginPlay() {
   Instance8.OnPlayerDisconnect(HandlePlayerDisconnect);
   Instance8.OnRoundStart(HandleRoundStart);
   Instance8.OnGunFire(HandleGunFire);
+  Instance8.OnWeaponPickup(HandleWeaponPickup);
+  Instance8.OnWeaponDrop(HandleWeaponDrop);
   Instance8.OnPlayerDamage(HandlePlayerDamage);
   Instance8.OnModifyPlayerDamage(HandleModifyPlayerDamage);
   Instance8.OnCustomHudClicked(HandleCustomHudClicked);
@@ -1157,7 +1204,7 @@ function HandlePlayerChat(Event) {
   }
   const PlayerClass = ClassChatCommands.get(Command);
   if (PlayerClass !== void 0) {
-    SetPlayerClass(Player, PlayerClass);
+    RequestPlayerClass(Player, PlayerClass);
   }
 }
 function HandlePlayerReset(Event) {
@@ -1168,13 +1215,20 @@ function HandlePlayerReset(Event) {
   }
   ClearPlayer(Slot);
   ResetBotMode(Slot);
+  const bHadClass = GClassBySlot.has(Slot);
+  ApplyPendingClass(Slot);
   RefreshClassUi(Pawn, Slot);
   const PlayerClass = GClassBySlot.get(Slot);
-  if (PlayerClass === void 0) {
-    return;
-  }
   SetTimer(0.1, () => {
-    if (Pawn.IsValid() && Pawn.IsAlive()) {
+    if (!Pawn.IsValid() || !Pawn.IsAlive()) {
+      return;
+    }
+    if (PlayerClass === void 0) {
+      if (bHadClass) {
+        RestoreDefaultBody(Pawn);
+      }
+      GiveNoClassLoadout(Pawn);
+    } else {
       GiveLoadout(Pawn, PlayerClass);
     }
   });
@@ -1191,6 +1245,7 @@ function HandlePlayerDisconnect(Event) {
   ResetDamageNumbers(Event.playerSlot);
   ResetClassUi(Event.playerSlot);
   GClassBySlot.delete(Event.playerSlot);
+  GPendingClassBySlot.delete(Event.playerSlot);
 }
 function HandleRoundStart() {
   for (const Definition of Object.values(ClassDefinitions)) {
@@ -1211,7 +1266,22 @@ function HandleGunFire(Event) {
   const Definition = ClassDefinitions[PlayerClass];
   if (IsWeapon(Weapon, Definition.Settings.Primary)) {
     Definition.OnPrimaryFire(Pawn, Slot, Instance8.GetGameTime());
+  } else if (IsWeapon(Weapon, Definition.Settings.Secondary)) {
+    Definition.OnSecondaryFire(Pawn, Slot, Instance8.GetGameTime());
   }
+}
+function HandleWeaponPickup(Event) {
+  const Weapon = Event.weapon;
+  SetTimer(0, () => {
+    RemoveIfNotAllowed(Weapon);
+  });
+}
+function HandleWeaponDrop(Event) {
+  const Weapon = Event.weapon;
+  const Dropper = Event.dropper;
+  SetTimer(0, () => {
+    RemoveDeathDrop(Weapon, Dropper);
+  });
 }
 function HandlePlayerDamage(Event) {
   const AttackerSlot = GetPlayerSlot(Event.attacker);
@@ -1227,7 +1297,7 @@ function HandleCustomHudClicked(Event) {
   }
   CloseClassMenu(Event.player.GetPlayerSlot());
   if (Choice !== "close") {
-    SetPlayerClass(Event.player, Choice);
+    RequestPlayerClass(Event.player, Choice);
   }
 }
 function HandleModifyPlayerDamage(Event) {
@@ -1248,6 +1318,7 @@ function HandleModifyPlayerDamage(Event) {
   return ClassDefinitions[AttackerClass].ModifyOutgoingDamage(Event);
 }
 var GClassBySlot = /* @__PURE__ */ new Map();
+var GPendingClassBySlot = /* @__PURE__ */ new Map();
 var GLastThinkTime = 0;
 function ApplyMatchSettings() {
   const Commands = [];
@@ -1267,6 +1338,36 @@ function TickMatch(Now) {
     Instance8.ServerCommand("mp_warmup_end");
   }
 }
+function RequestPlayerClass(Player, PlayerClass) {
+  const Slot = Player.GetPlayerSlot();
+  const CurrentClass = GClassBySlot.get(Slot) ?? "none" /* None */;
+  const Pawn = Player.GetPlayerPawn();
+  const bAlive = Pawn !== void 0 && Pawn.IsValid() && Pawn.IsAlive();
+  if (!bAlive || CurrentClass === "none" /* None */) {
+    GPendingClassBySlot.delete(Slot);
+    SetPlayerClass(Player, PlayerClass);
+    return;
+  }
+  if (PlayerClass === CurrentClass) {
+    GPendingClassBySlot.delete(Slot);
+  } else {
+    GPendingClassBySlot.set(Slot, PlayerClass);
+  }
+  ShowClassIndicator(Slot, CurrentClass);
+  Instance8.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass} on respawn`);
+}
+function ApplyPendingClass(Slot) {
+  const NextClass = GPendingClassBySlot.get(Slot);
+  if (NextClass === void 0) {
+    return;
+  }
+  GPendingClassBySlot.delete(Slot);
+  if (NextClass === "none" /* None */) {
+    GClassBySlot.delete(Slot);
+  } else {
+    GClassBySlot.set(Slot, NextClass);
+  }
+}
 function SetPlayerClass(Player, PlayerClass) {
   const Slot = Player.GetPlayerSlot();
   ClearPlayer(Slot);
@@ -1275,6 +1376,7 @@ function SetPlayerClass(Player, PlayerClass) {
     GClassBySlot.delete(Slot);
     if (Pawn && Pawn.IsAlive()) {
       RestoreDefaultBody(Pawn);
+      GiveNoClassLoadout(Pawn);
     }
   } else {
     GClassBySlot.set(Slot, PlayerClass);
@@ -1303,4 +1405,59 @@ function ClearPlayer(Slot) {
   for (const Definition of Object.values(ClassDefinitions)) {
     Definition.ClearPlayer(Slot);
   }
+}
+function RemoveIfNotAllowed(Weapon) {
+  if (!Weapon.IsValid()) {
+    return;
+  }
+  const Pawn = Weapon.GetOwner();
+  const Slot = GetPlayerSlot(Pawn);
+  if (!Pawn || Slot === INDEX_NONE || !Pawn.IsAlive()) {
+    return;
+  }
+  const PlayerClass = GClassBySlot.get(Slot) ?? "none" /* None */;
+  if (IsWeaponAllowed(PlayerClass, Weapon)) {
+    return;
+  }
+  Pawn.DestroyWeapon(Weapon);
+  SetTimer(0, () => {
+    EnsureWeaponInHand(Pawn);
+  });
+}
+function RemoveDeathDrop(Weapon, Dropper) {
+  if (!Weapon.IsValid() || Weapon.GetOwner()) {
+    return;
+  }
+  if (Dropper.IsValid() && Dropper.IsAlive()) {
+    return;
+  }
+  Weapon.Remove();
+}
+function EnsureWeaponInHand(Pawn) {
+  if (!Pawn.IsValid() || !Pawn.IsAlive()) {
+    return;
+  }
+  const Active = Pawn.GetActiveWeapon();
+  if (Active && Active.IsValid()) {
+    return;
+  }
+  for (const GearSlot of [CSGearSlot2.RIFLE, CSGearSlot2.PISTOL, CSGearSlot2.KNIFE]) {
+    const Weapon = Pawn.FindWeaponBySlot(GearSlot);
+    if (Weapon) {
+      Pawn.SwitchToWeapon(Weapon);
+      return;
+    }
+  }
+}
+function TickNoBuying() {
+  ForEachLivePawn((Pawn) => {
+    const Controller = Pawn.GetPlayerController();
+    if (!Controller) {
+      return;
+    }
+    const Money = Controller.GetMoneySpendableNow();
+    if (Money > 0) {
+      Controller.AddMoneySpendableNow(-Money);
+    }
+  });
 }

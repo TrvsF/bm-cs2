@@ -1,5 +1,5 @@
 import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData } from "cs_script/point_script";
 import { bDebug, TickInterval, FVectorMath, GetTeamColor, GetChestPosition, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { LaunchProjectile, MoveProjectile, DestroyProjectile, Explode, ApplyBulletFalloff } from "./bm_combat";
@@ -44,16 +44,22 @@ export interface FSoliderSettings extends FClassSettings
 
 export interface FDemoSettings extends FClassSettings
 {
-	readonly DetonateKey: CSInputs;
-	readonly MaxStickies: number;
-	readonly ArmTime: number;
-	readonly LaunchSpeed: number;
-	readonly LaunchUp: number;
-	readonly Radius: number;
-	readonly Damage: number;
-	readonly Knockback: number;
+	readonly PipeLaunchSpeed: number,
+	readonly PipeLaunchUp: number,
+	readonly PipeRadius: number,
+	readonly PipeDamage: number,
+	readonly PipeKnockback: number,
+	readonly PipeFalloff: FDamageFalloff | undefined,
+	readonly StickyDetonateKey: CSInputs;
+	readonly StickyMax: number;
+	readonly StickyArmTime: number;
+	readonly StickyLaunchSpeed: number;
+	readonly StickyLaunchUp: number;
+	readonly StickyRadius: number;
+	readonly StickyDamage: number;
+	readonly StickyKnockback: number;
 	readonly StickyFalloff: FDamageFalloff | undefined;
-	readonly StickyFalloffTime: number;   // older stickies do flat damage, like TF2
+	readonly StickyFalloffTime: number;
 }
 
 export interface FMedicSettings extends FClassSettings, FHitscanSettings
@@ -100,7 +106,7 @@ const TF2StickyFalloff: FDamageFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDis
 export const SoldierSettings: FSoliderSettings =
 {
 	DisplayName: "Soldier",
-	Primary: "weapon_scar20",
+	Primary: "weapon_awp",
 	Secondary: "",
 	Melee: "weapon_knife",
 	Health: 150,
@@ -117,28 +123,34 @@ export const SoldierSettings: FSoliderSettings =
 export const DemoSettings: FDemoSettings =
 {
 	DisplayName: "Demoman",
-	Primary: "weapon_nova",
-	Secondary: "weapon_glock",
+	Primary: "weapon_sawedoff",
+	Secondary: "weapon_deagle",
 	Melee: "",
 	Health: 130,
 	SizeScale: 1.0,
-
-	DetonateKey: CSInputs.ATTACK2,
-	MaxStickies: 6,
-	ArmTime: 0.8,
-	LaunchSpeed: 900,
-	LaunchUp: 150,
-	Radius: 160,
-	Damage: 90,
-	Knockback: 600,
+	
+	StickyDetonateKey: CSInputs.ATTACK2,
+	StickyMax: 6,
+	StickyArmTime: 0.8,
+	StickyLaunchSpeed: 900,
+	StickyLaunchUp: 150,
+	StickyRadius: 160,
+	StickyDamage: 90,
+	StickyKnockback: 600,
 	StickyFalloff: TF2StickyFalloff,
 	StickyFalloffTime: 5,
+	PipeLaunchSpeed: 1337,
+	PipeLaunchUp: 150,
+	PipeRadius: 160,
+	PipeDamage: 100,
+	PipeKnockback: 1000,
+	PipeFalloff: TF2RocketFalloff,
 };
 
 export const MedicSettings: FMedicSettings =
 {
 	DisplayName: "Medic",
-	Primary: "weapon_mp7",
+	Primary: "weapon_nova",
 	Secondary: "",
 	Melee: "weapon_knife",
 	Health: 150,
@@ -159,6 +171,8 @@ const RocketTemplateName: string = "rocket_template";
 const DefaultHealth: number = 100;
 const DefaultSizeScale: number = 1.0;
 const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
+const NoClassStrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.GRENADES];   // keeps their own knife
+const NoClassMelee: string = "weapon_knife";
 
 const BeamStartDrop: FVector = { x: 0, y: 0, z: 12 };
 const UnarmedStickyColor: FColor = { r: 120, g: 120, b: 120 };
@@ -178,9 +192,9 @@ export function RestoreDefaultBody(Pawn: CSPlayerPawn): void
 	ApplyBody(Pawn, DefaultHealth, DefaultSizeScale);
 }
 
-function StripGuns(Pawn: CSPlayerPawn): void
+function StripGearSlots(Pawn: CSPlayerPawn, GearSlots: readonly CSGearSlot[]): void
 {
-	for (const GearSlot of StrippedGearSlots)
+	for (const GearSlot of GearSlots)
 	{
 		for (let Attempt: number = 0; Attempt < 6; Attempt++)
 		{
@@ -207,7 +221,7 @@ abstract class UPlayerClass<TSettings extends FClassSettings>
 
 	public ApplyLoadout(Pawn: CSPlayerPawn): void
 	{
-		StripGuns(Pawn);
+		StripGearSlots(Pawn, StrippedGearSlots);
 		ApplyBody(Pawn, this.Settings.Health, this.Settings.SizeScale);
 
 		if (this.Settings.Melee !== "")
@@ -232,6 +246,11 @@ abstract class UPlayerClass<TSettings extends FClassSettings>
 
 	// Called when someone playing this class fires their primary
 	public OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	{
+	}
+
+	// Called when someone playing this class fires their primary
+	public OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
 	}
 
@@ -360,24 +379,30 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 	{
 		const Sticky: FStickyBomb =
 		{
-			...LaunchProjectile(Pawn, this.Settings.LaunchSpeed, this.Settings.LaunchUp, 1, StickyTemplateName),
+			...LaunchProjectile(Pawn, this.Settings.StickyLaunchSpeed, this.Settings.StickyLaunchUp, 1, StickyTemplateName),
 			bStuck: false,
-			ArmedAt: Now + this.Settings.ArmTime,
+			ArmedAt: Now + this.Settings.StickyArmTime,
 		};
 
 		const State: FDemoPlayerState = this.GetPlayerState(Slot);
 		State.Stickies.push(Sticky);
 		if (!bDebug)
 		{
-			while (State.Stickies.length > this.Settings.MaxStickies)
+			while (State.Stickies.length > this.Settings.StickyMax)
 			{
-				const Oldest: FStickyBomb | undefined = State.Stickies.shift(); // oldest fizzles
+				const Oldest: FStickyBomb | undefined = State.Stickies.shift();
 				if (Oldest)
 				{
 					DestroyProjectile(Oldest);
 				}
 			}
 		}
+	}
+
+	public override OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	{
+		const Pipe: FRocket = LaunchProjectile(Pawn, this.Settings.RocketSpeed, 0, 0, RocketTemplateName);
+		this.Rockets.push(Rocket);
 	}
 
 	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
@@ -400,7 +425,7 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 			}
 		}
 
-		const bDown: boolean = Pawn.IsInputPressed(this.Settings.DetonateKey);
+		const bDown: boolean = Pawn.IsInputPressed(this.Settings.StickyDetonateKey);
 		const bPressed: boolean = bDown && !State.bDetonateHeld;
 		State.bDetonateHeld = bDown;
 		if (!bPressed)
@@ -419,7 +444,7 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 			DestroyProjectile(Sticky);
 			const bYoungSticky: boolean = Now - Sticky.SpawnedAt < this.Settings.StickyFalloffTime;
 			const RangeFalloff: FDamageFalloff | undefined = bYoungSticky ? this.Settings.StickyFalloff : undefined;
-			Explode(Sticky.Position, Pawn, this.Settings.Radius, this.Settings.Damage, this.Settings.Knockback, RangeFalloff);
+			Explode(Sticky.Position, Pawn, this.Settings.StickyRadius, this.Settings.StickyDamage, this.Settings.StickyKnockback, RangeFalloff);
 		}
 		State.Stickies = StillArming;
 	}
@@ -710,4 +735,48 @@ export const ClassDefinitions: Readonly<Record<EPlayableClass, UPlayerClass<FCla
 export function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void
 {
 	ClassDefinitions[PlayerClass].ApplyLoadout(Pawn);
+}
+
+export function GiveNoClassLoadout(Pawn: CSPlayerPawn): void
+{
+	StripGearSlots(Pawn, NoClassStrippedGearSlots);
+
+	const Knife: CSWeaponBase | undefined = Pawn.FindWeaponBySlot(CSGearSlot.KNIFE);
+	if (Knife)
+	{
+		Pawn.SwitchToWeapon(Knife);
+	}
+	else
+	{
+		Pawn.GiveNamedItem(NoClassMelee, true);
+	}
+}
+
+export function IsWeaponAllowed(PlayerClass: EPlayerClass, Weapon: CSWeaponBase): boolean
+{
+	const Data: CSWeaponData | undefined = Weapon.GetData();
+	if (!Data || Data.GetGearSlot() === CSGearSlot.C4)
+	{
+		return true;
+	}
+
+	const bIsKnife: boolean = Data.GetType() === CSWeaponType.KNIFE;
+	if (PlayerClass === EPlayerClass.None)
+	{
+		return bIsKnife;
+	}
+
+	const Settings: FClassSettings = ClassDefinitions[PlayerClass].Settings;
+	if (bIsKnife && Settings.Melee !== "")
+	{
+		return true;
+	}
+	for (const Allowed of [Settings.Primary, Settings.Secondary, Settings.Melee])
+	{
+		if (Allowed !== "" && IsWeapon(Weapon, Allowed))
+		{
+			return true;
+		}
+	}
+	return false;
 }
