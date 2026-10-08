@@ -4,6 +4,10 @@
 	</styles>
 	<Panel class="ClassScreen" hittest="false">
 
+		<Panel id="ChargeBar" class="ChargeBar" hittest="false">
+			<Panel class="ChargeFill" hittest="false" />
+		</Panel>
+
 		<Panel id="BottomBar" class="BottomBar" hittest="false">
 
 			<Panel id="ClassIndicator" class="ClassIndicator" hittest="false">
@@ -25,6 +29,15 @@
 				<Label id="AmmoSpare" class="AmmoSpare" text="/ {s:ammospare}" hittest="false" />
 			</Panel>
 
+			<Panel id="CounterPanel" class="CounterPanel" hittest="false">
+				<Label id="CounterLabel" class="CounterLabel" text="{s:counterlabel}" hittest="false" />
+				<Panel class="CounterRow" hittest="false">
+					<Label id="CounterValue" class="CounterValue" text="{s:countervalue}" hittest="false" />
+					<Label id="CounterMax" class="CounterMax" text="{s:countermax}" hittest="false" />
+				</Panel>
+			</Panel>
+
+
 		</Panel>
 
 		<Panel id="ClassMenu" class="ClassMenu">
@@ -32,16 +45,21 @@
 			<Panel class="ClassButtons">
 				<Button id="Pick_soldier" class="ClassButton SoldierButton">
 					<Label class="ClassButtonName" text="Soldier" hittest="false" />
-					<Label class="ClassButtonInfo" text="Rocket launcher. Shoot the floor to rocket jump." hittest="false" />
+					<Label class="ClassButtonInfo" text="It's not that type of RPG" hittest="false" />
 				</Button>
 				<Button id="Pick_demo" class="ClassButton DemoButton">
 					<Label class="ClassButtonName" text="Demoman" hittest="false" />
-					<Label class="ClassButtonInfo" text="Sticky bombs. Right-click to detonate." hittest="false" />
+					<Label class="ClassButtonInfo" text="Stickies & Pipes" hittest="false" />
 				</Button>
 				<Button id="Pick_medic" class="ClassButton MedicButton">
 					<Label class="ClassButtonName" text="Medic" hittest="false" />
-					<Label class="ClassButtonInfo" text="Knife heals teammates. Right-click for Uber when full." hittest="false" />
+					<Label class="ClassButtonInfo" text="Medic!" hittest="false" />
 				</Button>
+				<Button id="Pick_railer" class="ClassButton RailerButton">
+					<Label class="ClassButtonName" text="Railer" hittest="false" />
+					<Label class="ClassButtonInfo" text="Chargin ur Lazor" hittest="false" />
+				</Button>
+
 			</Panel>
 			<Panel class="MenuFooter">
 				<Button id="Pick_none" class="FooterButton">

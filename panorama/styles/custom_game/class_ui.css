@@ -328,3 +328,142 @@
 	text-transform: uppercase;
 	letter-spacing: 1px;
 }
+
+.ChargeBar
+{
+	visibility: collapse;
+	horizontal-align: center;
+	vertical-align: center;
+	margin-top: 80px;
+	width: 140px;
+	height: 6px;
+	border-radius: 3px;
+	background-color: #0b0f14b0;
+}
+ 
+.ChargeBar.Shown
+{
+	visibility: visible;
+}
+ 
+.ChargeFill
+{
+	width: 0%;
+	height: 100%;
+	border-radius: 3px;
+	background-color: #7fd4ff;
+}
+ 
+.ChargeBar.Charge_1 .ChargeFill
+{
+	width: 10%;
+}
+ 
+.ChargeBar.Charge_2 .ChargeFill
+{
+	width: 20%;
+}
+ 
+.ChargeBar.Charge_3 .ChargeFill
+{
+	width: 30%;
+}
+ 
+.ChargeBar.Charge_4 .ChargeFill
+{
+	width: 40%;
+}
+ 
+.ChargeBar.Charge_5 .ChargeFill
+{
+	width: 50%;
+}
+ 
+.ChargeBar.Charge_6 .ChargeFill
+{
+	width: 60%;
+}
+ 
+.ChargeBar.Charge_7 .ChargeFill
+{
+	width: 70%;
+}
+ 
+.ChargeBar.Charge_8 .ChargeFill
+{
+	width: 80%;
+}
+ 
+.ChargeBar.Charge_9 .ChargeFill
+{
+	width: 90%;
+}
+ 
+.ChargeBar.Charge_10 .ChargeFill
+{
+	width: 100%;
+}
+ 
+.RailerButton .ClassButtonName
+{
+	color: #7fd4ff;
+}
+
+.CounterPanel
+{
+	visibility: collapse;
+	horizontal-align: right;
+	vertical-align: center;
+	margin-right: 200px;
+	flow-children: down;
+	padding: 2px 14px 2px 14px;
+	border-right: 2px solid #2a313a;
+}
+ 
+.CounterPanel.Shown
+{
+	visibility: visible;
+}
+ 
+.CounterLabel
+{
+	horizontal-align: right;
+	font-size: 13px;
+	color: #9aa2ac;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+}
+ 
+.CounterRow
+{
+	horizontal-align: right;
+	flow-children: right;
+}
+ 
+.CounterValue
+{
+	vertical-align: center;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 40px;
+	color: #6c7580;
+}
+ 
+.CounterMax
+{
+	vertical-align: bottom;
+	margin-left: 6px;
+	margin-bottom: 8px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 20px;
+	color: #6c7580;
+}
+ 
+.CounterPanel.HasAny .CounterValue
+{
+	color: #ffffff;
+}
+ 
+.CounterPanel.Full .CounterValue
+{
+	color: #e8823a;
+}

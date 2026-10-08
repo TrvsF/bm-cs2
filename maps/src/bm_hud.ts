@@ -17,8 +17,11 @@ const DamageHudName: string = "damage_hud";
 const DamageLabelId: string = "DamageNumber";
 const DamageBatchWindow: number = 0.6;
 const DamageShowTime: number = 0.85;
+const AirshotLabelId: string = "AirshotText";
+const AirshotShowTime: number = 2;
 
 const GDamageNumberStates: Map<number, FDamageNumberState> = new Map<number, FDamageNumberState>();
+const GLastAirshotTimes: Map<number, number> = new Map<number, number>();
 let GbWarnedNoDamageHud: boolean = false;
 
 // Hud /////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,9 +56,36 @@ export function ShowDamageNumber(Slot: number, Damage: number): void
 	});
 }
 
+export function ShowAirshot(Slot: number): void
+{
+	const Hud: CustomHudLayout | undefined = FindDamageHud();
+	if (!Hud)
+	{
+		return;
+	}
+	const Now: number = Instance.GetGameTime();
+	GLastAirshotTimes.set(Slot, Now);
+	Hud.SetHasClassForPlayer(Slot, AirshotLabelId, "Shown", true);
+
+	SetTimer(AirshotShowTime, (): void =>
+	{
+		if (GLastAirshotTimes.get(Slot) !== Now)
+		{
+			return;
+		}
+		GLastAirshotTimes.delete(Slot);
+		const LaterHud: CustomHudLayout | undefined = FindDamageHud();
+		if (LaterHud)
+		{
+			LaterHud.SetHasClassForPlayer(Slot, AirshotLabelId, "Shown", false);
+		}
+	});
+}
+
 export function ResetDamageNumbers(Slot: number): void
 {
 	GDamageNumberStates.delete(Slot);
+	GLastAirshotTimes.delete(Slot);
 	const Hud: CustomHudLayout | undefined = FindDamageHud();
 	if (Hud)
 	{

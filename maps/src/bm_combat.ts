@@ -1,6 +1,6 @@
 import { Instance, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult } from "cs_script/point_script";
-import { bDebug, LogPrefix, UpVector, FVectorMath, IsValid, IsPlayerPawn, GetChestPosition, SpawnFromTemplate, ForEachLivePawn } from "./bm_core";
+import { bDebug, bFriendlyFire, LogPrefix, UpVector, FVectorMath, IsValid, IsPlayerPawn, GetChestPosition, SpawnFromTemplate, ForEachLivePawn } from "./bm_core";
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter } from "./bm_effects";
 
@@ -23,6 +23,14 @@ export interface FDamageFalloff
 	readonly OptimalDistance: number;
 }
 
+export interface FDamageCurveKey
+{
+	readonly Distance: number;
+	readonly Scale: number;
+}
+
+export type FDamageCurve = readonly FDamageCurveKey[];
+
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 const Gravity: number = 800;
@@ -31,6 +39,7 @@ const ProjectileLaunchOffset: FVector = { x: 0, y: 0, z: -8 };
 const ExplosionOffset: FVector = { x: 0, y: 0, z: 6 };
 const GroundedKnockbackLift: FVector = { x: 0, y: 0, z: 0.6 };
 const ExplosionDebugColor: FColor = { r: 255, g: 140, b: 0 };
+const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };   // ground traces start just above the feet, so they don't begin inside the floor
 
 // Projectile //////////////////////////////////////////////////////////////////////////////////////
 
@@ -119,7 +128,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		}
 
 		const bIsSelf: boolean = Victim === Attacker;
-		if (!bIsSelf && Victim.GetTeamNumber() === Attacker.GetTeamNumber())
+		if (!bIsSelf && !bFriendlyFire && Victim.GetTeamNumber() === Attacker.GetTeamNumber())
 		{
 			return;
 		}
@@ -182,6 +191,31 @@ export function GetDistanceDamageScale(Distance: number, Falloff: FDamageFalloff
 	return 1 - (1 - Falloff.FallOff) * (1 - 2 * Curve);
 }
 
+export function EvaluateDamageCurve(Curve: FDamageCurve, Distance: number): number
+{
+	const First: FDamageCurveKey | undefined = Curve[0];
+	if (!First)
+	{
+		return 1;
+	}
+	if (Distance <= First.Distance)
+	{
+		return First.Scale;
+	}
+	for (let Index: number = 1; Index < Curve.length; Index++)
+	{
+		const Previous: FDamageCurveKey | undefined = Curve[Index - 1];
+		const Next: FDamageCurveKey | undefined = Curve[Index];
+		if (Previous && Next && Distance <= Next.Distance)
+		{
+			const Alpha: number = (Distance - Previous.Distance) / Math.max(1, Next.Distance - Previous.Distance);
+			return Previous.Scale + (Next.Scale - Previous.Scale) * Alpha;
+		}
+	}
+	const Last: FDamageCurveKey | undefined = Curve[Curve.length - 1];
+	return Last ? Last.Scale : 1;
+}
+
 function GetRangeDamageScale(Attacker: CSPlayerPawn, Victim: CSPlayerPawn, Falloff: FDamageFalloff | undefined): number
 {
 	if (!Falloff)
@@ -190,6 +224,26 @@ function GetRangeDamageScale(Attacker: CSPlayerPawn, Victim: CSPlayerPawn, Fallo
 	}
 	const Distance: number = FVectorMath.Size(FVectorMath.Subtract(GetChestPosition(Victim), GetChestPosition(Attacker)));
 	return GetDistanceDamageScale(Distance, Falloff);
+}
+
+export function GetHeightAboveGround(Pawn: CSPlayerPawn, MaxDistance: number): number
+{
+	if (Pawn.GetGroundEntity())
+	{
+		return 0;
+	}
+	const Start: FVector = FVectorMath.Add(Pawn.GetAbsOrigin(), GroundTraceLift);
+	const Trace: TraceResult = Instance.TraceLine(
+	{
+		start: Start,
+		end: FVectorMath.Add(Start, { x: 0, y: 0, z: -(MaxDistance + GroundTraceLift.z) }),
+		ignorePlayers: true,
+	});
+	if (!Trace.didHit)
+	{
+		return MaxDistance;
+	}
+	return Trace.startedInSolid ? 0 : Math.max(0, Start.z - Trace.end.z - GroundTraceLift.z);
 }
 
 export function ApplyBulletFalloff(Event: FModifyDamageEvent, Falloff: FDamageFalloff | undefined): FModifyDamageResult

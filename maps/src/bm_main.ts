@@ -1,6 +1,6 @@
 import { Instance, CSDamageTypes, CSGearSlot } from "cs_script/point_script";
 import type { CSPlayerPawn, CSPlayerController, CSWeaponBase } from "cs_script/point_script";
-import { bDebug, TickInterval, LogPrefix, INDEX_NONE, GetPlayerSlot, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
+import { bDebug, bFriendlyFire, TickInterval, LogPrefix, INDEX_NONE, GetPlayerSlot, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
 import type
 {
 	FPlayerChatEvent,
@@ -18,19 +18,24 @@ import type
 import { EPlayerClass, ClassDefinitions, GiveLoadout, GiveNoClassLoadout, IsWeaponAllowed, RestoreDefaultBody } from "./bm_classes";
 import type { EPlayableClass } from "./bm_classes";
 import { ClearDecals } from "./bm_effects";
-import { ShowDamageNumber, ResetDamageNumbers } from "./bm_hud";
+import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
+import { GetHeightAboveGround } from "./bm_combat";
 import { TickBots, ResetBotMode, ForgetBot } from "./bm_bots";
-import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ResetClassUi } from "./bm_class_ui";
+import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ResetClassUi } from "./bm_class_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo } from "./bm_launcher";
+import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
 import type { FClassMenuChoice } from "./bm_class_ui";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
+
+const AirshotMinHeight: number = 64;
 
 const ClassChatCommands: ReadonlyMap<string, EPlayerClass> = new Map<string, EPlayerClass>(
 	[
 		["!demo", EPlayerClass.Demoman],
 		["!medic", EPlayerClass.Medic],
 		["!solider", EPlayerClass.Solider],
+		["!railer", EPlayerClass.Railer],
 		["!none", EPlayerClass.None],
 	]
 );
@@ -75,6 +80,7 @@ function Tick(): void
 		{
 			Definition.TickWorldLate(Now, DeltaTime);
 		}
+		TickHealthKits(Now);
 
 		TickClassMenuKey();
 		TickPlayerHud();
@@ -200,6 +206,7 @@ function HandleRoundStart(): void
 		Definition.OnRoundStart();
 	}
 	ClearDecals();
+	ResetHealthKits();
 	ApplyMatchSettings();
 	Instance.Msg(`${LogPrefix} match settings applied`);
 }
@@ -253,6 +260,11 @@ function HandlePlayerDamage(Event: FPlayerDamageEvent): void
 		return;
 	}
 	ShowDamageNumber(AttackerSlot, Event.damage);
+
+	if (GetHeightAboveGround(Event.player, AirshotMinHeight) >= AirshotMinHeight)
+	{
+		ShowAirshot(AttackerSlot);
+	}
 }
 
 function HandleCustomHudClicked(Event: FCustomHudClickedEvent): void
@@ -315,6 +327,9 @@ let GLastThinkTime: number = 0;
 function ApplyMatchSettings(): void
 {
 	const Commands: string[] = [];
+
+	// Both teams can hurt each other at full damage, with no team-kill penalties
+	Commands.push(`mp_teammates_are_enemies ${bFriendlyFire ? 1 : 0}`, `mp_friendlyfire ${bFriendlyFire ? 1 : 0}`);
 
 	if (bDebug)
 	{
@@ -443,6 +458,7 @@ function ClearPlayer(Slot: number): void
 	ClearLauncher(Slot);
 	ShowAmmo(Slot, undefined);
 	ShowHealth(Slot, undefined);
+	ShowCounter(Slot, undefined);
 }
 
 function TickPlayerHud(): void
@@ -452,8 +468,10 @@ function TickPlayerHud(): void
 		const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
 		if (Controller && !Controller.IsBot())
 		{
+			const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
 			ShowHealth(Slot, Pawn);
 			ShowAmmo(Slot, GetLauncherAmmo(Pawn, Slot));
+			ShowCounter(Slot, PlayerClass !== undefined ? ClassDefinitions[PlayerClass].GetHudCounter(Slot) : undefined);
 		}
 	});
 }

@@ -4,5 +4,8 @@
 	</styles>
 	<Panel class="DamageScreen" hittest="false">
 		<Label id="DamageNumber" class="DamageNumber" text="{s:damage}" hittest="false" />
+		<Panel class="AirshotScreen" hittest="false">
+			<Label id="AirshotText" class="AirshotText" text="Airshot!" hittest="false" />
+		</Panel>
 	</Panel>
 </root>

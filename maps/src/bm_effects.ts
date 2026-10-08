@@ -1,7 +1,7 @@
 import { Instance } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { FVectorMath, UpVector, IsPointTemplate, GetChestPosition } from "./bm_core";
-import type { FVector, FRotator } from "./bm_core";
+import { FVectorMath, UpVector, IsPointTemplate, GetChestPosition, SetTimer } from "./bm_core";
+import type { FVector, FRotator, FColor } from "./bm_core";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,6 +50,53 @@ export function SpawnBloodSplatter(ExplosionOrigin: FVector, Victim: CSPlayerPaw
 	{
 		SpawnDecal(BloodTemplateName, Below.end, Below.normal);
 	}
+}
+
+// Effects /////////////////////////////////////////////////////////////////////////////////////////
+
+export function SpawnTemporaryTemplate(TemplateName: string, Position: FVector, Lifetime: number): Entity[] | undefined
+{
+	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
+	if (!IsPointTemplate(Template))
+	{
+		return undefined;
+	}
+	const Spawned: Entity[] | undefined = Template.ForceSpawn(Position);
+	if (Spawned && Spawned.length > 0)
+	{
+		SetTimer(Lifetime, (): void =>
+		{
+			RemoveEntities(Spawned);
+		});
+	}
+	return Spawned;
+}
+
+export function SpawnBeam(TemplateName: string, EndMarkerName: string, Start: FVector, End: FVector, Lifetime: number, FallbackColor: FColor): void
+{
+	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
+	if (!IsPointTemplate(Template))
+	{
+		Instance.DebugLine({ start: Start, end: End, duration: Lifetime, color: FallbackColor });
+		return;
+	}
+
+	const Spawned: Entity[] | undefined = Template.ForceSpawn(Start, FVectorMath.GetRotation(FVectorMath.Subtract(End, Start)));
+	if (!Spawned || Spawned.length === 0)
+	{
+		return;
+	}
+	for (const Ent of Spawned)
+	{
+		if (Ent.GetEntityName().startsWith(EndMarkerName))
+		{
+			Ent.Teleport({ position: End });
+		}
+	}
+	SetTimer(Lifetime, (): void =>
+	{
+		RemoveEntities(Spawned);
+	});
 }
 
 export function ClearDecals(): void

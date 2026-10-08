@@ -1,9 +1,10 @@
-import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData } from "cs_script/point_script";
-import { bDebug, TickInterval, FVectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
+import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSDamageFlags, CSWeaponType, CSHitGroup } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
+import { bDebug, bFriendlyFire, TickInterval, LogPrefix, FVectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
-import { LaunchProjectile, MoveProjectile, DestroyProjectile, Explode, ApplyBulletFalloff } from "./bm_combat";
-import type { FProjectile, FDamageFalloff } from "./bm_combat";
+import { LaunchProjectile, MoveProjectile, DestroyProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve } from "./bm_combat";
+import type { FProjectile, FDamageFalloff, FDamageCurve } from "./bm_combat";
+import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
 import type { FLauncherSettings } from "./bm_launcher";
 
@@ -30,6 +31,13 @@ export interface FClassSettings
 	readonly SizeScale: number;
 	readonly PrimaryLauncher: FLauncherSettings | undefined;
 	readonly SecondaryLauncher: FLauncherSettings | undefined;
+}
+
+export interface FHudCounter
+{
+	readonly Label: string;
+	readonly Count: number;
+	readonly Max: number;
 }
 
 export interface FHitscanSettings
@@ -81,7 +89,11 @@ export interface FMedicSettings extends FClassSettings, FHitscanSettings
 
 export interface FRailerSettings extends FClassSettings
 {
-	readonly BeamChargeTime: number;
+	readonly BeamDamage: number;
+	readonly BeamRange: number;
+	readonly BeamHeadshotMultiplier: number;
+	readonly bBeamPierces: boolean;
+	readonly BeamFalloff: FDamageCurve;
 }
 
 export interface FRocket extends FProjectile
@@ -118,6 +130,13 @@ const TF2HitscanFalloff: FDamageFalloff = { RampUp: 1.5, FallOff: 0.5, OptimalDi
 const TF2RocketFalloff: FDamageFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
 const TF2StickyFalloff: FDamageFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDistance: 512 };
 
+const RailerBeamFalloff: FDamageCurve =
+[
+	{ Distance: 0, Scale: 1.0 },
+	{ Distance: 1024, Scale: 1.0 },
+	{ Distance: 3072, Scale: 0.5 },
+];
+
 export const SoldierSettings: FSoliderSettings =
 {
 	DisplayName: "Soldier",
@@ -132,6 +151,7 @@ export const SoldierSettings: FSoliderSettings =
 		ClipSize: 4,
 		ReloadFirstTime: 0.92,
 		ReloadEachTime: 0.8,
+		ChargeTime: 0,
 		FireFxTemplate: "rocket_fire_template",
 	},
 	SecondaryLauncher: undefined,
@@ -158,6 +178,7 @@ export const DemoSettings: FDemoSettings =
 		ClipSize: 6,
 		ReloadFirstTime: 1.09,
 		ReloadEachTime: 0.67,
+		ChargeTime: 0,
 		FireFxTemplate: "sticky_fire_template",
 	},
 	SecondaryLauncher:
@@ -166,6 +187,7 @@ export const DemoSettings: FDemoSettings =
 		ClipSize: 4,
 		ReloadFirstTime: 1.24,
 		ReloadEachTime: 0.6,
+		ChargeTime: 0,
 		FireFxTemplate: "pipe_fire_template",
 	},
 	
@@ -179,10 +201,11 @@ export const DemoSettings: FDemoSettings =
 	StickyKnockback: 600,
 	StickyFalloff: TF2StickyFalloff,
 	StickyFalloffTime: 5,
-	PipeLaunchSpeed: 1337,
+
+	PipeLaunchSpeed: 1200,
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
-	PipeDamage: 20,
+	PipeDamage: 44,
 	PipeKnockback: 1000,
 	PipeFalloff: TF2RocketFalloff,
 	PipeLifetime: 5,
@@ -212,20 +235,38 @@ export const MedicSettings: FMedicSettings =
 export const RailerSettings: FRailerSettings =
 {
 	DisplayName: "Railer",
-	Primary: "weapon_scar20",
+	Primary: "weapon_ssg08",
 	Secondary: "weapon_revolver",
 	Melee: "",
 	Health: 100,
 	SizeScale: 0.8,
-	PrimaryLauncher: undefined,
+	PrimaryLauncher:
+	{
+		FireInterval: 0.5,
+		ClipSize: 1,
+		ReloadFirstTime: 3,
+		ReloadEachTime: 3,
+		ChargeTime: 1,
+		FireFxTemplate: "rail_fire_template",
+	},
 	SecondaryLauncher: undefined,
-	
-	BeamChargeTime: 1,
+
+	BeamDamage: 90,
+	BeamRange: 8192,
+	BeamHeadshotMultiplier: 1.5,
+	bBeamPierces: true,
+	BeamFalloff: RailerBeamFalloff,
 };
 
 const StickyTemplateName: string = "sticky_template";
 const RocketTemplateName: string = "rocket_template";
 const PipeTemplateName: string = "pipe_template";
+const RailBeamTemplateName: string = "rail_beam_template";
+const RailBeamEndName: string = "rail_beam_end";
+const RailImpactTemplateName: string = "rail_impact_template";
+const RailBeamLifetime: number = 0.4;
+const RailImpactLifetime: number = 2;
+const MaxBeamTraces: number = 8;
 const DefaultHealth: number = 100;
 const DefaultSizeScale: number = 1.0;
 const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
@@ -248,6 +289,11 @@ export function ApplyBody(Pawn: CSPlayerPawn, Health: number, SizeScale: number)
 export function RestoreDefaultBody(Pawn: CSPlayerPawn): void
 {
 	ApplyBody(Pawn, DefaultHealth, DefaultSizeScale);
+}
+
+function IsBulletDamage(Event: FModifyDamageEvent): boolean
+{
+	return (Event.damageTypes & (CSDamageTypes.BULLET | CSDamageTypes.BUCKSHOT)) !== 0;
 }
 
 function StripGearSlots(Pawn: CSPlayerPawn, GearSlots: readonly CSGearSlot[]): void
@@ -361,18 +407,22 @@ abstract class UPlayerClass<TSettings extends FClassSettings>
 		return;
 	}
 
-	// True for the primary's own bullets, as opposed to explosions it causes
+	// Override to put a counter on this class's HUD. undefined = none.
+	public GetHudCounter(Slot: number): FHudCounter | undefined
+	{
+		return undefined;
+	}
+
+	// True for the primary's own bullets, as opposed to explosions or beams the script deals in its name
 	protected IsPrimaryBulletDamage(Event: FModifyDamageEvent): boolean
 	{
-		const bIsBlast: boolean = (Event.damageTypes & CSDamageTypes.BLAST) !== 0;
-		return !bIsBlast && IsWeapon(Event.weapon, this.Settings.Primary);
+		return IsBulletDamage(Event) && IsWeapon(Event.weapon, this.Settings.Primary);
 	}
 
 	// True for the secondary's own bullets
 	protected IsSecondaryBulletDamage(Event: FModifyDamageEvent): boolean
 	{
-		const bIsBlast: boolean = (Event.damageTypes & CSDamageTypes.BLAST) !== 0;
-		return !bIsBlast && this.Settings.Secondary !== "" && IsWeapon(Event.weapon, this.Settings.Secondary);
+		return IsBulletDamage(Event) && this.Settings.Secondary !== "" && IsWeapon(Event.weapon, this.Settings.Secondary);
 	}
 }
 
@@ -552,6 +602,12 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 			DestroyProjectile(Sticky);
 		}
 		this.PlayerStates.delete(Slot);
+	}
+
+	public override GetHudCounter(Slot: number): FHudCounter | undefined
+	{
+		const State: FDemoPlayerState | undefined = this.PlayerStates.get(Slot);
+		return { Label: "Stickies", Count: State ? State.Stickies.length : 0, Max: bDebug ? 0 : this.Settings.StickyMax };
 	}
 
 	private GetPlayerState(Slot: number): FDemoPlayerState
@@ -832,6 +888,69 @@ class URailerClass extends UPlayerClass<FRailerSettings>
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
+		const Start: FVector = Pawn.GetEyePosition();
+		const Direction: FVector = FVectorMath.GetForwardVector(Pawn.GetEyeAngles());
+		const End: FVector = FVectorMath.Add(Start, FVectorMath.Scale(Direction, this.Settings.BeamRange));
+		const Weapon: CSWeaponBase | undefined = Pawn.FindWeapon(this.Settings.Primary);
+
+		const Ignored: Entity[] = [Pawn];
+		let BeamEnd: FVector = End;
+		for (let TraceCount: number = 0; TraceCount < MaxBeamTraces; TraceCount++)
+		{
+			const Trace: TraceResult = Instance.TraceLine({ start: Start, end: End, ignoreEntity: Ignored, traceHitboxes: true });
+			if (!Trace.didHit)
+			{
+				BeamEnd = End;
+				break;
+			}
+			BeamEnd = Trace.end;
+
+			const Victim: Entity | undefined = Trace.hitEntity;
+			if (!IsPlayerPawn(Victim))
+			{
+				break;
+			}
+			Ignored.push(Victim);
+			if (!Victim.IsAlive() || (!bFriendlyFire && Victim.GetTeamNumber() === Pawn.GetTeamNumber()))
+			{
+				continue;
+			}
+			this.HitWithBeam(Pawn, Victim, Trace, Start, Weapon);
+			if (!this.Settings.bBeamPierces)
+			{
+				break;
+			}
+		}
+
+		SpawnBeam(RailBeamTemplateName, RailBeamEndName, FVectorMath.Subtract(Start, BeamStartDrop), BeamEnd, RailBeamLifetime, GetTeamColor(Pawn));
+		SpawnTemporaryTemplate(RailImpactTemplateName, BeamEnd, RailImpactLifetime);
+	}
+
+	private HitWithBeam(Shooter: CSPlayerPawn, Victim: CSPlayerPawn, Trace: TraceResult, Start: FVector, Weapon: CSWeaponBase | undefined): void
+	{
+		const Distance: number = FVectorMath.Size(FVectorMath.Subtract(Trace.end, Start));
+		const RangeScale: number = EvaluateDamageCurve(this.Settings.BeamFalloff, Distance);
+		const bHeadshot: boolean = Trace.hitGroup === CSHitGroup.HEAD;
+		const Damage: number = this.Settings.BeamDamage * RangeScale * (bHeadshot ? this.Settings.BeamHeadshotMultiplier : 1);
+
+		const DamageDealt: number = Victim.TakeDamage(
+		{
+			damage: Damage,
+			damageTypes: CSDamageTypes.SHOCK,
+			damageFlags: CSDamageFlags.IGNORE_ARMOR,
+			attacker: Shooter,
+			inflictor: Shooter,
+			weapon: Weapon,
+		});
+		if (DamageDealt > 0)
+		{
+			SpawnBloodSplatter(Start, Victim);
+		}
+
+		if (bDebug)
+		{
+			Instance.Msg(`${LogPrefix} rail beam: ${Math.round(Distance)}u x${RangeScale.toFixed(2)}${bHeadshot ? " headshot" : ""} -> ${Math.round(Damage)}`);
+		}
 	}
 }
 
