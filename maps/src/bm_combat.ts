@@ -1,8 +1,8 @@
 import { Instance, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult } from "cs_script/point_script";
-import { bDebug, bFriendlyFire, LogPrefix, UpVector, FVectorMath, IsValid, IsPlayerPawn, GetChestPosition, SpawnFromTemplate, ForEachLivePawn } from "./bm_core";
-import type { FVector, FRotator, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
-import { SpawnScorchMark, SpawnBloodSplatter } from "./bm_effects";
+import { bDebug, bFriendlyFire, LogPrefix, UpVector, FVectorMath, FRotationMath, IsPlayerPawn, IsModelEntity, GetChestPosition, SpawnTemplateEntities, ForEachLivePawn } from "./bm_core";
+import type { FVector, FRotator, FRotationMatrix, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
+import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -13,7 +13,13 @@ export interface FProjectile
 	Velocity: FVector;
 	GravityScale: number;
 	SpawnedAt: number;
-	Model: Entity | undefined;
+	Models: FProjectileModel[];
+}
+
+export interface FProjectileModel
+{
+	readonly Ent: Entity;
+	readonly LocalRotation: FRotationMatrix;
 }
 
 export interface FDamageFalloff
@@ -47,12 +53,13 @@ export interface FHitscanResult
 
 const Gravity: number = 800;
 const ExplosionTemplateName: string = "boom_template";
+const ExplosionFxLifetime: number = 5;
 const ProjectileLaunchOffset: FVector = { x: 0, y: 0, z: -8 };
 const ExplosionOffset: FVector = { x: 0, y: 0, z: 6 };
 const GroundedKnockbackLift: FVector = { x: 0, y: 0, z: 0.6 };
 const ExplosionDebugColor: FColor = { r: 255, g: 140, b: 0 };
 const MaxHitscanTraces: number = 8;
-const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };   // ground traces start just above the feet, so they don't begin inside the floor
+const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };
 
 // Projectile //////////////////////////////////////////////////////////////////////////////////////
 
@@ -60,15 +67,17 @@ export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: nu
 {
 	const Direction: FVector = FVectorMath.GetForwardVector(Owner.GetEyeAngles());
 	const Start: FVector = FVectorMath.Add(Owner.GetEyePosition(), ProjectileLaunchOffset);
+	const Velocity: FVector = FVectorMath.Add(FVectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed });
 	const Projectile: FProjectile =
 	{
 		Owner: Owner,
 		Position: Start,
-		Velocity: FVectorMath.Add(FVectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed }),
+		Velocity: Velocity,
 		GravityScale: GravityScale,
 		SpawnedAt: Instance.GetGameTime(),
-		Model: SpawnFromTemplate(TemplateName, Start),
+		Models: SpawnProjectileModels(TemplateName, Start),
 	};
+	PlaceProjectileModels(Projectile, true);
 	return Projectile;
 }
 
@@ -77,7 +86,14 @@ export function MoveProjectile(Projectile: FProjectile, DeltaTime: number, bHitP
 	const Velocity: FVector = Projectile.Velocity;
 	Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
 	const NextPosition: FVector = FVectorMath.Add(Projectile.Position, FVectorMath.Scale(Projectile.Velocity, DeltaTime));
-	const IgnoredEntities: Entity[] = IsValid(Projectile.Model) ? [Projectile.Owner, Projectile.Model] : [Projectile.Owner];
+	const IgnoredEntities: Entity[] = [Projectile.Owner];
+	for (const Model of Projectile.Models)
+	{
+		if (Model.Ent.IsValid())
+		{
+			IgnoredEntities.push(Model.Ent);
+		}
+	}
 	const Trace: TraceResult = Instance.TraceLine(
 	{
 		start: Projectile.Position,
@@ -95,18 +111,61 @@ export function MoveProjectile(Projectile: FProjectile, DeltaTime: number, bHitP
 		Projectile.Position = NextPosition;
 	}
 
-	if (IsValid(Projectile.Model))
-	{
-		Projectile.Model.Teleport({ position: Projectile.Position });
-	}
+	PlaceProjectileModels(Projectile, false);
 	return Trace.didHit ? Trace : undefined;
 }
 
 export function DestroyProjectile(Projectile: FProjectile): void
 {
-	if (IsValid(Projectile.Model))
+	for (const Model of Projectile.Models)
 	{
-		Projectile.Model.Remove();
+		if (Model.Ent.IsValid())
+		{
+			Model.Ent.Remove();
+		}
+	}
+	Projectile.Models = [];
+}
+
+export function TintProjectile(Projectile: FProjectile, Color: FColor): void
+{
+	for (const Model of Projectile.Models)
+	{
+		if (Model.Ent.IsValid() && IsModelEntity(Model.Ent))
+		{
+			Model.Ent.SetColor(Color);
+		}
+	}
+}
+
+function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjectileModel[]
+{
+	const Models: FProjectileModel[] = [];
+	for (const Ent of SpawnTemplateEntities(TemplateName, Position, undefined))
+	{
+		Models.push({ Ent: Ent, LocalRotation: FRotationMath.FromRotator(Ent.GetAbsAngles()) });
+	}
+	return Models;
+}
+
+function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): void
+{
+	const Flight: FRotationMatrix = FRotationMath.FromRotator(FVectorMath.GetRotation(Projectile.Velocity));
+	for (const Model of Projectile.Models)
+	{
+		if (!Model.Ent.IsValid() || Model.Ent.GetParent() !== undefined)
+		{
+			continue;
+		}
+		const Angles: FRotator = FRotationMath.ToRotator(FRotationMath.Multiply(Flight, Model.LocalRotation));
+		if (bTeleport)
+		{
+			Model.Ent.Teleport({ position: Projectile.Position, angles: Angles });
+		}
+		else
+		{
+			Model.Ent.Move({ position: Projectile.Position, angles: Angles });
+		}
 	}
 }
 
@@ -114,7 +173,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 {
 	const Origin: FVector = FVectorMath.Add(Position, ExplosionOffset);
 
-	if (!SpawnFromTemplate(ExplosionTemplateName, Origin))
+	if (!SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime))
 	{
 		Instance.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
 	}

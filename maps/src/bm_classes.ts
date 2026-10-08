@@ -2,7 +2,7 @@ import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSDamageFlags, CSWeaponT
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
 import { bDebug, bFriendlyFire, TickInterval, LogPrefix, FVectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
-import { LaunchProjectile, MoveProjectile, DestroyProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
+import { LaunchProjectile, MoveProjectile, DestroyProjectile, TintProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
 import type { FProjectile, FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
 import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
@@ -114,6 +114,7 @@ export interface FStickyBomb extends FProjectile
 {
 	bStuck: boolean;
 	ArmedAt: number;
+	bTintedArmed: boolean;
 }
 
 interface FDemoPlayerState
@@ -219,7 +220,7 @@ export const DemoSettings: FDemoSettings =
 	PipeLaunchSpeed: 1337,
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
-	PipeDamage: 20,
+	PipeDamage: 40,
 	PipeKnockback: 1000,
 	PipeFalloff: TF2RocketFalloff,
 	PipeLifetime: 5,
@@ -506,7 +507,7 @@ class USoldierClass extends UPlayerClass<FSoliderSettings>
 			return false;
 		}
 
-		if (!Rocket.Model)
+		if (Rocket.Models.length === 0)
 		{
 			Instance.DebugSphere({ center: Rocket.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Rocket.Owner) });
 		}
@@ -533,7 +534,9 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 			...LaunchProjectile(Pawn, this.Settings.StickyLaunchSpeed, this.Settings.StickyLaunchUp, 1, StickyTemplateName),
 			bStuck: false,
 			ArmedAt: Now + this.Settings.StickyArmTime,
+			bTintedArmed: false,
 		};
+		TintProjectile(Sticky, UnarmedStickyColor);
 
 		const State: FDemoPlayerState = this.GetPlayerState(Slot);
 		State.Stickies.push(Sticky);
@@ -577,10 +580,15 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 
 		for (const Sticky of State.Stickies)
 		{
-			if (!Sticky.Model)
+			const bArmed: boolean = Now >= Sticky.ArmedAt;
+			if (Sticky.Models.length === 0)
 			{
-				const Color: FColor = Now >= Sticky.ArmedAt ? GetTeamColor(Pawn) : UnarmedStickyColor;
-				Instance.DebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: Color });
+				Instance.DebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: bArmed ? GetTeamColor(Pawn) : UnarmedStickyColor });
+			}
+			else if (bArmed && !Sticky.bTintedArmed)
+			{
+				TintProjectile(Sticky, GetTeamColor(Pawn));
+				Sticky.bTintedArmed = true;
 			}
 		}
 
@@ -667,7 +675,7 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 			return false;
 		}
 
-		if (!Pipe.Model)
+		if (Pipe.Models.length === 0)
 		{
 			Instance.DebugSphere({ center: Pipe.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Pipe.Owner) });
 		}

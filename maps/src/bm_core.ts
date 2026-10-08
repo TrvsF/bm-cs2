@@ -2,6 +2,7 @@ import { Instance } from "cs_script/point_script";
 import type
 {
 	Entity,
+	BaseModelEntity,
 	CSPlayerPawn,
 	CSPlayerController,
 	CSWeaponBase,
@@ -135,6 +136,77 @@ export abstract class FVectorMath
 	}
 }
 
+export interface FRotationMatrix
+{
+	readonly Forward: FVector;
+	readonly Left: FVector;
+	readonly Up: FVector;
+}
+
+export class FRotationMath
+{
+	public static FromRotator(Rotation: FRotator): FRotationMatrix
+	{
+		const Pitch: number = (Rotation.pitch * Math.PI) / 180;
+		const Yaw: number = (Rotation.yaw * Math.PI) / 180;
+		const Roll: number = (Rotation.roll * Math.PI) / 180;
+		const SP: number = Math.sin(Pitch);
+		const CP: number = Math.cos(Pitch);
+		const SY: number = Math.sin(Yaw);
+		const CY: number = Math.cos(Yaw);
+		const SR: number = Math.sin(Roll);
+		const CR: number = Math.cos(Roll);
+		const Result: FRotationMatrix =
+		{
+			Forward: { x: CP * CY, y: CP * SY, z: -SP },
+			Left: { x: SP * SR * CY - CR * SY, y: SP * SR * SY + CR * CY, z: SR * CP },
+			Up: { x: SP * CR * CY + SR * SY, y: SP * CR * SY - SR * CY, z: CR * CP },
+		};
+		return Result;
+	}
+
+	public static ToRotator(Matrix: FRotationMatrix): FRotator
+	{
+		const Forward: FVector = Matrix.Forward;
+		const FlatLength: number = Math.hypot(Forward.x, Forward.y);
+		const Pitch: number = Math.atan2(-Forward.z, FlatLength);
+		let Yaw: number = 0;
+		let Roll: number = 0;
+		if (FlatLength > 0.001)
+		{
+			Yaw = Math.atan2(Forward.y, Forward.x);
+			Roll = Math.atan2(Matrix.Left.z, Matrix.Up.z);
+		}
+		else
+		{
+			Yaw = Math.atan2(-Matrix.Left.x, Matrix.Left.y);
+		}
+		return { pitch: (Pitch * 180) / Math.PI, yaw: (Yaw * 180) / Math.PI, roll: (Roll * 180) / Math.PI };
+	}
+
+	public static RotateVector(Matrix: FRotationMatrix, V: FVector): FVector
+	{
+		const Result: FVector =
+		{
+			x: Matrix.Forward.x * V.x + Matrix.Left.x * V.y + Matrix.Up.x * V.z,
+			y: Matrix.Forward.y * V.x + Matrix.Left.y * V.y + Matrix.Up.y * V.z,
+			z: Matrix.Forward.z * V.x + Matrix.Left.z * V.y + Matrix.Up.z * V.z,
+		};
+		return Result;
+	}
+
+	public static Multiply(A: FRotationMatrix, B: FRotationMatrix): FRotationMatrix
+	{
+		const Result: FRotationMatrix =
+		{
+			Forward: FRotationMath.RotateVector(A, B.Forward),
+			Left: FRotationMath.RotateVector(A, B.Left),
+			Up: FRotationMath.RotateVector(A, B.Up),
+		};
+		return Result;
+	}
+}
+
 export function IsValid<TEntity extends Entity>(Ent: TEntity | undefined): Ent is TEntity
 {
 	return Ent !== undefined && Ent.IsValid();
@@ -195,6 +267,21 @@ export function SpawnFromTemplate(TemplateName: string, Position: FVector): Enti
 	}
 	const Spawned: Entity[] | undefined = Template.ForceSpawn(Position);
 	return Spawned ? Spawned[0] : undefined;
+}
+
+export function SpawnTemplateEntities(TemplateName: string, Position: FVector, Rotation: FRotator | undefined): Entity[]
+{
+	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
+	if (!IsPointTemplate(Template))
+	{
+		return [];
+	}
+	return Template.ForceSpawn(Position, Rotation) ?? [];
+}
+
+export function IsModelEntity(Ent: Entity): Ent is BaseModelEntity
+{
+	return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
 }
 
 export function ForEachLivePawn(Visitor: (Pawn: CSPlayerPawn, Slot: number) => void): void

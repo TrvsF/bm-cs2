@@ -57,6 +57,55 @@ var FVectorMath = class _FVectorMath {
     return { pitch: Pitch, yaw: Yaw, roll: Roll };
   }
 };
+var FRotationMath = class _FRotationMath {
+  static FromRotator(Rotation) {
+    const Pitch = Rotation.pitch * Math.PI / 180;
+    const Yaw = Rotation.yaw * Math.PI / 180;
+    const Roll = Rotation.roll * Math.PI / 180;
+    const SP = Math.sin(Pitch);
+    const CP = Math.cos(Pitch);
+    const SY = Math.sin(Yaw);
+    const CY = Math.cos(Yaw);
+    const SR = Math.sin(Roll);
+    const CR = Math.cos(Roll);
+    const Result = {
+      Forward: { x: CP * CY, y: CP * SY, z: -SP },
+      Left: { x: SP * SR * CY - CR * SY, y: SP * SR * SY + CR * CY, z: SR * CP },
+      Up: { x: SP * CR * CY + SR * SY, y: SP * CR * SY - SR * CY, z: CR * CP }
+    };
+    return Result;
+  }
+  static ToRotator(Matrix) {
+    const Forward = Matrix.Forward;
+    const FlatLength = Math.hypot(Forward.x, Forward.y);
+    const Pitch = Math.atan2(-Forward.z, FlatLength);
+    let Yaw = 0;
+    let Roll = 0;
+    if (FlatLength > 1e-3) {
+      Yaw = Math.atan2(Forward.y, Forward.x);
+      Roll = Math.atan2(Matrix.Left.z, Matrix.Up.z);
+    } else {
+      Yaw = Math.atan2(-Matrix.Left.x, Matrix.Left.y);
+    }
+    return { pitch: Pitch * 180 / Math.PI, yaw: Yaw * 180 / Math.PI, roll: Roll * 180 / Math.PI };
+  }
+  static RotateVector(Matrix, V) {
+    const Result = {
+      x: Matrix.Forward.x * V.x + Matrix.Left.x * V.y + Matrix.Up.x * V.z,
+      y: Matrix.Forward.y * V.x + Matrix.Left.y * V.y + Matrix.Up.y * V.z,
+      z: Matrix.Forward.z * V.x + Matrix.Left.z * V.y + Matrix.Up.z * V.z
+    };
+    return Result;
+  }
+  static Multiply(A, B) {
+    const Result = {
+      Forward: _FRotationMath.RotateVector(A, B.Forward),
+      Left: _FRotationMath.RotateVector(A, B.Left),
+      Up: _FRotationMath.RotateVector(A, B.Up)
+    };
+    return Result;
+  }
+};
 function IsValid(Ent) {
   return Ent !== void 0 && Ent.IsValid();
 }
@@ -89,13 +138,15 @@ function IsWeapon(Weapon, Name) {
   const Data = Weapon.GetData();
   return Data !== void 0 && Data.GetName() === Name;
 }
-function SpawnFromTemplate(TemplateName, Position) {
+function SpawnTemplateEntities(TemplateName, Position, Rotation) {
   const Template = Instance.FindEntityByName(TemplateName);
   if (!IsPointTemplate(Template)) {
-    return void 0;
+    return [];
   }
-  const Spawned = Template.ForceSpawn(Position);
-  return Spawned ? Spawned[0] : void 0;
+  return Template.ForceSpawn(Position, Rotation) ?? [];
+}
+function IsModelEntity(Ent) {
+  return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
 }
 function ForEachLivePawn(Visitor) {
   for (let Slot = 0; Slot < MaxPlayerSlots; Slot++) {
@@ -246,6 +297,7 @@ function RemoveEntities(Entities) {
 // src/bm_combat.ts
 var Gravity = 800;
 var ExplosionTemplateName = "boom_template";
+var ExplosionFxLifetime = 5;
 var ProjectileLaunchOffset = { x: 0, y: 0, z: -8 };
 var ExplosionOffset = { x: 0, y: 0, z: 6 };
 var GroundedKnockbackLift = { x: 0, y: 0, z: 0.6 };
@@ -255,21 +307,28 @@ var GroundTraceLift = { x: 0, y: 0, z: 2 };
 function LaunchProjectile(Owner, Speed, UpSpeed, GravityScale, TemplateName) {
   const Direction = FVectorMath.GetForwardVector(Owner.GetEyeAngles());
   const Start = FVectorMath.Add(Owner.GetEyePosition(), ProjectileLaunchOffset);
+  const Velocity = FVectorMath.Add(FVectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed });
   const Projectile = {
     Owner,
     Position: Start,
-    Velocity: FVectorMath.Add(FVectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed }),
+    Velocity,
     GravityScale,
     SpawnedAt: Instance3.GetGameTime(),
-    Model: SpawnFromTemplate(TemplateName, Start)
+    Models: SpawnProjectileModels(TemplateName, Start)
   };
+  PlaceProjectileModels(Projectile, true);
   return Projectile;
 }
 function MoveProjectile(Projectile, DeltaTime, bHitPlayers) {
   const Velocity = Projectile.Velocity;
   Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
   const NextPosition = FVectorMath.Add(Projectile.Position, FVectorMath.Scale(Projectile.Velocity, DeltaTime));
-  const IgnoredEntities = IsValid(Projectile.Model) ? [Projectile.Owner, Projectile.Model] : [Projectile.Owner];
+  const IgnoredEntities = [Projectile.Owner];
+  for (const Model of Projectile.Models) {
+    if (Model.Ent.IsValid()) {
+      IgnoredEntities.push(Model.Ent);
+    }
+  }
   const Trace = Instance3.TraceLine(
     {
       start: Projectile.Position,
@@ -283,19 +342,48 @@ function MoveProjectile(Projectile, DeltaTime, bHitPlayers) {
   } else {
     Projectile.Position = NextPosition;
   }
-  if (IsValid(Projectile.Model)) {
-    Projectile.Model.Teleport({ position: Projectile.Position });
-  }
+  PlaceProjectileModels(Projectile, false);
   return Trace.didHit ? Trace : void 0;
 }
 function DestroyProjectile(Projectile) {
-  if (IsValid(Projectile.Model)) {
-    Projectile.Model.Remove();
+  for (const Model of Projectile.Models) {
+    if (Model.Ent.IsValid()) {
+      Model.Ent.Remove();
+    }
+  }
+  Projectile.Models = [];
+}
+function TintProjectile(Projectile, Color) {
+  for (const Model of Projectile.Models) {
+    if (Model.Ent.IsValid() && IsModelEntity(Model.Ent)) {
+      Model.Ent.SetColor(Color);
+    }
+  }
+}
+function SpawnProjectileModels(TemplateName, Position) {
+  const Models = [];
+  for (const Ent of SpawnTemplateEntities(TemplateName, Position, void 0)) {
+    Models.push({ Ent, LocalRotation: FRotationMath.FromRotator(Ent.GetAbsAngles()) });
+  }
+  return Models;
+}
+function PlaceProjectileModels(Projectile, bTeleport) {
+  const Flight = FRotationMath.FromRotator(FVectorMath.GetRotation(Projectile.Velocity));
+  for (const Model of Projectile.Models) {
+    if (!Model.Ent.IsValid() || Model.Ent.GetParent() !== void 0) {
+      continue;
+    }
+    const Angles = FRotationMath.ToRotator(FRotationMath.Multiply(Flight, Model.LocalRotation));
+    if (bTeleport) {
+      Model.Ent.Teleport({ position: Projectile.Position, angles: Angles });
+    } else {
+      Model.Ent.Move({ position: Projectile.Position, angles: Angles });
+    }
   }
 }
 function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff) {
   const Origin = FVectorMath.Add(Position, ExplosionOffset);
-  if (!SpawnFromTemplate(ExplosionTemplateName, Origin)) {
+  if (!SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime)) {
     Instance3.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
   }
   SpawnScorchMark(Position);
@@ -670,7 +758,7 @@ var DemoSettings = {
   PipeLaunchSpeed: 1337,
   PipeLaunchUp: 150,
   PipeRadius: 160,
-  PipeDamage: 20,
+  PipeDamage: 40,
   PipeKnockback: 1e3,
   PipeFalloff: TF2RocketFalloff,
   PipeLifetime: 5
@@ -870,7 +958,7 @@ var USoldierClass = class extends UPlayerClass {
       Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff);
       return false;
     }
-    if (!Rocket.Model) {
+    if (Rocket.Models.length === 0) {
       Instance5.DebugSphere({ center: Rocket.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Rocket.Owner) });
     }
     return true;
@@ -886,8 +974,10 @@ var UDemomanClass = class extends UPlayerClass {
     const Sticky = {
       ...LaunchProjectile(Pawn, this.Settings.StickyLaunchSpeed, this.Settings.StickyLaunchUp, 1, StickyTemplateName),
       bStuck: false,
-      ArmedAt: Now + this.Settings.StickyArmTime
+      ArmedAt: Now + this.Settings.StickyArmTime,
+      bTintedArmed: false
     };
+    TintProjectile(Sticky, UnarmedStickyColor);
     const State = this.GetPlayerState(Slot);
     State.Stickies.push(Sticky);
     if (!bDebug) {
@@ -916,9 +1006,12 @@ var UDemomanClass = class extends UPlayerClass {
       }
     }
     for (const Sticky of State.Stickies) {
-      if (!Sticky.Model) {
-        const Color = Now >= Sticky.ArmedAt ? GetTeamColor(Pawn) : UnarmedStickyColor;
-        Instance5.DebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: Color });
+      const bArmed = Now >= Sticky.ArmedAt;
+      if (Sticky.Models.length === 0) {
+        Instance5.DebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: bArmed ? GetTeamColor(Pawn) : UnarmedStickyColor });
+      } else if (bArmed && !Sticky.bTintedArmed) {
+        TintProjectile(Sticky, GetTeamColor(Pawn));
+        Sticky.bTintedArmed = true;
       }
     }
     const bDown = Pawn.IsInputPressed(this.Settings.StickyDetonateKey);
@@ -981,7 +1074,7 @@ var UDemomanClass = class extends UPlayerClass {
       Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, this.Settings.PipeDamage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
       return false;
     }
-    if (!Pipe.Model) {
+    if (Pipe.Models.length === 0) {
       Instance5.DebugSphere({ center: Pipe.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Pipe.Owner) });
     }
     return true;
@@ -1694,7 +1787,7 @@ function TickHealthKits(Now) {
     const Taker = FindKitTaker(Kit);
     if (Taker) {
       TakeKit(Kit, Taker, Now);
-    } else if (IsModelEntity(Kit.Entity)) {
+    } else if (IsModelEntity2(Kit.Entity)) {
       SpinKit(Kit, Kit.Entity, Now);
     } else if (bDebug) {
       Instance9.DebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
@@ -1732,7 +1825,7 @@ function RescanHealthKits() {
     if (Existing) {
       Kits.push(Existing);
     } else {
-      Kits.push({ Entity: Ent, VisibleScale: IsModelEntity(Ent) ? Ent.GetModelScale() : 1, BaseAngles: Ent.GetAbsAngles(), RespawnTime: void 0 });
+      Kits.push({ Entity: Ent, VisibleScale: IsModelEntity2(Ent) ? Ent.GetModelScale() : 1, BaseAngles: Ent.GetAbsAngles(), RespawnTime: void 0 });
     }
   }
   GHealthKits = Kits;
@@ -1779,7 +1872,7 @@ function SpinKit(Kit, Model, Now) {
   Model.Move({ angles: { pitch: Kit.BaseAngles.pitch, yaw: Yaw, roll: Kit.BaseAngles.roll } });
 }
 function SetKitVisible(Kit, bVisible) {
-  if (IsModelEntity(Kit.Entity)) {
+  if (IsModelEntity2(Kit.Entity)) {
     Kit.Entity.SetModelScale(bVisible ? Kit.VisibleScale : HiddenScale);
   }
 }
@@ -1788,7 +1881,7 @@ function SpawnKitFx(TemplateName, Kit) {
     SpawnTemporaryTemplate(TemplateName, Kit.Entity.GetAbsOrigin(), FxLifetime);
   }
 }
-function IsModelEntity(Ent) {
+function IsModelEntity2(Ent) {
   return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
 }
 
