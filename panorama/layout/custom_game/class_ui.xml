@@ -51,10 +51,10 @@
 					<Label class="ClassButtonName" text="Demoman" hittest="false" />
 					<Label class="ClassButtonInfo" text="Stickies & Pipes" hittest="false" />
 				</Button>
-				<Button id="Pick_medic" class="ClassButton MedicButton">
+				<!-- <Button id="Pick_medic" class="ClassButton MedicButton">
 					<Label class="ClassButtonName" text="Medic" hittest="false" />
 					<Label class="ClassButtonInfo" text="Medic!" hittest="false" />
-				</Button>
+				</Button> -->
 				<Button id="Pick_railer" class="ClassButton RailerButton">
 					<Label class="ClassButtonName" text="Railer" hittest="false" />
 					<Label class="ClassButtonInfo" text="Chargin ur Lazor" hittest="false" />

@@ -2,8 +2,8 @@ import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSDamageFlags, CSWeaponT
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
 import { bDebug, bFriendlyFire, TickInterval, LogPrefix, FVectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
-import { LaunchProjectile, MoveProjectile, DestroyProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve } from "./bm_combat";
-import type { FProjectile, FDamageFalloff, FDamageCurve } from "./bm_combat";
+import { LaunchProjectile, MoveProjectile, DestroyProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
+import type { FProjectile, FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
 import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
 import type { FLauncherSettings } from "./bm_launcher";
@@ -89,6 +89,12 @@ export interface FMedicSettings extends FClassSettings, FHitscanSettings
 
 export interface FRailerSettings extends FClassSettings
 {
+	readonly ShotDamage: number;
+	readonly ShotKnockback: number;
+	readonly ShotRange: number;
+	readonly ShotSpread: number;
+	readonly ShotFalloff: FDamageCurve;
+
 	readonly BeamDamage: number;
 	readonly BeamRange: number;
 	readonly BeamHeadshotMultiplier: number;
@@ -130,6 +136,15 @@ const TF2HitscanFalloff: FDamageFalloff = { RampUp: 1.5, FallOff: 0.5, OptimalDi
 const TF2RocketFalloff: FDamageFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
 const TF2StickyFalloff: FDamageFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDistance: 512 };
 
+// Full damage and knockback out to 512u, then down to 40% by 1536u
+const RailerShotFalloff: FDamageCurve =
+[
+	{ Distance: 0, Scale: 1.0 },
+	{ Distance: 512, Scale: 1.0 },
+	{ Distance: 1536, Scale: 0.4 },
+];
+
+// Full damage out to 1024u, then down to half by 3072u and stays there
 const RailerBeamFalloff: FDamageCurve =
 [
 	{ Distance: 0, Scale: 1.0 },
@@ -201,11 +216,10 @@ export const DemoSettings: FDemoSettings =
 	StickyKnockback: 600,
 	StickyFalloff: TF2StickyFalloff,
 	StickyFalloffTime: 5,
-
-	PipeLaunchSpeed: 1200,
+	PipeLaunchSpeed: 1337,
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
-	PipeDamage: 44,
+	PipeDamage: 20,
 	PipeKnockback: 1000,
 	PipeFalloff: TF2RocketFalloff,
 	PipeLifetime: 5,
@@ -235,12 +249,21 @@ export const MedicSettings: FMedicSettings =
 export const RailerSettings: FRailerSettings =
 {
 	DisplayName: "Railer",
-	Primary: "weapon_ssg08",
+	Primary: "weapon_famas",
 	Secondary: "weapon_revolver",
 	Melee: "",
 	Health: 100,
 	SizeScale: 0.8,
 	PrimaryLauncher:
+	{
+		FireInterval: 0.08,
+		ClipSize: 20,
+		ReloadFirstTime: 1.6,
+		ReloadEachTime: 0,
+		ChargeTime: 0,
+		FireFxTemplate: "rail_shot_fire_template",
+	},
+	SecondaryLauncher:
 	{
 		FireInterval: 0.5,
 		ClipSize: 1,
@@ -249,9 +272,14 @@ export const RailerSettings: FRailerSettings =
 		ChargeTime: 1,
 		FireFxTemplate: "rail_fire_template",
 	},
-	SecondaryLauncher: undefined,
 
-	BeamDamage: 90,
+	ShotDamage: 6,
+	ShotKnockback: 120,
+	ShotRange: 4096,
+	ShotSpread: 2,
+	ShotFalloff: RailerShotFalloff,
+
+	BeamDamage: 110,
 	BeamRange: 8192,
 	BeamHeadshotMultiplier: 1.5,
 	bBeamPierces: true,
@@ -266,7 +294,10 @@ const RailBeamEndName: string = "rail_beam_end";
 const RailImpactTemplateName: string = "rail_impact_template";
 const RailBeamLifetime: number = 0.4;
 const RailImpactLifetime: number = 2;
-const MaxBeamTraces: number = 8;
+const RailTracerTemplateName: string = "rail_tracer_template";
+const RailTracerEndName: string = "rail_tracer_end";
+const RailTracerLifetime: number = 0.06;
+const MaxBeamHits: number = 8;
 const DefaultHealth: number = 100;
 const DefaultSizeScale: number = 1.0;
 const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
@@ -889,69 +920,69 @@ class URailerClass extends UPlayerClass<FRailerSettings>
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
 		const Start: FVector = Pawn.GetEyePosition();
-		const Direction: FVector = FVectorMath.GetForwardVector(Pawn.GetEyeAngles());
-		const End: FVector = FVectorMath.Add(Start, FVectorMath.Scale(Direction, this.Settings.BeamRange));
+		const Direction: FVector = GetSpreadDirection(Pawn.GetEyeAngles(), this.Settings.ShotSpread);
+		const Result: FHitscanResult = TraceHitscan(Pawn, Start, FVectorMath.Add(Start, FVectorMath.Scale(Direction, this.Settings.ShotRange)), 1);
 		const Weapon: CSWeaponBase | undefined = Pawn.FindWeapon(this.Settings.Primary);
 
-		const Ignored: Entity[] = [Pawn];
-		let BeamEnd: FVector = End;
-		for (let TraceCount: number = 0; TraceCount < MaxBeamTraces; TraceCount++)
+		for (const Hit of Result.Hits)
 		{
-			const Trace: TraceResult = Instance.TraceLine({ start: Start, end: End, ignoreEntity: Ignored, traceHitboxes: true });
-			if (!Trace.didHit)
-			{
-				BeamEnd = End;
-				break;
-			}
-			BeamEnd = Trace.end;
-
-			const Victim: Entity | undefined = Trace.hitEntity;
-			if (!IsPlayerPawn(Victim))
-			{
-				break;
-			}
-			Ignored.push(Victim);
-			if (!Victim.IsAlive() || (!bFriendlyFire && Victim.GetTeamNumber() === Pawn.GetTeamNumber()))
-			{
-				continue;
-			}
-			this.HitWithBeam(Pawn, Victim, Trace, Start, Weapon);
-			if (!this.Settings.bBeamPierces)
-			{
-				break;
-			}
+			const RangeScale: number = EvaluateDamageCurve(this.Settings.ShotFalloff, GetHitDistance(Hit, Start));
+			DealShockDamage(Pawn, Hit.Victim, this.Settings.ShotDamage * RangeScale, Weapon);
+			ApplyKnockback(Hit.Victim, Direction, this.Settings.ShotKnockback * RangeScale);
 		}
-
-		SpawnBeam(RailBeamTemplateName, RailBeamEndName, FVectorMath.Subtract(Start, BeamStartDrop), BeamEnd, RailBeamLifetime, GetTeamColor(Pawn));
-		SpawnTemporaryTemplate(RailImpactTemplateName, BeamEnd, RailImpactLifetime);
+		SpawnBeam(RailTracerTemplateName, RailTracerEndName, FVectorMath.Subtract(Start, BeamStartDrop), Result.End, RailTracerLifetime, GetTeamColor(Pawn));
 	}
 
-	private HitWithBeam(Shooter: CSPlayerPawn, Victim: CSPlayerPawn, Trace: TraceResult, Start: FVector, Weapon: CSWeaponBase | undefined): void
+	public override OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
-		const Distance: number = FVectorMath.Size(FVectorMath.Subtract(Trace.end, Start));
+		const Start: FVector = Pawn.GetEyePosition();
+		const Direction: FVector = FVectorMath.GetForwardVector(Pawn.GetEyeAngles());
+		const MaxHits: number = this.Settings.bBeamPierces ? MaxBeamHits : 1;
+		const Result: FHitscanResult = TraceHitscan(Pawn, Start, FVectorMath.Add(Start, FVectorMath.Scale(Direction, this.Settings.BeamRange)), MaxHits);
+		const Weapon: CSWeaponBase | undefined = Pawn.FindWeapon(this.Settings.Secondary);
+
+		for (const Hit of Result.Hits)
+		{
+			this.HitWithBeam(Pawn, Hit, Start, Weapon);
+		}
+		SpawnBeam(RailBeamTemplateName, RailBeamEndName, FVectorMath.Subtract(Start, BeamStartDrop), Result.End, RailBeamLifetime, GetTeamColor(Pawn));
+		SpawnTemporaryTemplate(RailImpactTemplateName, Result.End, RailImpactLifetime);
+	}
+
+	private HitWithBeam(Shooter: CSPlayerPawn, Hit: FHitscanHit, Start: FVector, Weapon: CSWeaponBase | undefined): void
+	{
+		const Distance: number = GetHitDistance(Hit, Start);
 		const RangeScale: number = EvaluateDamageCurve(this.Settings.BeamFalloff, Distance);
-		const bHeadshot: boolean = Trace.hitGroup === CSHitGroup.HEAD;
+		const bHeadshot: boolean = Hit.Trace.hitGroup === CSHitGroup.HEAD;
 		const Damage: number = this.Settings.BeamDamage * RangeScale * (bHeadshot ? this.Settings.BeamHeadshotMultiplier : 1);
 
-		const DamageDealt: number = Victim.TakeDamage(
+		if (DealShockDamage(Shooter, Hit.Victim, Damage, Weapon) > 0)
 		{
-			damage: Damage,
-			damageTypes: CSDamageTypes.SHOCK,
-			damageFlags: CSDamageFlags.IGNORE_ARMOR,
-			attacker: Shooter,
-			inflictor: Shooter,
-			weapon: Weapon,
-		});
-		if (DamageDealt > 0)
-		{
-			SpawnBloodSplatter(Start, Victim);
+			SpawnBloodSplatter(Start, Hit.Victim);
 		}
-
 		if (bDebug)
 		{
 			Instance.Msg(`${LogPrefix} rail beam: ${Math.round(Distance)}u x${RangeScale.toFixed(2)}${bHeadshot ? " headshot" : ""} -> ${Math.round(Damage)}`);
 		}
 	}
+}
+
+function GetHitDistance(Hit: FHitscanHit, Start: FVector): number
+{
+	return FVectorMath.Size(FVectorMath.Subtract(Hit.Trace.end, Start));
+}
+
+function DealShockDamage(Shooter: CSPlayerPawn, Victim: CSPlayerPawn, Damage: number, Weapon: CSWeaponBase | undefined): number
+{
+	return Victim.TakeDamage(
+	{
+		damage: Damage,
+		damageTypes: CSDamageTypes.SHOCK,
+		damageFlags: CSDamageFlags.IGNORE_ARMOR,
+		attacker: Shooter,
+		inflictor: Shooter,
+		weapon: Weapon,
+	});
 }
 
 // Common //////////////////////////////////////////////////////////////////////////////////////////

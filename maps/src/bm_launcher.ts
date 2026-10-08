@@ -1,5 +1,6 @@
 import { Instance, CSInputs } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
+import { TickInterval } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -26,8 +27,8 @@ interface FLauncherState
 {
 	readonly Settings: FLauncherSettings;
 	readonly WeaponName: string;
-	readonly MaxClip: number;
 	Clip: number;
+	MaxClip: number;
 	NextFireTime: number;
 	NextReloadTime: number | undefined;
 	ChargeStartTime: number | undefined;
@@ -135,7 +136,9 @@ function TickHeldLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number
 		}
 		State.ChargeStartTime = undefined;
 		State.Clip--;
-		State.NextFireTime = Now + State.Settings.FireInterval;
+
+		const bHeldThrough: boolean = Now - State.NextFireTime < TickInterval * 1.5;
+		State.NextFireTime = (bHeldThrough ? State.NextFireTime : Now) + State.Settings.FireInterval;
 		SpawnFireFx(Pawn, State.Settings);
 		return true;
 	}
@@ -176,7 +179,7 @@ function TickReload(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): voi
 	{
 		return;
 	}
-	State.Clip++;
+	State.Clip = State.Settings.ReloadEachTime > 0 ? State.Clip + 1 : State.Settings.ClipSize;
 	State.NextReloadTime = CanReload(State) ? Now + State.Settings.ReloadEachTime : undefined;
 }
 

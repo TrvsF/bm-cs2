@@ -1,7 +1,7 @@
 import { Instance, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult } from "cs_script/point_script";
 import { bDebug, bFriendlyFire, LogPrefix, UpVector, FVectorMath, IsValid, IsPlayerPawn, GetChestPosition, SpawnFromTemplate, ForEachLivePawn } from "./bm_core";
-import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
+import type { FVector, FRotator, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter } from "./bm_effects";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -31,6 +31,18 @@ export interface FDamageCurveKey
 
 export type FDamageCurve = readonly FDamageCurveKey[];
 
+export interface FHitscanHit
+{
+	readonly Victim: CSPlayerPawn;
+	readonly Trace: TraceResult;
+}
+
+export interface FHitscanResult
+{
+	readonly Hits: FHitscanHit[];
+	readonly End: FVector;
+}
+
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 const Gravity: number = 800;
@@ -39,6 +51,7 @@ const ProjectileLaunchOffset: FVector = { x: 0, y: 0, z: -8 };
 const ExplosionOffset: FVector = { x: 0, y: 0, z: 6 };
 const GroundedKnockbackLift: FVector = { x: 0, y: 0, z: 0.6 };
 const ExplosionDebugColor: FColor = { r: 255, g: 140, b: 0 };
+const MaxHitscanTraces: number = 8;
 const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };   // ground traces start just above the feet, so they don't begin inside the floor
 
 // Projectile //////////////////////////////////////////////////////////////////////////////////////
@@ -224,6 +237,60 @@ function GetRangeDamageScale(Attacker: CSPlayerPawn, Victim: CSPlayerPawn, Fallo
 	}
 	const Distance: number = FVectorMath.Size(FVectorMath.Subtract(GetChestPosition(Victim), GetChestPosition(Attacker)));
 	return GetDistanceDamageScale(Distance, Falloff);
+}
+
+// Hitscan /////////////////////////////////////////////////////////////////////////////////////////
+
+export function TraceHitscan(Shooter: CSPlayerPawn, Start: FVector, End: FVector, MaxHits: number): FHitscanResult
+{
+	const Ignored: Entity[] = [Shooter];
+	const Hits: FHitscanHit[] = [];
+	let StopPoint: FVector = End;
+	for (let TraceCount: number = 0; TraceCount < MaxHitscanTraces; TraceCount++)
+	{
+		const Trace: TraceResult = Instance.TraceLine({ start: Start, end: End, ignoreEntity: Ignored, traceHitboxes: true });
+		if (!Trace.didHit)
+		{
+			StopPoint = End;
+			break;
+		}
+		StopPoint = Trace.end;
+
+		const Victim: Entity | undefined = Trace.hitEntity;
+		if (!IsPlayerPawn(Victim))
+		{
+			break;
+		}
+		Ignored.push(Victim);
+		if (!Victim.IsAlive() || (!bFriendlyFire && Victim.GetTeamNumber() === Shooter.GetTeamNumber()))
+		{
+			continue;
+		}
+		Hits.push({ Victim: Victim, Trace: Trace });
+		if (Hits.length >= MaxHits)
+		{
+			break;
+		}
+	}
+	return { Hits: Hits, End: StopPoint };
+}
+
+export function GetSpreadDirection(Aim: FRotator, SpreadDegrees: number): FVector
+{
+	const Radius: number = SpreadDegrees * Math.sqrt(Math.random());
+	const Around: number = Math.random() * Math.PI * 2;
+	return FVectorMath.GetForwardVector(
+	{
+		pitch: Aim.pitch + Radius * Math.sin(Around),
+		yaw: Aim.yaw + Radius * Math.cos(Around),
+		roll: 0,
+	});
+}
+
+export function ApplyKnockback(Victim: CSPlayerPawn, Direction: FVector, Speed: number): void
+{
+	const Push: FVector = Victim.GetGroundEntity() ? FVectorMath.GetSafeNormal(FVectorMath.Add(Direction, GroundedKnockbackLift)) : Direction;
+	Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Push, Speed)) });
 }
 
 export function GetHeightAboveGround(Pawn: CSPlayerPawn, MaxDistance: number): number
