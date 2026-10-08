@@ -30,6 +30,16 @@
 	border-left: 4px solid #9aa2ac;
 }
 
+.ClassIndicator.Team_ct
+{
+	border-left-color: #7fd4ff;
+}
+
+.ClassIndicator.Team_t
+{
+	border-left-color: #ee5a5a;
+}
+
 .ClassIndicator.Class_soldier
 {
 	border-left-color: #d9b26a;

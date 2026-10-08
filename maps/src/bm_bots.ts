@@ -32,8 +32,6 @@ const BotMarkerModes: ReadonlyMap<string, EBotMode> = new Map<string, EBotMode>(
 const BotRunSpeed: number = 250;
 const BotJumpSpeed: number = 301;
 const BotSpawnSettleTime: number = 0.1;
-const BotTurnCheckDistance: number = 40;
-const BotLedgeCheckDepth: number = 64;
 
 const GBotAssignments: Map<number, FBotAssignment> = new Map<number, FBotAssignment>();
 const GBotReadyAt: Map<number, number> = new Map<number, number>();
@@ -151,33 +149,6 @@ function DriveBot(Pawn: CSPlayerPawn, Assignment: FBotAssignment): void
 		return;
 	}
 
-	if (IsBotPathBlocked(Pawn, Assignment.Yaw))
-	{
-		Assignment.Yaw = (Assignment.Yaw + 180) % 360;
-		Pawn.Teleport({ angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 } });
-		Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
-	}
 	const Forward: FVector = FVectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
 	Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
-}
-
-function IsBotPathBlocked(Pawn: CSPlayerPawn, Yaw: number): boolean
-{
-	const Forward: FVector = FVectorMath.GetForwardVector({ pitch: 0, yaw: Yaw, roll: 0 });
-	const Knee: FVector = FVectorMath.Add(Pawn.GetAbsOrigin(), { x: 0, y: 0, z: 24 });
-	const Ahead: FVector = FVectorMath.Add(Knee, FVectorMath.Scale(Forward, BotTurnCheckDistance));
-
-	const Wall: TraceResult = Instance.TraceLine({ start: Knee, end: Ahead, ignorePlayers: true });
-	if (Wall.didHit)
-	{
-		return true;
-	}
-
-	const Floor: TraceResult = Instance.TraceLine(
-	{
-		start: Ahead,
-		end: FVectorMath.Add(Ahead, { x: 0, y: 0, z: -(24 + BotLedgeCheckDepth) }),
-		ignorePlayers: true,
-	});
-	return !Floor.didHit;
 }

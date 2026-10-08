@@ -127,7 +127,7 @@ export function ReadClassMenuClick(Layout: CustomHudLayout, ButtonId: string): F
 
 // Indicator ///////////////////////////////////////////////////////////////////////////////////////
 
-export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass): void
+export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass, IsT: boolean): void
 {
 	const Ui: CustomHudLayout | undefined = FindClassUi();
 	if (!Ui)
@@ -139,12 +139,8 @@ export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass): voi
 	Ui.SetDialogVariableStringForPlayer(Slot, ClassNameLabelId, "classname", DisplayName);
 	Ui.SetHasClassForPlayer(Slot, BottomBarId, "Shown", true);
 
-	for (const Other of AllClasses)
-	{
-		const bIsCurrent: boolean = Other === PlayerClass;
-		Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, `Class_${Other}`, bIsCurrent);
-		Ui.SetHasClassForPlayer(Slot, `${PickButtonPrefix}${Other}`, "Selected", bIsCurrent);
-	}
+	Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Team_t", IsT);
+	Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Team_ct", !IsT);
 
 	if (GOpenMenus.has(Slot))
 	{
@@ -155,7 +151,7 @@ export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass): voi
 
 export function ShowAmmo(Slot: number, Ammo: FLauncherAmmo | undefined): void
 {
-	const Key: string = Ammo ? `${Ammo.Clip}|${Ammo.Spare}|${Ammo.bReloading}` : "";
+	const Key: string = Ammo ? `${Ammo.Clip}|${Ammo.bReloading}` : "";
 	if ((GShownAmmo.get(Slot) ?? "") === Key)
 	{
 		return;
@@ -173,7 +169,7 @@ export function ShowAmmo(Slot: number, Ammo: FLauncherAmmo | undefined): void
 		return;
 	}
 	Ui.SetDialogVariableStringForPlayer(Slot, AmmoClipLabelId, "ammoclip", `${Ammo.Clip}`);
-	Ui.SetDialogVariableStringForPlayer(Slot, AmmoSpareLabelId, "ammospare", `${Ammo.Spare}`);
+	Ui.SetDialogVariableStringForPlayer(Slot, AmmoSpareLabelId, "ammospare", `${Ammo.MaxClip}`);
 	Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Reloading", Ammo.bReloading);
 	Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Empty", Ammo.Clip === 0);
 	Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Shown", true);

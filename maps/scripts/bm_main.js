@@ -361,7 +361,7 @@ function EquipLauncher(Pawn, Slot, WeaponName, Settings) {
       Settings,
       WeaponName,
       Clip: Settings.ClipSize,
-      Spare: Settings.SpareAmmo,
+      MaxClip: Settings.ClipSize,
       NextFireTime: 0,
       NextReloadTime: void 0
     }
@@ -399,7 +399,7 @@ function GetLauncherAmmo(Pawn, Slot) {
   }
   for (const State of Launchers) {
     if (Pawn.FindWeapon(State.WeaponName) === Active) {
-      return { Clip: State.Clip, Spare: State.Spare, bReloading: State.NextReloadTime !== void 0 };
+      return { Clip: State.Clip, MaxClip: State.MaxClip, bReloading: State.NextReloadTime !== void 0 };
     }
   }
   return void 0;
@@ -425,23 +425,17 @@ function TickReload(Pawn, State, Now) {
     return;
   }
   if (State.NextReloadTime === void 0) {
-    const bWantsReload = State.Clip === 0 || Pawn.WasInputJustPressed(CSInputs.RELOAD);
-    if (bWantsReload) {
-      State.NextReloadTime = Math.max(Now, State.NextFireTime) + State.Settings.ReloadFirstTime;
-    }
+    State.NextReloadTime = Math.max(Now, State.NextFireTime) + State.Settings.ReloadFirstTime;
     return;
   }
   if (Now < State.NextReloadTime) {
     return;
   }
   State.Clip++;
-  if (!bDebug) {
-    State.Spare--;
-  }
   State.NextReloadTime = CanReload(State) ? Now + State.Settings.ReloadEachTime : void 0;
 }
 function CanReload(State) {
-  return State.Clip < State.Settings.ClipSize && (State.Spare > 0 || bDebug);
+  return State.Clip < State.Settings.ClipSize;
 }
 function EmptyRealGun(Pawn, WeaponName) {
   const Weapon = Pawn.FindWeapon(WeaponName);
@@ -468,6 +462,7 @@ var EPlayerClass = /* @__PURE__ */ ((EPlayerClass2) => {
   EPlayerClass2["Demoman"] = "demo";
   EPlayerClass2["Solider"] = "soldier";
   EPlayerClass2["Medic"] = "medic";
+  EPlayerClass2["Railer"] = "railer";
   return EPlayerClass2;
 })(EPlayerClass || {});
 var TF2HitscanFalloff = { RampUp: 1.5, FallOff: 0.5, OptimalDistance: 512 };
@@ -483,7 +478,6 @@ var SoldierSettings = {
   PrimaryLauncher: {
     FireInterval: 0.8,
     ClipSize: 4,
-    SpareAmmo: 20,
     ReloadFirstTime: 0.92,
     ReloadEachTime: 0.8,
     FireFxTemplate: "rocket_fire_template"
@@ -505,8 +499,7 @@ var DemoSettings = {
   SizeScale: 1,
   PrimaryLauncher: {
     FireInterval: 0.6,
-    ClipSize: 8,
-    SpareAmmo: 24,
+    ClipSize: 6,
     ReloadFirstTime: 1.09,
     ReloadEachTime: 0.67,
     FireFxTemplate: "sticky_fire_template"
@@ -514,7 +507,6 @@ var DemoSettings = {
   SecondaryLauncher: {
     FireInterval: 0.6,
     ClipSize: 4,
-    SpareAmmo: 16,
     ReloadFirstTime: 1.24,
     ReloadEachTime: 0.6,
     FireFxTemplate: "pipe_fire_template"
@@ -555,6 +547,17 @@ var MedicSettings = {
   UberSecondsToFill: 40,
   UberDuration: 8
 };
+var RailerSettings = {
+  DisplayName: "Railer",
+  Primary: "weapon_scar20",
+  Secondary: "weapon_revolver",
+  Melee: "",
+  Health: 100,
+  SizeScale: 0.8,
+  PrimaryLauncher: void 0,
+  SecondaryLauncher: void 0,
+  BeamChargeTime: 1
+};
 var StickyTemplateName = "sticky_template";
 var RocketTemplateName = "rocket_template";
 var PipeTemplateName = "pipe_template";
@@ -564,7 +567,7 @@ var StrippedGearSlots = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, 
 var NoClassStrippedGearSlots = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.GRENADES];
 var NoClassMelee = "weapon_knife";
 var BeamStartDrop = { x: 0, y: 0, z: 12 };
-var UnarmedStickyColor = { r: 120, g: 120, b: 120 };
+var UnarmedStickyColor = { r: 240, g: 240, b: 240 };
 var UberReadyColor = { r: 255, g: 255, b: 255 };
 function ApplyBody(Pawn, Health, SizeScale) {
   Pawn.SetMaxHealth(Health);
@@ -635,7 +638,9 @@ var UPlayerClass = class {
   }
   // Override to change or block damage dealt by this class
   ModifyOutgoingDamage(Event) {
-    return;
+    if (this.IsPrimaryBulletDamage(Event) || this.IsSecondaryBulletDamage(Event)) {
+      return { abort: true };
+    }
   }
   // Called for every damage event, whoever deals it (e.g. über protecting a patient)
   ModifyAnyDamage(Event) {
@@ -671,12 +676,6 @@ var USoldierClass = class extends UPlayerClass {
       DestroyProjectile(Rocket);
     }
     this.Rockets = [];
-  }
-  ModifyOutgoingDamage(Event) {
-    if (this.IsPrimaryBulletDamage(Event)) {
-      return { abort: true };
-    }
-    return;
   }
   StepRocket(Rocket, Now, DeltaTime) {
     if (!Rocket.Owner.IsValid() || Now - Rocket.SpawnedAt > this.Settings.RocketLifetime) {
@@ -776,11 +775,6 @@ var UDemomanClass = class extends UPlayerClass {
       DestroyProjectile(Sticky);
     }
     this.PlayerStates.delete(Slot);
-  }
-  ModifyOutgoingDamage(Event) {
-    if (this.IsPrimaryBulletDamage(Event) || this.IsSecondaryBulletDamage(Event)) {
-      return { abort: true };
-    }
   }
   GetPlayerState(Slot) {
     let State = this.PlayerStates.get(Slot);
@@ -978,10 +972,18 @@ var UMedicClass = class extends UPlayerClass {
     this.GlowingPawns = new Set(this.UberedThisTick);
   }
 };
+var URailerClass = class extends UPlayerClass {
+  constructor() {
+    super(RailerSettings);
+  }
+  OnPrimaryFire(Pawn, Slot, Now) {
+  }
+};
 var ClassDefinitions = {
   ["demo" /* Demoman */]: new UDemomanClass(),
   ["soldier" /* Solider */]: new USoldierClass(),
-  ["medic" /* Medic */]: new UMedicClass()
+  ["medic" /* Medic */]: new UMedicClass(),
+  ["railer" /* Railer */]: new URailerClass()
 };
 function GiveLoadout(Pawn, PlayerClass) {
   ClassDefinitions[PlayerClass].ApplyLoadout(Pawn);
@@ -1088,8 +1090,6 @@ var BotMarkerModes = /* @__PURE__ */ new Map(
 var BotRunSpeed = 250;
 var BotJumpSpeed = 301;
 var BotSpawnSettleTime = 0.1;
-var BotTurnCheckDistance = 40;
-var BotLedgeCheckDepth = 64;
 var GBotAssignments = /* @__PURE__ */ new Map();
 var GBotReadyAt = /* @__PURE__ */ new Map();
 function TickBots(Now) {
@@ -1169,30 +1169,8 @@ function DriveBot(Pawn, Assignment) {
     Pawn.Teleport({ velocity: { x: 0, y: 0, z: BotJumpSpeed } });
     return;
   }
-  if (IsBotPathBlocked(Pawn, Assignment.Yaw)) {
-    Assignment.Yaw = (Assignment.Yaw + 180) % 360;
-    Pawn.Teleport({ angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 } });
-    Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
-  }
   const Forward = FVectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
   Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
-}
-function IsBotPathBlocked(Pawn, Yaw) {
-  const Forward = FVectorMath.GetForwardVector({ pitch: 0, yaw: Yaw, roll: 0 });
-  const Knee = FVectorMath.Add(Pawn.GetAbsOrigin(), { x: 0, y: 0, z: 24 });
-  const Ahead = FVectorMath.Add(Knee, FVectorMath.Scale(Forward, BotTurnCheckDistance));
-  const Wall = Instance7.TraceLine({ start: Knee, end: Ahead, ignorePlayers: true });
-  if (Wall.didHit) {
-    return true;
-  }
-  const Floor = Instance7.TraceLine(
-    {
-      start: Ahead,
-      end: FVectorMath.Add(Ahead, { x: 0, y: 0, z: -(24 + BotLedgeCheckDepth) }),
-      ignorePlayers: true
-    }
-  );
-  return !Floor.didHit;
 }
 
 // src/bm_class_ui.ts
@@ -1281,7 +1259,7 @@ function ReadClassMenuClick(Layout, ButtonId) {
   }
   return void 0;
 }
-function ShowClassIndicator(Slot, PlayerClass) {
+function ShowClassIndicator(Slot, PlayerClass, IsT) {
   const Ui = FindClassUi();
   if (!Ui) {
     return;
@@ -1289,18 +1267,15 @@ function ShowClassIndicator(Slot, PlayerClass) {
   const DisplayName = PlayerClass === "none" /* None */ ? NoClassName : ClassDefinitions[PlayerClass].Settings.DisplayName;
   Ui.SetDialogVariableStringForPlayer(Slot, ClassNameLabelId, "classname", DisplayName);
   Ui.SetHasClassForPlayer(Slot, BottomBarId, "Shown", true);
-  for (const Other of AllClasses) {
-    const bIsCurrent = Other === PlayerClass;
-    Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, `Class_${Other}`, bIsCurrent);
-    Ui.SetHasClassForPlayer(Slot, `${PickButtonPrefix}${Other}`, "Selected", bIsCurrent);
-  }
+  Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Team_t", IsT);
+  Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Team_ct", !IsT);
   if (GOpenMenus.has(Slot)) {
     Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", true);
     Ui.SetInputCaptureEnabled(Slot, true);
   }
 }
 function ShowAmmo(Slot, Ammo) {
-  const Key = Ammo ? `${Ammo.Clip}|${Ammo.Spare}|${Ammo.bReloading}` : "";
+  const Key = Ammo ? `${Ammo.Clip}|${Ammo.bReloading}` : "";
   if ((GShownAmmo.get(Slot) ?? "") === Key) {
     return;
   }
@@ -1314,7 +1289,7 @@ function ShowAmmo(Slot, Ammo) {
     return;
   }
   Ui.SetDialogVariableStringForPlayer(Slot, AmmoClipLabelId, "ammoclip", `${Ammo.Clip}`);
-  Ui.SetDialogVariableStringForPlayer(Slot, AmmoSpareLabelId, "ammospare", `${Ammo.Spare}`);
+  Ui.SetDialogVariableStringForPlayer(Slot, AmmoSpareLabelId, "ammospare", `${Ammo.MaxClip}`);
   Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Reloading", Ammo.bReloading);
   Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Empty", Ammo.Clip === 0);
   Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Shown", true);
@@ -1597,7 +1572,7 @@ function RequestPlayerClass(Player, PlayerClass) {
   } else {
     GPendingClassBySlot.set(Slot, PlayerClass);
   }
-  ShowClassIndicator(Slot, CurrentClass);
+  ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
   Instance9.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass} on respawn`);
 }
 function ApplyPendingClass(Slot) {
@@ -1628,7 +1603,7 @@ function SetPlayerClass(Player, PlayerClass) {
       GiveLoadout(Pawn, PlayerClass);
     }
   }
-  ShowClassIndicator(Slot, PlayerClass);
+  ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === 2);
   const ClassLabel = PlayerClass === "none" /* None */ ? "normal" : PlayerClass;
   Instance9.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
 }
@@ -1638,7 +1613,7 @@ function RefreshClassUi(Pawn, Slot) {
     return;
   }
   const PlayerClass = GClassBySlot.get(Slot) ?? "none" /* None */;
-  ShowClassIndicator(Slot, PlayerClass);
+  ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === 2);
   SetTimer(0.5, () => {
     if (Pawn.IsValid() && Pawn.IsAlive()) {
       OfferClassMenu(Slot, GClassBySlot.get(Slot) ?? "none" /* None */);

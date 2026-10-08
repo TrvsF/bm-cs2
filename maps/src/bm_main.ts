@@ -363,7 +363,7 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 	{
 		GPendingClassBySlot.set(Slot, PlayerClass);
 	}
-	ShowClassIndicator(Slot, CurrentClass);
+	ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
 	Instance.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass} on respawn`);
 }
 
@@ -409,7 +409,7 @@ function SetPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): 
 			GiveLoadout(Pawn, PlayerClass);
 		}
 	}
-	ShowClassIndicator(Slot, PlayerClass);
+	ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === 2);
 
 	const ClassLabel: string = PlayerClass === EPlayerClass.None ? "normal" : PlayerClass;
 	Instance.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
@@ -424,7 +424,7 @@ function RefreshClassUi(Pawn: CSPlayerPawn, Slot: number): void
 	}
 
 	const PlayerClass: EPlayerClass = GClassBySlot.get(Slot) ?? EPlayerClass.None;
-	ShowClassIndicator(Slot, PlayerClass);
+	ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === 2);
 	SetTimer(0.5, (): void =>
 	{
 		if (Pawn.IsValid() && Pawn.IsAlive())

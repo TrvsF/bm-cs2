@@ -15,6 +15,7 @@ export enum EPlayerClass
 	Demoman = "demo",
 	Solider = "soldier",
 	Medic = "medic",
+	Railer = "railer",
 }
 
 export type EPlayableClass = Exclude<EPlayerClass, EPlayerClass.None>;
@@ -27,7 +28,7 @@ export interface FClassSettings
 	readonly Melee: string;
 	readonly Health: number;
 	readonly SizeScale: number;
-	readonly PrimaryLauncher: FLauncherSettings | undefined;     // the script fires this gun itself (fire rate, ammo, no CS gunfire). undefined = the real gun fires
+	readonly PrimaryLauncher: FLauncherSettings | undefined;
 	readonly SecondaryLauncher: FLauncherSettings | undefined;
 }
 
@@ -78,6 +79,11 @@ export interface FMedicSettings extends FClassSettings, FHitscanSettings
 	readonly UberDuration: number;
 }
 
+export interface FRailerSettings extends FClassSettings
+{
+	readonly BeamChargeTime: number;
+}
+
 export interface FRocket extends FProjectile
 {
 }
@@ -124,7 +130,6 @@ export const SoldierSettings: FSoliderSettings =
 	{
 		FireInterval: 0.8,
 		ClipSize: 4,
-		SpareAmmo: 20,
 		ReloadFirstTime: 0.92,
 		ReloadEachTime: 0.8,
 		FireFxTemplate: "rocket_fire_template",
@@ -150,8 +155,7 @@ export const DemoSettings: FDemoSettings =
 	PrimaryLauncher:
 	{
 		FireInterval: 0.6,
-		ClipSize: 8,
-		SpareAmmo: 24,
+		ClipSize: 6,
 		ReloadFirstTime: 1.09,
 		ReloadEachTime: 0.67,
 		FireFxTemplate: "sticky_fire_template",
@@ -160,7 +164,6 @@ export const DemoSettings: FDemoSettings =
 	{
 		FireInterval: 0.6,
 		ClipSize: 4,
-		SpareAmmo: 16,
 		ReloadFirstTime: 1.24,
 		ReloadEachTime: 0.6,
 		FireFxTemplate: "pipe_fire_template",
@@ -206,17 +209,31 @@ export const MedicSettings: FMedicSettings =
 	UberDuration: 8,
 };
 
+export const RailerSettings: FRailerSettings =
+{
+	DisplayName: "Railer",
+	Primary: "weapon_scar20",
+	Secondary: "weapon_revolver",
+	Melee: "",
+	Health: 100,
+	SizeScale: 0.8,
+	PrimaryLauncher: undefined,
+	SecondaryLauncher: undefined,
+	
+	BeamChargeTime: 1,
+};
+
 const StickyTemplateName: string = "sticky_template";
 const RocketTemplateName: string = "rocket_template";
 const PipeTemplateName: string = "pipe_template";
 const DefaultHealth: number = 100;
 const DefaultSizeScale: number = 1.0;
 const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
-const NoClassStrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.GRENADES];   // keeps their own knife
+const NoClassStrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.GRENADES];
 const NoClassMelee: string = "weapon_knife";
 
 const BeamStartDrop: FVector = { x: 0, y: 0, z: 12 };
-const UnarmedStickyColor: FColor = { r: 120, g: 120, b: 120 };
+const UnarmedStickyColor: FColor = { r: 240, g: 240, b: 240 };
 const UberReadyColor: FColor = { r: 255, g: 255, b: 255 };
 
 // Body ////////////////////////////////////////////////////////////////////////////////////////////
@@ -332,7 +349,10 @@ abstract class UPlayerClass<TSettings extends FClassSettings>
 	// Override to change or block damage dealt by this class
 	public ModifyOutgoingDamage(Event: FModifyDamageEvent): FModifyDamageResult
 	{
-		return;
+		if (this.IsPrimaryBulletDamage(Event) || this.IsSecondaryBulletDamage(Event))
+		{
+			return { abort: true };
+		}
 	}
 
 	// Called for every damage event, whoever deals it (e.g. über protecting a patient)
@@ -388,15 +408,6 @@ class USoldierClass extends UPlayerClass<FSoliderSettings>
 			DestroyProjectile(Rocket);
 		}
 		this.Rockets = [];
-	}
-
-	public override ModifyOutgoingDamage(Event: FModifyDamageEvent): FModifyDamageResult
-	{
-		if (this.IsPrimaryBulletDamage(Event))
-		{
-			return { abort: true };
-		}
-		return;
 	}
 
 	private StepRocket(Rocket: FRocket, Now: number, DeltaTime: number): boolean
@@ -541,14 +552,6 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 			DestroyProjectile(Sticky);
 		}
 		this.PlayerStates.delete(Slot);
-	}
-
-	public override ModifyOutgoingDamage(Event: FModifyDamageEvent): FModifyDamageResult
-	{
-		if (this.IsPrimaryBulletDamage(Event) || this.IsSecondaryBulletDamage(Event))
-		{
-			return { abort: true };
-		}
 	}
 
 	private GetPlayerState(Slot: number): FDemoPlayerState
@@ -719,7 +722,6 @@ class UMedicClass extends UPlayerClass<FMedicSettings>
 
 	public override ModifyOutgoingDamage(Event: FModifyDamageEvent): FModifyDamageResult
 	{
-		// The knife is the medigun, so it never deals damage
 		if (Event.weapon && Event.weapon.GetData().GetType() === CSWeaponType.KNIFE)
 		{
 			return { abort: true };
@@ -819,11 +821,28 @@ class UMedicClass extends UPlayerClass<FMedicSettings>
 	}
 }
 
+// Railer //////////////////////////////////////////////////////////////////////////////////////////
+
+class URailerClass extends UPlayerClass<FRailerSettings>
+{
+	constructor()
+	{
+		super(RailerSettings);
+	}
+
+	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	{
+	}
+}
+
+// Common //////////////////////////////////////////////////////////////////////////////////////////
+
 export const ClassDefinitions: Readonly<Record<EPlayableClass, UPlayerClass<FClassSettings>>> =
 {
 	[EPlayerClass.Demoman]: new UDemomanClass(),
 	[EPlayerClass.Solider]: new USoldierClass(),
 	[EPlayerClass.Medic]: new UMedicClass(),
+	[EPlayerClass.Railer]: new URailerClass(),
 };
 
 export function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void
