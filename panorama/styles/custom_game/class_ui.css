@@ -5,21 +5,29 @@
 	z-index: 99998;
 }
 
-.ClassIndicator
+.BottomBar
 {
 	visibility: collapse;
-	horizontal-align: right;
+	width: 100%;
+	height: 100px;
 	vertical-align: bottom;
-
-	flow-children: down;
-	padding: 6px 14px 6px 10px;
-	border-right: 3px solid #9aa2ac;
-	background-color: #0b0f14b0;
+	background-color: #0b0f14;
+	border-top: 2px solid #2a313a;
 }
 
-.ClassIndicator.Shown
+.BottomBar.Shown
 {
 	visibility: visible;
+}
+
+.ClassIndicator
+{
+	horizontal-align: left;
+	vertical-align: center;
+	margin-left: 28px;
+	flow-children: down;
+	padding: 4px 14px 4px 12px;
+	border-left: 4px solid #9aa2ac;
 }
 
 .ClassIndicator.Class_soldier
@@ -40,20 +48,151 @@
 .ClassName
 {
 	font-family: Stratum2 Medium Condensed;
-	font-size: 22px;
+	font-size: 30px;
 	color: #ffffff;
 	text-transform: uppercase;
-	letter-spacing: 1.2px;
+	letter-spacing: 1.4px;
 }
 
 .ClassHint
 {
-	font-size: 12px;
+	font-size: 13px;
 	color: #9aa2ac;
 	margin-top: 2px;
 }
 
-/* Menu */
+.HealthPanel
+{
+	visibility: collapse;
+	horizontal-align: center;
+	vertical-align: center;
+	flow-children: right;
+}
+
+.HealthPanel.Shown
+{
+	visibility: visible;
+}
+
+.HealthCross
+{
+	width: 46px;
+	height: 46px;
+	vertical-align: center;
+}
+
+.CrossBar
+{
+	border-radius: 3px;
+	background-color: #f2f4f7;
+}
+
+.CrossHorizontal
+{
+	width: 100%;
+	height: 16px;
+	vertical-align: center;
+}
+
+.CrossVertical
+{
+	width: 16px;
+	height: 100%;
+	horizontal-align: center;
+}
+
+.HealthValue
+{
+	vertical-align: center;
+	margin-left: 14px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 52px;
+	color: #f2f4f7;
+}
+
+.HealthMax
+{
+	vertical-align: bottom;
+	margin-left: 6px;
+	margin-bottom: 22px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 22px;
+	color: #6c7580;
+}
+
+.HealthPanel.Overhealed .CrossBar
+{
+	background-color: #7fd4ff;
+}
+
+.HealthPanel.Overhealed .HealthValue
+{
+	color: #7fd4ff;
+}
+
+.HealthPanel.Hurt .CrossBar
+{
+	background-color: #f0d080;
+}
+
+.HealthPanel.Hurt .HealthValue
+{
+	color: #f0d080;
+}
+
+.HealthPanel.Critical .CrossBar
+{
+	background-color: #ee5a5a;
+}
+
+.HealthPanel.Critical .HealthValue
+{
+	color: #ee5a5a;
+}
+
+.AmmoPanel
+{
+	visibility: collapse;
+	horizontal-align: right;
+	vertical-align: center;
+	margin-right: 28px;
+	flow-children: right;
+	padding: 4px 12px 4px 14px;
+	border-right: 4px solid #9aa2ac;
+}
+
+.AmmoPanel.Shown
+{
+	visibility: visible;
+}
+
+.AmmoClip
+{
+	vertical-align: center;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 52px;
+	color: #ffffff;
+}
+
+.AmmoSpare
+{
+	vertical-align: bottom;
+	margin-left: 8px;
+	margin-bottom: 14px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 24px;
+	color: #9aa2ac;
+}
+
+.AmmoPanel.Empty .AmmoClip
+{
+	color: #ee5a5a;
+}
+
+.AmmoPanel.Reloading .AmmoClip
+{
+	color: #f0d080;
+}
 
 .ClassMenu
 {

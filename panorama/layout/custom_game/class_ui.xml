@@ -4,9 +4,27 @@
 	</styles>
 	<Panel class="ClassScreen" hittest="false">
 
-		<Panel id="ClassIndicator" class="ClassIndicator" hittest="false">
-			<Label id="ClassName" class="ClassName" text="{s:classname}" hittest="false" />
-			<Label class="ClassHint" text="F: change class" hittest="false" />
+		<Panel id="BottomBar" class="BottomBar" hittest="false">
+
+			<Panel id="ClassIndicator" class="ClassIndicator" hittest="false">
+				<Label id="ClassName" class="ClassName" text="{s:classname}" hittest="false" />
+				<Label class="ClassHint" text="F: change class" hittest="false" />
+			</Panel>
+
+			<Panel id="HealthPanel" class="HealthPanel" hittest="false">
+				<Panel class="HealthCross" hittest="false">
+					<Panel class="CrossBar CrossHorizontal" hittest="false" />
+					<Panel class="CrossBar CrossVertical" hittest="false" />
+				</Panel>
+				<Label id="HealthValue" class="HealthValue" text="{s:health}" hittest="false" />
+				<Label id="HealthMax" class="HealthMax" text="/ {s:maxhealth}" hittest="false" />
+			</Panel>
+
+			<Panel id="AmmoPanel" class="AmmoPanel" hittest="false">
+				<Label id="AmmoClip" class="AmmoClip" text="{s:ammoclip}" hittest="false" />
+				<Label id="AmmoSpare" class="AmmoSpare" text="/ {s:ammospare}" hittest="false" />
+			</Panel>
+
 		</Panel>
 
 		<Panel id="ClassMenu" class="ClassMenu">

@@ -20,7 +20,8 @@ import type { EPlayableClass } from "./bm_classes";
 import { ClearDecals } from "./bm_effects";
 import { ShowDamageNumber, ResetDamageNumbers } from "./bm_hud";
 import { TickBots, ResetBotMode, ForgetBot } from "./bm_bots";
-import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ResetClassUi } from "./bm_class_ui";
+import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ResetClassUi } from "./bm_class_ui";
+import { TickLauncher, ClearLauncher, GetLauncherAmmo } from "./bm_launcher";
 import type { FClassMenuChoice } from "./bm_class_ui";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,7 +58,17 @@ function Tick(): void
 			const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
 			if (PlayerClass !== undefined)
 			{
-				ClassDefinitions[PlayerClass].TickPlayer(Pawn, Slot, Now, DeltaTime);
+				const Definition = ClassDefinitions[PlayerClass];
+				const FiredWeapon: string | undefined = TickLauncher(Pawn, Slot, Now);
+				if (FiredWeapon === Definition.Settings.Primary)
+				{
+					Definition.OnPrimaryFire(Pawn, Slot, Now);
+				}
+				else if (FiredWeapon === Definition.Settings.Secondary)
+				{
+					Definition.OnSecondaryFire(Pawn, Slot, Now);
+				}
+				Definition.TickPlayer(Pawn, Slot, Now, DeltaTime);
 			}
 		});
 		for (const Definition of Object.values(ClassDefinitions))
@@ -66,6 +77,7 @@ function Tick(): void
 		}
 
 		TickClassMenuKey();
+		TickPlayerHud();
 		TickNoBuying();
 		TickBots(Now);
 	}
@@ -204,11 +216,11 @@ function HandleGunFire(Event: FGunFireEvent): void
 	}
 
 	const Definition = ClassDefinitions[PlayerClass];
-	if (IsWeapon(Weapon, Definition.Settings.Primary))
+	if (IsWeapon(Weapon, Definition.Settings.Primary) && !Definition.Settings.PrimaryLauncher)
 	{
 		Definition.OnPrimaryFire(Pawn, Slot, Instance.GetGameTime());
 	}
-	else if (IsWeapon(Weapon, Definition.Settings.Secondary))
+	else if (IsWeapon(Weapon, Definition.Settings.Secondary) && !Definition.Settings.SecondaryLauncher)
 	{
 		Definition.OnSecondaryFire(Pawn, Slot, Instance.GetGameTime());
 	}
@@ -428,6 +440,22 @@ function ClearPlayer(Slot: number): void
 	{
 		Definition.ClearPlayer(Slot);
 	}
+	ClearLauncher(Slot);
+	ShowAmmo(Slot, undefined);
+	ShowHealth(Slot, undefined);
+}
+
+function TickPlayerHud(): void
+{
+	ForEachLivePawn((Pawn: CSPlayerPawn, Slot: number): void =>
+	{
+		const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
+		if (Controller && !Controller.IsBot())
+		{
+			ShowHealth(Slot, Pawn);
+			ShowAmmo(Slot, GetLauncherAmmo(Pawn, Slot));
+		}
+	});
 }
 
 // Weapons /////////////////////////////////////////////////////////////////////////////////////////

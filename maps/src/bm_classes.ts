@@ -1,9 +1,11 @@
 import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData } from "cs_script/point_script";
-import { bDebug, TickInterval, FVectorMath, GetTeamColor, GetChestPosition, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
+import { bDebug, TickInterval, FVectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { LaunchProjectile, MoveProjectile, DestroyProjectile, Explode, ApplyBulletFalloff } from "./bm_combat";
 import type { FProjectile, FDamageFalloff } from "./bm_combat";
+import { EquipLauncher } from "./bm_launcher";
+import type { FLauncherSettings } from "./bm_launcher";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,6 +27,8 @@ export interface FClassSettings
 	readonly Melee: string;
 	readonly Health: number;
 	readonly SizeScale: number;
+	readonly PrimaryLauncher: FLauncherSettings | undefined;     // the script fires this gun itself (fire rate, ammo, no CS gunfire). undefined = the real gun fires
+	readonly SecondaryLauncher: FLauncherSettings | undefined;
 }
 
 export interface FHitscanSettings
@@ -50,6 +54,7 @@ export interface FDemoSettings extends FClassSettings
 	readonly PipeDamage: number,
 	readonly PipeKnockback: number,
 	readonly PipeFalloff: FDamageFalloff | undefined,
+	readonly PipeLifetime: number,
 	readonly StickyDetonateKey: CSInputs;
 	readonly StickyMax: number;
 	readonly StickyArmTime: number;
@@ -74,6 +79,10 @@ export interface FMedicSettings extends FClassSettings, FHitscanSettings
 }
 
 export interface FRocket extends FProjectile
+{
+}
+
+export interface FPipe extends FProjectile
 {
 }
 
@@ -111,6 +120,16 @@ export const SoldierSettings: FSoliderSettings =
 	Melee: "weapon_knife",
 	Health: 150,
 	SizeScale: 1.25,
+	PrimaryLauncher:
+	{
+		FireInterval: 0.8,
+		ClipSize: 4,
+		SpareAmmo: 20,
+		ReloadFirstTime: 0.92,
+		ReloadEachTime: 0.8,
+		FireFxTemplate: "rocket_fire_template",
+	},
+	SecondaryLauncher: undefined,
 
 	RocketDamage: 80,
 	RocketRadius: 160,
@@ -128,6 +147,24 @@ export const DemoSettings: FDemoSettings =
 	Melee: "",
 	Health: 130,
 	SizeScale: 1.0,
+	PrimaryLauncher:
+	{
+		FireInterval: 0.6,
+		ClipSize: 8,
+		SpareAmmo: 24,
+		ReloadFirstTime: 1.09,
+		ReloadEachTime: 0.67,
+		FireFxTemplate: "sticky_fire_template",
+	},
+	SecondaryLauncher:
+	{
+		FireInterval: 0.6,
+		ClipSize: 4,
+		SpareAmmo: 16,
+		ReloadFirstTime: 1.24,
+		ReloadEachTime: 0.6,
+		FireFxTemplate: "pipe_fire_template",
+	},
 	
 	StickyDetonateKey: CSInputs.ATTACK2,
 	StickyMax: 6,
@@ -142,9 +179,10 @@ export const DemoSettings: FDemoSettings =
 	PipeLaunchSpeed: 1337,
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
-	PipeDamage: 100,
+	PipeDamage: 20,
 	PipeKnockback: 1000,
 	PipeFalloff: TF2RocketFalloff,
+	PipeLifetime: 5,
 };
 
 export const MedicSettings: FMedicSettings =
@@ -155,6 +193,8 @@ export const MedicSettings: FMedicSettings =
 	Melee: "weapon_knife",
 	Health: 150,
 	SizeScale: 0.9,
+	PrimaryLauncher: undefined,
+	SecondaryLauncher: undefined,
 	BulletFalloff: TF2HitscanFalloff,
 
 	Range: 450,
@@ -168,6 +208,7 @@ export const MedicSettings: FMedicSettings =
 
 const StickyTemplateName: string = "sticky_template";
 const RocketTemplateName: string = "rocket_template";
+const PipeTemplateName: string = "pipe_template";
 const DefaultHealth: number = 100;
 const DefaultSizeScale: number = 1.0;
 const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
@@ -236,6 +277,16 @@ abstract class UPlayerClass<TSettings extends FClassSettings>
 		}
 		Pawn.GiveNamedItem(this.Settings.Primary, true);
 
+		const Slot: number = GetPlayerSlot(Pawn);
+		if (this.Settings.PrimaryLauncher)
+		{
+			EquipLauncher(Pawn, Slot, this.Settings.Primary, this.Settings.PrimaryLauncher);
+		}
+		if (bHasSecondary && this.Settings.SecondaryLauncher)
+		{
+			EquipLauncher(Pawn, Slot, this.Settings.Secondary, this.Settings.SecondaryLauncher);
+		}
+
 		this.OnLoadoutApplied(Pawn);
 	}
 
@@ -249,7 +300,7 @@ abstract class UPlayerClass<TSettings extends FClassSettings>
 	{
 	}
 
-	// Called when someone playing this class fires their primary
+	// Called when someone playing this class fires their secondary
 	public OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
 	}
@@ -295,6 +346,13 @@ abstract class UPlayerClass<TSettings extends FClassSettings>
 	{
 		const bIsBlast: boolean = (Event.damageTypes & CSDamageTypes.BLAST) !== 0;
 		return !bIsBlast && IsWeapon(Event.weapon, this.Settings.Primary);
+	}
+
+	// True for the secondary's own bullets
+	protected IsSecondaryBulletDamage(Event: FModifyDamageEvent): boolean
+	{
+		const bIsBlast: boolean = (Event.damageTypes & CSDamageTypes.BLAST) !== 0;
+		return !bIsBlast && this.Settings.Secondary !== "" && IsWeapon(Event.weapon, this.Settings.Secondary);
 	}
 }
 
@@ -369,6 +427,7 @@ class USoldierClass extends UPlayerClass<FSoliderSettings>
 class UDemomanClass extends UPlayerClass<FDemoSettings>
 {
 	private PlayerStates: Map<number, FDemoPlayerState> = new Map<number, FDemoPlayerState>();
+	private Pipes: FPipe[] = [];
 
 	constructor()
 	{
@@ -401,8 +460,16 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 
 	public override OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
-		const Pipe: FRocket = LaunchProjectile(Pawn, this.Settings.RocketSpeed, 0, 0, RocketTemplateName);
-		this.Rockets.push(Rocket);
+		const Pipe: FPipe = LaunchProjectile(Pawn, this.Settings.PipeLaunchSpeed, this.Settings.PipeLaunchUp, 1, PipeTemplateName);
+		this.Pipes.push(Pipe);
+	}
+
+	public override TickWorld(Now: number, DeltaTime: number): void
+	{
+		this.Pipes = this.Pipes.filter((Pipe: FPipe): boolean =>
+		{
+			return this.StepPipe(Pipe, Now, DeltaTime);
+		});
 	}
 
 	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
@@ -455,6 +522,11 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 		{
 			this.ClearPlayer(Slot);
 		}
+		for (const Pipe of this.Pipes)
+		{
+			DestroyProjectile(Pipe);
+		}
+		this.Pipes = [];
 	}
 
 	public override ClearPlayer(Slot: number): void
@@ -473,7 +545,7 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 
 	public override ModifyOutgoingDamage(Event: FModifyDamageEvent): FModifyDamageResult
 	{
-		if (this.IsPrimaryBulletDamage(Event))
+		if (this.IsPrimaryBulletDamage(Event) || this.IsSecondaryBulletDamage(Event))
 		{
 			return { abort: true };
 		}
@@ -488,6 +560,28 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 			this.PlayerStates.set(Slot, State);
 		}
 		return State;
+	}
+
+	private StepPipe(Pipe: FPipe, Now: number, DeltaTime: number): boolean
+	{
+		if (!Pipe.Owner.IsValid() || Now - Pipe.SpawnedAt > this.Settings.PipeLifetime)
+		{
+			DestroyProjectile(Pipe);
+			return false;
+		}
+
+		if (MoveProjectile(Pipe, DeltaTime, true))
+		{
+			DestroyProjectile(Pipe);
+			Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, this.Settings.PipeDamage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
+			return false;
+		}
+
+		if (!Pipe.Model)
+		{
+			Instance.DebugSphere({ center: Pipe.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Pipe.Owner) });
+		}
+		return true;
 	}
 }
 

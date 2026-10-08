@@ -1,5 +1,5 @@
 // src/bm_main.ts
-import { Instance as Instance8, CSDamageTypes as CSDamageTypes3, CSGearSlot as CSGearSlot2 } from "cs_script/point_script";
+import { Instance as Instance9, CSDamageTypes as CSDamageTypes3, CSGearSlot as CSGearSlot2 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance } from "cs_script/point_script";
@@ -110,7 +110,7 @@ function ForEachLivePawn(Visitor) {
 }
 
 // src/bm_classes.ts
-import { Instance as Instance4, CSInputs, CSGearSlot, CSDamageTypes as CSDamageTypes2, CSWeaponType as CSWeaponType2 } from "cs_script/point_script";
+import { Instance as Instance5, CSInputs as CSInputs2, CSGearSlot, CSDamageTypes as CSDamageTypes2, CSWeaponType as CSWeaponType2 } from "cs_script/point_script";
 
 // src/bm_combat.ts
 import { Instance as Instance3, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
@@ -349,6 +349,119 @@ function ApplyBulletFalloff(Event, Falloff) {
   return { damage: Damage };
 }
 
+// src/bm_launcher.ts
+import { Instance as Instance4, CSInputs } from "cs_script/point_script";
+var GLaunchers = /* @__PURE__ */ new Map();
+function EquipLauncher(Pawn, Slot, WeaponName, Settings) {
+  const Launchers = (GLaunchers.get(Slot) ?? []).filter((Other) => {
+    return Other.WeaponName !== WeaponName;
+  });
+  Launchers.push(
+    {
+      Settings,
+      WeaponName,
+      Clip: Settings.ClipSize,
+      Spare: Settings.SpareAmmo,
+      NextFireTime: 0,
+      NextReloadTime: void 0
+    }
+  );
+  GLaunchers.set(Slot, Launchers);
+  EmptyRealGun(Pawn, WeaponName);
+}
+function ClearLauncher(Slot) {
+  GLaunchers.delete(Slot);
+}
+function TickLauncher(Pawn, Slot, Now) {
+  const Launchers = GLaunchers.get(Slot);
+  if (!Launchers) {
+    return void 0;
+  }
+  const Active = Pawn.GetActiveWeapon();
+  let FiredWeapon = void 0;
+  for (const State of Launchers) {
+    const Weapon = EmptyRealGun(Pawn, State.WeaponName);
+    if (!Weapon || Active !== Weapon) {
+      State.NextReloadTime = void 0;
+      continue;
+    }
+    if (TickHeldLauncher(Pawn, State, Now)) {
+      FiredWeapon = State.WeaponName;
+    }
+  }
+  return FiredWeapon;
+}
+function GetLauncherAmmo(Pawn, Slot) {
+  const Launchers = GLaunchers.get(Slot);
+  const Active = Pawn.GetActiveWeapon();
+  if (!Launchers || !Active) {
+    return void 0;
+  }
+  for (const State of Launchers) {
+    if (Pawn.FindWeapon(State.WeaponName) === Active) {
+      return { Clip: State.Clip, Spare: State.Spare, bReloading: State.NextReloadTime !== void 0 };
+    }
+  }
+  return void 0;
+}
+function TickHeldLauncher(Pawn, State, Now) {
+  const bFireHeld = Pawn.IsInputPressed(CSInputs.ATTACK) && !Pawn.IsBuyMenuOpen() && !Instance4.IsFreezePeriod();
+  if (bFireHeld && State.Clip > 0) {
+    State.NextReloadTime = void 0;
+    if (Now < State.NextFireTime) {
+      return false;
+    }
+    State.Clip--;
+    State.NextFireTime = Now + State.Settings.FireInterval;
+    SpawnFireFx(Pawn, State.Settings);
+    return true;
+  }
+  TickReload(Pawn, State, Now);
+  return false;
+}
+function TickReload(Pawn, State, Now) {
+  if (!CanReload(State)) {
+    State.NextReloadTime = void 0;
+    return;
+  }
+  if (State.NextReloadTime === void 0) {
+    const bWantsReload = State.Clip === 0 || Pawn.WasInputJustPressed(CSInputs.RELOAD);
+    if (bWantsReload) {
+      State.NextReloadTime = Math.max(Now, State.NextFireTime) + State.Settings.ReloadFirstTime;
+    }
+    return;
+  }
+  if (Now < State.NextReloadTime) {
+    return;
+  }
+  State.Clip++;
+  if (!bDebug) {
+    State.Spare--;
+  }
+  State.NextReloadTime = CanReload(State) ? Now + State.Settings.ReloadEachTime : void 0;
+}
+function CanReload(State) {
+  return State.Clip < State.Settings.ClipSize && (State.Spare > 0 || bDebug);
+}
+function EmptyRealGun(Pawn, WeaponName) {
+  const Weapon = Pawn.FindWeapon(WeaponName);
+  if (!Weapon) {
+    return void 0;
+  }
+  if (Weapon.GetClipAmmo() !== 0) {
+    Weapon.SetClipAmmo(0);
+  }
+  if (Weapon.GetReserveAmmo() !== 0) {
+    Weapon.SetReserveAmmo(0);
+  }
+  return Weapon;
+}
+function SpawnFireFx(Pawn, Settings) {
+  if (Settings.FireFxTemplate !== "") {
+    SpawnFromTemplate(Settings.FireFxTemplate, Pawn.GetEyePosition());
+  }
+}
+
 // src/bm_classes.ts
 var EPlayerClass = /* @__PURE__ */ ((EPlayerClass2) => {
   EPlayerClass2["None"] = "none";
@@ -367,6 +480,15 @@ var SoldierSettings = {
   Melee: "weapon_knife",
   Health: 150,
   SizeScale: 1.25,
+  PrimaryLauncher: {
+    FireInterval: 0.8,
+    ClipSize: 4,
+    SpareAmmo: 20,
+    ReloadFirstTime: 0.92,
+    ReloadEachTime: 0.8,
+    FireFxTemplate: "rocket_fire_template"
+  },
+  SecondaryLauncher: void 0,
   RocketDamage: 80,
   RocketRadius: 160,
   RocketSpeed: 1200,
@@ -381,7 +503,23 @@ var DemoSettings = {
   Melee: "",
   Health: 130,
   SizeScale: 1,
-  StickyDetonateKey: CSInputs.ATTACK2,
+  PrimaryLauncher: {
+    FireInterval: 0.6,
+    ClipSize: 8,
+    SpareAmmo: 24,
+    ReloadFirstTime: 1.09,
+    ReloadEachTime: 0.67,
+    FireFxTemplate: "sticky_fire_template"
+  },
+  SecondaryLauncher: {
+    FireInterval: 0.6,
+    ClipSize: 4,
+    SpareAmmo: 16,
+    ReloadFirstTime: 1.24,
+    ReloadEachTime: 0.6,
+    FireFxTemplate: "pipe_fire_template"
+  },
+  StickyDetonateKey: CSInputs2.ATTACK2,
   StickyMax: 6,
   StickyArmTime: 0.8,
   StickyLaunchSpeed: 900,
@@ -394,9 +532,10 @@ var DemoSettings = {
   PipeLaunchSpeed: 1337,
   PipeLaunchUp: 150,
   PipeRadius: 160,
-  PipeDamage: 100,
+  PipeDamage: 20,
   PipeKnockback: 1e3,
-  PipeFalloff: TF2RocketFalloff
+  PipeFalloff: TF2RocketFalloff,
+  PipeLifetime: 5
 };
 var MedicSettings = {
   DisplayName: "Medic",
@@ -405,6 +544,8 @@ var MedicSettings = {
   Melee: "weapon_knife",
   Health: 150,
   SizeScale: 0.9,
+  PrimaryLauncher: void 0,
+  SecondaryLauncher: void 0,
   BulletFalloff: TF2HitscanFalloff,
   Range: 450,
   BreakRange: 540,
@@ -416,6 +557,7 @@ var MedicSettings = {
 };
 var StickyTemplateName = "sticky_template";
 var RocketTemplateName = "rocket_template";
+var PipeTemplateName = "pipe_template";
 var DefaultHealth = 100;
 var DefaultSizeScale = 1;
 var StrippedGearSlots = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
@@ -459,6 +601,13 @@ var UPlayerClass = class {
       Pawn.GiveNamedItem(this.Settings.Secondary);
     }
     Pawn.GiveNamedItem(this.Settings.Primary, true);
+    const Slot = GetPlayerSlot(Pawn);
+    if (this.Settings.PrimaryLauncher) {
+      EquipLauncher(Pawn, Slot, this.Settings.Primary, this.Settings.PrimaryLauncher);
+    }
+    if (bHasSecondary && this.Settings.SecondaryLauncher) {
+      EquipLauncher(Pawn, Slot, this.Settings.Secondary, this.Settings.SecondaryLauncher);
+    }
     this.OnLoadoutApplied(Pawn);
   }
   // Override for class-specific setup. Runs after the shared loadout.
@@ -467,7 +616,7 @@ var UPlayerClass = class {
   // Called when someone playing this class fires their primary
   OnPrimaryFire(Pawn, Slot, Now) {
   }
-  // Called when someone playing this class fires their primary
+  // Called when someone playing this class fires their secondary
   OnSecondaryFire(Pawn, Slot, Now) {
   }
   // Called every tick, whether or not anyone is playing this class
@@ -497,6 +646,11 @@ var UPlayerClass = class {
     const bIsBlast = (Event.damageTypes & CSDamageTypes2.BLAST) !== 0;
     return !bIsBlast && IsWeapon(Event.weapon, this.Settings.Primary);
   }
+  // True for the secondary's own bullets
+  IsSecondaryBulletDamage(Event) {
+    const bIsBlast = (Event.damageTypes & CSDamageTypes2.BLAST) !== 0;
+    return !bIsBlast && this.Settings.Secondary !== "" && IsWeapon(Event.weapon, this.Settings.Secondary);
+  }
 };
 var USoldierClass = class extends UPlayerClass {
   Rockets = [];
@@ -504,17 +658,17 @@ var USoldierClass = class extends UPlayerClass {
     super(SoldierSettings);
   }
   OnPrimaryFire(Pawn, Slot, Now) {
-    const Rocket2 = LaunchProjectile(Pawn, this.Settings.RocketSpeed, 0, 0, RocketTemplateName);
-    this.Rockets.push(Rocket2);
+    const Rocket = LaunchProjectile(Pawn, this.Settings.RocketSpeed, 0, 0, RocketTemplateName);
+    this.Rockets.push(Rocket);
   }
   TickWorld(Now, DeltaTime) {
-    this.Rockets = this.Rockets.filter((Rocket2) => {
-      return this.StepRocket(Rocket2, Now, DeltaTime);
+    this.Rockets = this.Rockets.filter((Rocket) => {
+      return this.StepRocket(Rocket, Now, DeltaTime);
     });
   }
   OnRoundStart() {
-    for (const Rocket2 of this.Rockets) {
-      DestroyProjectile(Rocket2);
+    for (const Rocket of this.Rockets) {
+      DestroyProjectile(Rocket);
     }
     this.Rockets = [];
   }
@@ -524,24 +678,25 @@ var USoldierClass = class extends UPlayerClass {
     }
     return;
   }
-  StepRocket(Rocket2, Now, DeltaTime) {
-    if (!Rocket2.Owner.IsValid() || Now - Rocket2.SpawnedAt > this.Settings.RocketLifetime) {
-      DestroyProjectile(Rocket2);
+  StepRocket(Rocket, Now, DeltaTime) {
+    if (!Rocket.Owner.IsValid() || Now - Rocket.SpawnedAt > this.Settings.RocketLifetime) {
+      DestroyProjectile(Rocket);
       return false;
     }
-    if (MoveProjectile(Rocket2, DeltaTime, true)) {
-      DestroyProjectile(Rocket2);
-      Explode(Rocket2.Position, Rocket2.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff);
+    if (MoveProjectile(Rocket, DeltaTime, true)) {
+      DestroyProjectile(Rocket);
+      Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff);
       return false;
     }
-    if (!Rocket2.Model) {
-      Instance4.DebugSphere({ center: Rocket2.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Rocket2.Owner) });
+    if (!Rocket.Model) {
+      Instance5.DebugSphere({ center: Rocket.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Rocket.Owner) });
     }
     return true;
   }
 };
 var UDemomanClass = class extends UPlayerClass {
   PlayerStates = /* @__PURE__ */ new Map();
+  Pipes = [];
   constructor() {
     super(DemoSettings);
   }
@@ -563,8 +718,13 @@ var UDemomanClass = class extends UPlayerClass {
     }
   }
   OnSecondaryFire(Pawn, Slot, Now) {
-    const Pipe = LaunchProjectile(Pawn, this.Settings.RocketSpeed, 0, 0, RocketTemplateName);
-    this.Rockets.push(Rocket);
+    const Pipe = LaunchProjectile(Pawn, this.Settings.PipeLaunchSpeed, this.Settings.PipeLaunchUp, 1, PipeTemplateName);
+    this.Pipes.push(Pipe);
+  }
+  TickWorld(Now, DeltaTime) {
+    this.Pipes = this.Pipes.filter((Pipe) => {
+      return this.StepPipe(Pipe, Now, DeltaTime);
+    });
   }
   TickPlayer(Pawn, Slot, Now, DeltaTime) {
     const State = this.GetPlayerState(Slot);
@@ -576,7 +736,7 @@ var UDemomanClass = class extends UPlayerClass {
     for (const Sticky of State.Stickies) {
       if (!Sticky.Model) {
         const Color = Now >= Sticky.ArmedAt ? GetTeamColor(Pawn) : UnarmedStickyColor;
-        Instance4.DebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: Color });
+        Instance5.DebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: Color });
       }
     }
     const bDown = Pawn.IsInputPressed(this.Settings.StickyDetonateKey);
@@ -602,6 +762,10 @@ var UDemomanClass = class extends UPlayerClass {
     for (const Slot of this.PlayerStates.keys()) {
       this.ClearPlayer(Slot);
     }
+    for (const Pipe of this.Pipes) {
+      DestroyProjectile(Pipe);
+    }
+    this.Pipes = [];
   }
   ClearPlayer(Slot) {
     const State = this.PlayerStates.get(Slot);
@@ -614,7 +778,7 @@ var UDemomanClass = class extends UPlayerClass {
     this.PlayerStates.delete(Slot);
   }
   ModifyOutgoingDamage(Event) {
-    if (this.IsPrimaryBulletDamage(Event)) {
+    if (this.IsPrimaryBulletDamage(Event) || this.IsSecondaryBulletDamage(Event)) {
       return { abort: true };
     }
   }
@@ -625,6 +789,21 @@ var UDemomanClass = class extends UPlayerClass {
       this.PlayerStates.set(Slot, State);
     }
     return State;
+  }
+  StepPipe(Pipe, Now, DeltaTime) {
+    if (!Pipe.Owner.IsValid() || Now - Pipe.SpawnedAt > this.Settings.PipeLifetime) {
+      DestroyProjectile(Pipe);
+      return false;
+    }
+    if (MoveProjectile(Pipe, DeltaTime, true)) {
+      DestroyProjectile(Pipe);
+      Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, this.Settings.PipeDamage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
+      return false;
+    }
+    if (!Pipe.Model) {
+      Instance5.DebugSphere({ center: Pipe.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Pipe.Owner) });
+    }
+    return true;
   }
 };
 var UMedicClass = class extends UPlayerClass {
@@ -654,7 +833,7 @@ var UMedicClass = class extends UPlayerClass {
     const State = this.GetPlayerState(Slot);
     const ActiveWeapon = Pawn.GetActiveWeapon();
     const bHoldingMedigun = !!ActiveWeapon && ActiveWeapon.GetData().GetType() === CSWeaponType2.KNIFE;
-    const bFiring = bHoldingMedigun && Pawn.IsInputPressed(CSInputs.ATTACK);
+    const bFiring = bHoldingMedigun && Pawn.IsInputPressed(CSInputs2.ATTACK);
     let Target = bFiring ? State.HealTarget : void 0;
     if (Target && !this.IsHealTargetValid(Pawn, Target)) {
       Target = void 0;
@@ -680,7 +859,7 @@ var UMedicClass = class extends UPlayerClass {
         const ChargeRate = 100 / this.Settings.UberSecondsToFill * (Health < MaxHealth ? 1 : 0.5);
         State.UberCharge = Math.min(100, State.UberCharge + ChargeRate * DeltaTime);
       }
-      Instance4.DebugLine(
+      Instance5.DebugLine(
         {
           start: FVectorMath.Subtract(Pawn.GetEyePosition(), BeamStartDrop),
           end: GetChestPosition(Target),
@@ -689,7 +868,7 @@ var UMedicClass = class extends UPlayerClass {
         }
       );
     }
-    if (Now >= State.UberEndTime && State.UberCharge >= 100 && bHoldingMedigun && Pawn.IsInputPressed(CSInputs.ATTACK2)) {
+    if (Now >= State.UberEndTime && State.UberCharge >= 100 && bHoldingMedigun && Pawn.IsInputPressed(CSInputs2.ATTACK2)) {
       State.UberEndTime = Now + this.Settings.UberDuration;
     }
     const bUberActive = Now < State.UberEndTime;
@@ -704,7 +883,7 @@ var UMedicClass = class extends UPlayerClass {
     const MedicName = Controller ? Controller.GetPlayerName() : "medic";
     const ActiveText = bUberActive ? "  ACTIVE" : "";
     const PatientText = Target ? `  | patient ${Target.GetHealth()} HP` : "";
-    Instance4.DebugScreenText(
+    Instance5.DebugScreenText(
       {
         text: `${MedicName}  \xDCBER ${Math.floor(State.UberCharge)}%${ActiveText}${PatientText}`,
         x: 40,
@@ -756,13 +935,13 @@ var UMedicClass = class extends UPlayerClass {
     if (FVectorMath.Size(FVectorMath.Subtract(TargetChest, EyePosition)) > this.Settings.BreakRange) {
       return false;
     }
-    return !Instance4.TraceLine({ start: EyePosition, end: TargetChest, ignorePlayers: true }).didHit;
+    return !Instance5.TraceLine({ start: EyePosition, end: TargetChest, ignorePlayers: true }).didHit;
   }
   AcquireHealTarget(Medic) {
     const EyePosition = Medic.GetEyePosition();
     const Forward = FVectorMath.GetForwardVector(Medic.GetEyeAngles());
     const End = FVectorMath.Add(EyePosition, FVectorMath.Scale(Forward, this.Settings.Range));
-    const HitEntity = Instance4.TraceSphere({ start: EyePosition, end: End, radius: 12, ignoreEntity: Medic }).hitEntity;
+    const HitEntity = Instance5.TraceSphere({ start: EyePosition, end: End, radius: 12, ignoreEntity: Medic }).hitEntity;
     if (IsPlayerPawn(HitEntity) && HitEntity.IsAlive() && HitEntity.GetTeamNumber() === Medic.GetTeamNumber()) {
       return HitEntity;
     }
@@ -838,7 +1017,7 @@ function IsWeaponAllowed(PlayerClass, Weapon) {
 }
 
 // src/bm_hud.ts
-import { Instance as Instance5 } from "cs_script/point_script";
+import { Instance as Instance6 } from "cs_script/point_script";
 var DamageHudName = "damage_hud";
 var DamageLabelId = "DamageNumber";
 var DamageBatchWindow = 0.6;
@@ -851,7 +1030,7 @@ function ShowDamageNumber(Slot, Damage) {
     return;
   }
   const State = GetDamageNumberState(Slot);
-  const Now = Instance5.GetGameTime();
+  const Now = Instance6.GetGameTime();
   if (Now - State.LastDamageTime > DamageBatchWindow) {
     State.DamageTotal = 0;
   }
@@ -861,7 +1040,7 @@ function ShowDamageNumber(Slot, Damage) {
   Hud.SetDialogVariableStringForPlayer(Slot, DamageLabelId, "damage", `-${Math.round(State.DamageTotal)}`);
   SetTimer(DamageShowTime, () => {
     const LaterHud = FindDamageHud();
-    if (LaterHud && Instance5.GetGameTime() - State.LastDamageTime >= DamageShowTime - 0.01) {
+    if (LaterHud && Instance6.GetGameTime() - State.LastDamageTime >= DamageShowTime - 0.01) {
       LaterHud.SetDialogVariableStringForPlayer(Slot, DamageLabelId, "damage", "");
     }
   });
@@ -882,14 +1061,14 @@ function GetDamageNumberState(Slot) {
   return State;
 }
 function FindDamageHud() {
-  const Hud = Instance5.FindEntityByName(DamageHudName);
+  const Hud = Instance6.FindEntityByName(DamageHudName);
   if (IsCustomHudLayout(Hud)) {
     return Hud;
   }
   if (!GbWarnedNoDamageHud) {
     GbWarnedNoDamageHud = true;
     const Problem = Hud ? "exists but isn't a custom_hud_layout" : "wasn't found";
-    Instance5.Msg(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+    Instance6.Msg(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
   }
   return void 0;
 }
@@ -898,7 +1077,7 @@ function IsCustomHudLayout(Ent) {
 }
 
 // src/bm_bots.ts
-import { Instance as Instance6 } from "cs_script/point_script";
+import { Instance as Instance7 } from "cs_script/point_script";
 var BotMarkerModes = /* @__PURE__ */ new Map(
   [
     ["bot_still", 0 /* Still */],
@@ -942,7 +1121,7 @@ function ResetBotMode(Slot) {
   if (Assignment) {
     Assignment.bPlaced = false;
   }
-  GBotReadyAt.set(Slot, Instance6.GetGameTime() + BotSpawnSettleTime);
+  GBotReadyAt.set(Slot, Instance7.GetGameTime() + BotSpawnSettleTime);
 }
 function ForgetBot(Slot) {
   GBotAssignments.delete(Slot);
@@ -955,7 +1134,7 @@ function FindFreeBotMarkers() {
   }
   const FreeMarkers = /* @__PURE__ */ new Map();
   for (const [MarkerName, Mode] of BotMarkerModes) {
-    for (const Marker of Instance6.FindEntitiesByName(MarkerName)) {
+    for (const Marker of Instance7.FindEntitiesByName(MarkerName)) {
       if (Marker.IsValid() && !Claimed.has(Marker)) {
         FreeMarkers.set(Marker, Mode);
       }
@@ -1002,11 +1181,11 @@ function IsBotPathBlocked(Pawn, Yaw) {
   const Forward = FVectorMath.GetForwardVector({ pitch: 0, yaw: Yaw, roll: 0 });
   const Knee = FVectorMath.Add(Pawn.GetAbsOrigin(), { x: 0, y: 0, z: 24 });
   const Ahead = FVectorMath.Add(Knee, FVectorMath.Scale(Forward, BotTurnCheckDistance));
-  const Wall = Instance6.TraceLine({ start: Knee, end: Ahead, ignorePlayers: true });
+  const Wall = Instance7.TraceLine({ start: Knee, end: Ahead, ignorePlayers: true });
   if (Wall.didHit) {
     return true;
   }
-  const Floor = Instance6.TraceLine(
+  const Floor = Instance7.TraceLine(
     {
       start: Ahead,
       end: FVectorMath.Add(Ahead, { x: 0, y: 0, z: -(24 + BotLedgeCheckDepth) }),
@@ -1017,18 +1196,29 @@ function IsBotPathBlocked(Pawn, Yaw) {
 }
 
 // src/bm_class_ui.ts
-import { Instance as Instance7, CSInputs as CSInputs2 } from "cs_script/point_script";
+import { Instance as Instance8, CSInputs as CSInputs3 } from "cs_script/point_script";
 var ClassUiName = "class_hud";
 var MenuPanelId = "ClassMenu";
+var BottomBarId = "BottomBar";
 var IndicatorPanelId = "ClassIndicator";
 var ClassNameLabelId = "ClassName";
 var PickButtonPrefix = "Pick_";
 var CloseButtonId = "CloseMenu";
-var MenuToggleKey = CSInputs2.LOOK_AT_WEAPON;
+var MenuToggleKey = CSInputs3.LOOK_AT_WEAPON;
 var NoClassName = "No class";
+var AmmoPanelId = "AmmoPanel";
+var AmmoClipLabelId = "AmmoClip";
+var AmmoSpareLabelId = "AmmoSpare";
+var HealthPanelId = "HealthPanel";
+var HealthValueLabelId = "HealthValue";
+var HealthMaxLabelId = "HealthMax";
+var HurtHealthFraction = 0.5;
+var CriticalHealthFraction = 0.25;
 var AllClasses = Object.values(EPlayerClass);
 var GOpenMenus = /* @__PURE__ */ new Set();
 var GOfferedMenus = /* @__PURE__ */ new Set();
+var GShownAmmo = /* @__PURE__ */ new Map();
+var GShownHealth = /* @__PURE__ */ new Map();
 var GbWarnedNoClassUi = false;
 function OpenClassMenu(Slot) {
   const Ui = FindClassUi();
@@ -1098,7 +1288,7 @@ function ShowClassIndicator(Slot, PlayerClass) {
   }
   const DisplayName = PlayerClass === "none" /* None */ ? NoClassName : ClassDefinitions[PlayerClass].Settings.DisplayName;
   Ui.SetDialogVariableStringForPlayer(Slot, ClassNameLabelId, "classname", DisplayName);
-  Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Shown", true);
+  Ui.SetHasClassForPlayer(Slot, BottomBarId, "Shown", true);
   for (const Other of AllClasses) {
     const bIsCurrent = Other === PlayerClass;
     Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, `Class_${Other}`, bIsCurrent);
@@ -1109,9 +1299,55 @@ function ShowClassIndicator(Slot, PlayerClass) {
     Ui.SetInputCaptureEnabled(Slot, true);
   }
 }
+function ShowAmmo(Slot, Ammo) {
+  const Key = Ammo ? `${Ammo.Clip}|${Ammo.Spare}|${Ammo.bReloading}` : "";
+  if ((GShownAmmo.get(Slot) ?? "") === Key) {
+    return;
+  }
+  const Ui = FindClassUi();
+  if (!Ui) {
+    return;
+  }
+  GShownAmmo.set(Slot, Key);
+  if (!Ammo) {
+    Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Shown", false);
+    return;
+  }
+  Ui.SetDialogVariableStringForPlayer(Slot, AmmoClipLabelId, "ammoclip", `${Ammo.Clip}`);
+  Ui.SetDialogVariableStringForPlayer(Slot, AmmoSpareLabelId, "ammospare", `${Ammo.Spare}`);
+  Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Reloading", Ammo.bReloading);
+  Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Empty", Ammo.Clip === 0);
+  Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Shown", true);
+}
+function ShowHealth(Slot, Pawn) {
+  const Health = Pawn ? Pawn.GetHealth() : 0;
+  const MaxHealth = Pawn ? Math.max(1, Pawn.GetMaxHealth()) : 1;
+  const Key = Pawn ? `${Health}|${MaxHealth}` : "";
+  if ((GShownHealth.get(Slot) ?? "") === Key) {
+    return;
+  }
+  const Ui = FindClassUi();
+  if (!Ui) {
+    return;
+  }
+  GShownHealth.set(Slot, Key);
+  if (!Pawn) {
+    Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Shown", false);
+    return;
+  }
+  const Fraction = Health / MaxHealth;
+  Ui.SetDialogVariableStringForPlayer(Slot, HealthValueLabelId, "health", `${Health}`);
+  Ui.SetDialogVariableStringForPlayer(Slot, HealthMaxLabelId, "maxhealth", `${MaxHealth}`);
+  Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Overhealed", Health > MaxHealth);
+  Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Hurt", Fraction <= HurtHealthFraction && Fraction > CriticalHealthFraction);
+  Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Critical", Fraction <= CriticalHealthFraction);
+  Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Shown", true);
+}
 function ResetClassUi(Slot) {
   GOpenMenus.delete(Slot);
   GOfferedMenus.delete(Slot);
+  GShownAmmo.delete(Slot);
+  GShownHealth.delete(Slot);
   const Ui = FindClassUi();
   if (!Ui) {
     return;
@@ -1120,14 +1356,14 @@ function ResetClassUi(Slot) {
   Ui.ResetForPlayer(Slot);
 }
 function FindClassUi() {
-  const Ui = Instance7.FindEntityByName(ClassUiName);
+  const Ui = Instance8.FindEntityByName(ClassUiName);
   if (IsCustomHudLayout2(Ui)) {
     return Ui;
   }
   if (!GbWarnedNoClassUi) {
     GbWarnedNoClassUi = true;
     const Problem = Ui ? "exists but isn't a custom_hud_layout" : "wasn't found";
-    Instance7.Msg(`${LogPrefix} class menu: an entity named "${ClassUiName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+    Instance8.Msg(`${LogPrefix} class menu: an entity named "${ClassUiName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
   }
   return void 0;
 }
@@ -1145,8 +1381,8 @@ var ClassChatCommands = /* @__PURE__ */ new Map(
   ]
 );
 function Tick() {
-  const Now = Instance8.GetGameTime();
-  Instance8.SetNextThink(Now + TickInterval);
+  const Now = Instance9.GetGameTime();
+  Instance9.SetNextThink(Now + TickInterval);
   const DeltaTime = Math.min(0.1, Math.max(0, Now - GLastThinkTime)) || TickInterval;
   GLastThinkTime = Now;
   try {
@@ -1158,34 +1394,42 @@ function Tick() {
     ForEachLivePawn((Pawn, Slot) => {
       const PlayerClass = GClassBySlot.get(Slot);
       if (PlayerClass !== void 0) {
-        ClassDefinitions[PlayerClass].TickPlayer(Pawn, Slot, Now, DeltaTime);
+        const Definition = ClassDefinitions[PlayerClass];
+        const FiredWeapon = TickLauncher(Pawn, Slot, Now);
+        if (FiredWeapon === Definition.Settings.Primary) {
+          Definition.OnPrimaryFire(Pawn, Slot, Now);
+        } else if (FiredWeapon === Definition.Settings.Secondary) {
+          Definition.OnSecondaryFire(Pawn, Slot, Now);
+        }
+        Definition.TickPlayer(Pawn, Slot, Now, DeltaTime);
       }
     });
     for (const Definition of Object.values(ClassDefinitions)) {
       Definition.TickWorldLate(Now, DeltaTime);
     }
     TickClassMenuKey();
+    TickPlayerHud();
     TickNoBuying();
     TickBots(Now);
   } catch (Exception) {
-    Instance8.Msg(`${LogPrefix} error: ${String(Exception)}`);
+    Instance9.Msg(`${LogPrefix} error: ${String(Exception)}`);
   }
 }
 function BeginPlay() {
-  Instance8.OnPlayerChat(HandlePlayerChat);
-  Instance8.OnPlayerReset(HandlePlayerReset);
-  Instance8.OnPlayerKill(HandlePlayerKill);
-  Instance8.OnPlayerDisconnect(HandlePlayerDisconnect);
-  Instance8.OnRoundStart(HandleRoundStart);
-  Instance8.OnGunFire(HandleGunFire);
-  Instance8.OnWeaponPickup(HandleWeaponPickup);
-  Instance8.OnWeaponDrop(HandleWeaponDrop);
-  Instance8.OnPlayerDamage(HandlePlayerDamage);
-  Instance8.OnModifyPlayerDamage(HandleModifyPlayerDamage);
-  Instance8.OnCustomHudClicked(HandleCustomHudClicked);
-  Instance8.SetThink(Tick);
-  Instance8.SetNextThink(Instance8.GetGameTime());
-  Instance8.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
+  Instance9.OnPlayerChat(HandlePlayerChat);
+  Instance9.OnPlayerReset(HandlePlayerReset);
+  Instance9.OnPlayerKill(HandlePlayerKill);
+  Instance9.OnPlayerDisconnect(HandlePlayerDisconnect);
+  Instance9.OnRoundStart(HandleRoundStart);
+  Instance9.OnGunFire(HandleGunFire);
+  Instance9.OnWeaponPickup(HandleWeaponPickup);
+  Instance9.OnWeaponDrop(HandleWeaponDrop);
+  Instance9.OnPlayerDamage(HandlePlayerDamage);
+  Instance9.OnModifyPlayerDamage(HandleModifyPlayerDamage);
+  Instance9.OnCustomHudClicked(HandleCustomHudClicked);
+  Instance9.SetThink(Tick);
+  Instance9.SetNextThink(Instance9.GetGameTime());
+  Instance9.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
 }
 BeginPlay();
 function HandlePlayerChat(Event) {
@@ -1253,7 +1497,7 @@ function HandleRoundStart() {
   }
   ClearDecals();
   ApplyMatchSettings();
-  Instance8.Msg(`${LogPrefix} match settings applied`);
+  Instance9.Msg(`${LogPrefix} match settings applied`);
 }
 function HandleGunFire(Event) {
   const Weapon = Event.weapon;
@@ -1264,10 +1508,10 @@ function HandleGunFire(Event) {
     return;
   }
   const Definition = ClassDefinitions[PlayerClass];
-  if (IsWeapon(Weapon, Definition.Settings.Primary)) {
-    Definition.OnPrimaryFire(Pawn, Slot, Instance8.GetGameTime());
-  } else if (IsWeapon(Weapon, Definition.Settings.Secondary)) {
-    Definition.OnSecondaryFire(Pawn, Slot, Instance8.GetGameTime());
+  if (IsWeapon(Weapon, Definition.Settings.Primary) && !Definition.Settings.PrimaryLauncher) {
+    Definition.OnPrimaryFire(Pawn, Slot, Instance9.GetGameTime());
+  } else if (IsWeapon(Weapon, Definition.Settings.Secondary) && !Definition.Settings.SecondaryLauncher) {
+    Definition.OnSecondaryFire(Pawn, Slot, Instance9.GetGameTime());
   }
 }
 function HandleWeaponPickup(Event) {
@@ -1330,12 +1574,12 @@ function ApplyMatchSettings() {
     Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any", "bot_stop 1");
   }
   for (const Command of Commands) {
-    Instance8.ServerCommand(Command);
+    Instance9.ServerCommand(Command);
   }
 }
 function TickMatch(Now) {
-  if (bDebug && Instance8.IsWarmupPeriod()) {
-    Instance8.ServerCommand("mp_warmup_end");
+  if (bDebug && Instance9.IsWarmupPeriod()) {
+    Instance9.ServerCommand("mp_warmup_end");
   }
 }
 function RequestPlayerClass(Player, PlayerClass) {
@@ -1354,7 +1598,7 @@ function RequestPlayerClass(Player, PlayerClass) {
     GPendingClassBySlot.set(Slot, PlayerClass);
   }
   ShowClassIndicator(Slot, CurrentClass);
-  Instance8.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass} on respawn`);
+  Instance9.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass} on respawn`);
 }
 function ApplyPendingClass(Slot) {
   const NextClass = GPendingClassBySlot.get(Slot);
@@ -1386,7 +1630,7 @@ function SetPlayerClass(Player, PlayerClass) {
   }
   ShowClassIndicator(Slot, PlayerClass);
   const ClassLabel = PlayerClass === "none" /* None */ ? "normal" : PlayerClass;
-  Instance8.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
+  Instance9.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
 }
 function RefreshClassUi(Pawn, Slot) {
   const Controller = Pawn.GetPlayerController();
@@ -1405,6 +1649,18 @@ function ClearPlayer(Slot) {
   for (const Definition of Object.values(ClassDefinitions)) {
     Definition.ClearPlayer(Slot);
   }
+  ClearLauncher(Slot);
+  ShowAmmo(Slot, void 0);
+  ShowHealth(Slot, void 0);
+}
+function TickPlayerHud() {
+  ForEachLivePawn((Pawn, Slot) => {
+    const Controller = Pawn.GetPlayerController();
+    if (Controller && !Controller.IsBot()) {
+      ShowHealth(Slot, Pawn);
+      ShowAmmo(Slot, GetLauncherAmmo(Pawn, Slot));
+    }
+  });
 }
 function RemoveIfNotAllowed(Weapon) {
   if (!Weapon.IsValid()) {
