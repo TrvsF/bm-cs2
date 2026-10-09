@@ -1,6 +1,6 @@
 import { Instance, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult } from "cs_script/point_script";
-import { bDebug, bFriendlyFire, LogPrefix, UpVector, FVectorMath, FRotationMath, IsPlayerPawn, IsModelEntity, GetChestPosition, SpawnTemplateEntities, ForEachLivePawn } from "./bm_core";
+import { bDebug, bFriendlyFire, LogPrefix, UpVector, ZeroVector, FVectorMath, FRotationMath, IsPlayerPawn, IsModelEntity, GetChestPosition, SpawnTemplateEntities, ForEachLivePawn } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
 
@@ -13,13 +13,13 @@ export interface FProjectile
 	Velocity: FVector;
 	GravityScale: number;
 	SpawnedAt: number;
-	Models: FProjectileModel[];
+	Models: FProjectileModel[];   // everything spawned from the projectile's template. Empty when the template isn't in the map
 }
 
 export interface FProjectileModel
 {
 	readonly Ent: Entity;
-	readonly LocalRotation: FRotationMatrix;
+	readonly LocalRotation: FRotationMatrix;   // how it's turned in the template. +X in Hammer is the way it flies
 }
 
 export interface FDamageFalloff
@@ -53,13 +53,17 @@ export interface FHitscanResult
 
 const Gravity: number = 800;
 const ExplosionTemplateName: string = "boom_template";
-const ExplosionFxLifetime: number = 5;
+const ExplosionFxLifetime: number = 5;   // explosion fx entities are removed after this, so they don't pile up
 const ProjectileLaunchOffset: FVector = { x: 0, y: 0, z: -8 };
 const ExplosionOffset: FVector = { x: 0, y: 0, z: 6 };
 const GroundedKnockbackLift: FVector = { x: 0, y: 0, z: 0.6 };
+const StandingKnockbackHeight: number = 82;
+const CrouchedKnockbackHeight: number = 62;
+const AirborneSelfKnockbackScale: number = 1.33;
+const SelfBlastDamageScale: number = 0.33;
 const ExplosionDebugColor: FColor = { r: 255, g: 140, b: 0 };
 const MaxHitscanTraces: number = 8;
-const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };
+const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };   // ground traces start just above the feet, so they don't begin inside the floor
 
 // Projectile //////////////////////////////////////////////////////////////////////////////////////
 
@@ -127,6 +131,7 @@ export function DestroyProjectile(Projectile: FProjectile): void
 	Projectile.Models = [];
 }
 
+// Tints the projectile's models, e.g. stickies turning team coloured once armed. Multiplies the model's own colours.
 export function TintProjectile(Projectile: FProjectile, Color: FColor): void
 {
 	for (const Model of Projectile.Models)
@@ -138,6 +143,8 @@ export function TintProjectile(Projectile: FProjectile, Color: FColor): void
 	}
 }
 
+// Spawns the template as it was built in Hammer and remembers how each part is turned, so a model rotated in the
+// template (e.g. one whose nose is +Z, turned to face +X) keeps that turn on top of the flight direction.
 function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjectileModel[]
 {
 	const Models: FProjectileModel[] = [];
@@ -148,6 +155,8 @@ function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjec
 	return Models;
 }
 
+// Puts the template's top-level entities on the projectile, turned to its flight. Anything parented to them in the
+// template (a trail, a model) comes along. Move once it's flying, so it glides smoothly for players; Teleport to place it at launch.
 function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): void
 {
 	const Flight: FRotationMatrix = FRotationMath.FromRotator(FVectorMath.GetRotation(Projectile.Velocity));
@@ -206,36 +215,15 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		}
 
 		const Falloff: number = 1 - 0.5 * (Distance / Radius);
-
 		const RangeScale: number = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
-		let CalculatedDmg: number = Damage * Falloff * RangeScale;
+		const BlastDamage: number = Damage * Falloff * RangeScale;
+		const Away: FVector = Distance > 1 ? Offset : UpVector;
+		const Push: FVector = ApplyKnockback(Victim, Away, BlastDamage, Knockback, bIsSelf);
 
-		// do knockback
-        const IsCrouched: boolean = Victim.IsDucking() || Victim.IsDucked();
-        let Direction: FVector = Distance > 1 ? FVectorMath.GetSafeNormal(Offset) : UpVector;
-        if (Victim.GetGroundEntity())
-        {
-            Direction = FVectorMath.GetSafeNormal(FVectorMath.Add(Direction, GroundedKnockbackLift));
-        }
-
-        const CrouchFactor: number = IsCrouched ? 62 : 82;
-        let KBStrength: number = Knockback;
-        if (!Victim.GetGroundEntity() && bIsSelf)
-        {
-            KBStrength *= 1.33;
-        }
-
-        const CalculatedKb: number = CalculatedDmg * (KBStrength / CrouchFactor);
-        Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Direction, CalculatedKb)) });
-
-		if (bIsSelf)
-		{
-			CalculatedDmg *= 0.33;
-		}
-
+		const DamageTaken: number = bIsSelf ? BlastDamage * SelfBlastDamageScale : BlastDamage;
 		const DamageDealt: number = Victim.TakeDamage(
 		{
-			damage: CalculatedDmg,
+			damage: DamageTaken,
 			damageTypes: CSDamageTypes.BLAST,
 			attacker: Attacker,
 			inflictor: Attacker,
@@ -246,7 +234,8 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 			SpawnBloodSplatter(Origin, Victim);
 		}
 
-		Instance.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
+		const PushDirection: FVector = FVectorMath.GetSafeNormal(Push);
+		Instance.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${FVectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
 	});
 }
 
@@ -346,10 +335,31 @@ export function GetSpreadDirection(Aim: FRotator, SpreadDegrees: number): FVecto
 	});
 }
 
-export function ApplyKnockback(Victim: CSPlayerPawn, Direction: FVector, Speed: number): void
+export function ApplyKnockback(Victim: CSPlayerPawn, Direction: FVector, Damage: number, Strength: number, bIsSelf: boolean): FVector
 {
-	const Push: FVector = Victim.GetGroundEntity() ? FVectorMath.GetSafeNormal(FVectorMath.Add(Direction, GroundedKnockbackLift)) : Direction;
-	Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Push, Speed)) });
+	const bOnGround: boolean = Victim.GetGroundEntity() !== undefined;
+	const bCrouched: boolean = Victim.IsDucking() || Victim.IsDucked();
+
+	let Push: FVector = FVectorMath.GetSafeNormal(Direction);
+	if (bOnGround)
+	{
+		Push = FVectorMath.GetSafeNormal(FVectorMath.Add(Push, GroundedKnockbackLift));
+	}
+
+	let Scale: number = Strength;
+	if (bIsSelf && !bOnGround)
+	{
+		Scale *= AirborneSelfKnockbackScale;
+	}
+
+	const Speed: number = (Damage * Scale) / (bCrouched ? CrouchedKnockbackHeight : StandingKnockbackHeight);
+	if (Speed === 0)
+	{
+		return ZeroVector;
+	}
+	const Velocity: FVector = FVectorMath.Scale(Push, Speed);
+	Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), Velocity) });
+	return Velocity;
 }
 
 export function GetHeightAboveGround(Pawn: CSPlayerPawn, MaxDistance: number): number

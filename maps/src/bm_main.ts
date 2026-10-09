@@ -15,16 +15,16 @@ import type
 	FModifyDamageEvent,
 	FModifyDamageResult,
 } from "./bm_core";
-import { EPlayerClass, ClassDefinitions, GiveLoadout, GiveNoClassLoadout, IsWeaponAllowed, RestoreDefaultBody } from "./bm_classes";
+import { EPlayerClass, ClassDefinitions, GiveLoadout, GiveNoClassLoadout, IsWeaponAllowed, RestoreDefaultBody, PickRandomClass } from "./bm_classes";
 import type { EPlayableClass } from "./bm_classes";
 import { ClearDecals } from "./bm_effects";
 import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
 import { TickBots, ResetBotMode, ForgetBot } from "./bm_bots";
-import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ResetClassUi } from "./bm_class_ui";
+import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ResetClassUi } from "./bm_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
-import type { FClassMenuChoice } from "./bm_class_ui";
+import type { FClassMenuChoice } from "./bm_ui";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -85,6 +85,7 @@ function Tick(): void
 		TickClassMenuKey();
 		TickPlayerHud();
 		TickNoBuying();
+		TickBotClasses();
 		TickBots(Now);
 	}
 	catch (Exception: unknown)
@@ -154,6 +155,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 
 	ClearPlayer(Slot);
 	ResetBotMode(Slot);
+	AssignRandomBotClass(Pawn, Slot);
 	const bHadClass: boolean = GClassBySlot.has(Slot);
 	ApplyPendingClass(Slot);
 	RefreshClassUi(Pawn, Slot);
@@ -428,6 +430,31 @@ function SetPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): 
 
 	const ClassLabel: string = PlayerClass === EPlayerClass.None ? "normal" : PlayerClass;
 	Instance.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
+}
+
+function AssignRandomBotClass(Pawn: CSPlayerPawn, Slot: number): boolean
+{
+	const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
+	if (!Controller || !Controller.IsBot() || GClassBySlot.has(Slot) || GPendingClassBySlot.has(Slot))
+	{
+		return false;
+	}
+	const PlayerClass: EPlayableClass = PickRandomClass();
+	GClassBySlot.set(Slot, PlayerClass);
+	Instance.Msg(`${LogPrefix} ${Controller.GetPlayerName()} (bot) -> ${PlayerClass}`);
+	return true;
+}
+
+function TickBotClasses(): void
+{
+	ForEachLivePawn((Pawn: CSPlayerPawn, Slot: number): void =>
+	{
+		const PlayerClass: EPlayableClass | undefined = AssignRandomBotClass(Pawn, Slot) ? GClassBySlot.get(Slot) : undefined;
+		if (PlayerClass !== undefined)
+		{
+			GiveLoadout(Pawn, PlayerClass);
+		}
+	});
 }
 
 function RefreshClassUi(Pawn: CSPlayerPawn, Slot: number): void

@@ -301,6 +301,10 @@ var ExplosionFxLifetime = 5;
 var ProjectileLaunchOffset = { x: 0, y: 0, z: -8 };
 var ExplosionOffset = { x: 0, y: 0, z: 6 };
 var GroundedKnockbackLift = { x: 0, y: 0, z: 0.6 };
+var StandingKnockbackHeight = 82;
+var CrouchedKnockbackHeight = 62;
+var AirborneSelfKnockbackScale = 1.33;
+var SelfBlastDamageScale = 0.33;
 var ExplosionDebugColor = { r: 255, g: 140, b: 0 };
 var MaxHitscanTraces = 8;
 var GroundTraceLift = { x: 0, y: 0, z: 2 };
@@ -407,25 +411,13 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff) {
     }
     const Falloff = 1 - 0.5 * (Distance / Radius);
     const RangeScale = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
-    let CalculatedDmg = Damage * Falloff * RangeScale;
-    const IsCrouched = Victim.IsDucking() || Victim.IsDucked();
-    let Direction = Distance > 1 ? FVectorMath.GetSafeNormal(Offset) : UpVector;
-    if (Victim.GetGroundEntity()) {
-      Direction = FVectorMath.GetSafeNormal(FVectorMath.Add(Direction, GroundedKnockbackLift));
-    }
-    const CrouchFactor = IsCrouched ? 62 : 82;
-    let KBStrength = Knockback;
-    if (!Victim.GetGroundEntity() && bIsSelf) {
-      KBStrength *= 1.33;
-    }
-    const CalculatedKb = CalculatedDmg * (KBStrength / CrouchFactor);
-    Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Direction, CalculatedKb)) });
-    if (bIsSelf) {
-      CalculatedDmg *= 0.33;
-    }
+    const BlastDamage = Damage * Falloff * RangeScale;
+    const Away = Distance > 1 ? Offset : UpVector;
+    const Push = ApplyKnockback(Victim, Away, BlastDamage, Knockback, bIsSelf);
+    const DamageTaken = bIsSelf ? BlastDamage * SelfBlastDamageScale : BlastDamage;
     const DamageDealt = Victim.TakeDamage(
       {
-        damage: CalculatedDmg,
+        damage: DamageTaken,
         damageTypes: CSDamageTypes.BLAST,
         attacker: Attacker,
         inflictor: Attacker
@@ -434,7 +426,8 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff) {
     if (!bIsSelf && DamageDealt > 0) {
       SpawnBloodSplatter(Origin, Victim);
     }
-    Instance3.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${CalculatedDmg}d : ${CalculatedKb}k (${Direction.x}, ${Direction.y}, ${Direction.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
+    const PushDirection = FVectorMath.GetSafeNormal(Push);
+    Instance3.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${FVectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
   });
 }
 function GetDistanceDamageScale(Distance, Falloff) {
@@ -508,9 +501,24 @@ function GetSpreadDirection(Aim, SpreadDegrees) {
     }
   );
 }
-function ApplyKnockback(Victim, Direction, Speed) {
-  const Push = Victim.GetGroundEntity() ? FVectorMath.GetSafeNormal(FVectorMath.Add(Direction, GroundedKnockbackLift)) : Direction;
-  Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), FVectorMath.Scale(Push, Speed)) });
+function ApplyKnockback(Victim, Direction, Damage, Strength, bIsSelf) {
+  const bOnGround = Victim.GetGroundEntity() !== void 0;
+  const bCrouched = Victim.IsDucking() || Victim.IsDucked();
+  let Push = FVectorMath.GetSafeNormal(Direction);
+  if (bOnGround) {
+    Push = FVectorMath.GetSafeNormal(FVectorMath.Add(Push, GroundedKnockbackLift));
+  }
+  let Scale = Strength;
+  if (bIsSelf && !bOnGround) {
+    Scale *= AirborneSelfKnockbackScale;
+  }
+  const Speed = Damage * Scale / (bCrouched ? CrouchedKnockbackHeight : StandingKnockbackHeight);
+  if (Speed === 0) {
+    return ZeroVector;
+  }
+  const Velocity = FVectorMath.Scale(Push, Speed);
+  Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), Velocity) });
+  return Velocity;
 }
 function GetHeightAboveGround(Pawn, MaxDistance) {
   if (Pawn.GetGroundEntity()) {
@@ -565,6 +573,7 @@ function EquipLauncher(Pawn, Slot, WeaponName, Settings) {
       MaxClip: Settings.ClipSize,
       NextFireTime: 0,
       NextReloadTime: void 0,
+      ReloadWaitStart: 0,
       ChargeStartTime: void 0
     }
   );
@@ -602,7 +611,14 @@ function GetLauncherAmmo(Pawn, Slot) {
   }
   for (const State of Launchers) {
     if (Pawn.FindWeapon(State.WeaponName) === Active) {
-      return { Clip: State.Clip, MaxClip: State.MaxClip, bReloading: State.NextReloadTime !== void 0, ChargeFraction: GetChargeFraction(State) };
+      const Ammo = {
+        Clip: State.Clip,
+        MaxClip: State.MaxClip,
+        bReloading: State.NextReloadTime !== void 0,
+        ChargeFraction: GetChargeFraction(State),
+        ReadyFraction: GetReadyFraction(State)
+      };
+      return Ammo;
     }
   }
   return void 0;
@@ -640,6 +656,22 @@ function GetChargeFraction(State) {
   }
   return Math.min(1, (Instance4.GetGameTime() - State.ChargeStartTime) / State.Settings.ChargeTime);
 }
+function GetReadyFraction(State) {
+  const Now = Instance4.GetGameTime();
+  if (State.Clip > 0) {
+    return GetWaitFraction(State.NextFireTime - State.Settings.FireInterval, State.NextFireTime, Now);
+  }
+  if (State.NextReloadTime === void 0) {
+    return 0;
+  }
+  return GetWaitFraction(State.ReloadWaitStart, State.NextReloadTime, Now);
+}
+function GetWaitFraction(WaitStart, ReadyTime, Now) {
+  if (Now >= ReadyTime || ReadyTime <= WaitStart) {
+    return 1;
+  }
+  return Math.max(0, (Now - WaitStart) / (ReadyTime - WaitStart));
+}
 function TickReload(Pawn, State, Now) {
   if (!CanReload(State)) {
     State.NextReloadTime = void 0;
@@ -647,6 +679,7 @@ function TickReload(Pawn, State, Now) {
   }
   if (State.NextReloadTime === void 0) {
     State.NextReloadTime = Math.max(Now, State.NextFireTime) + State.Settings.ReloadFirstTime;
+    State.ReloadWaitStart = Now < State.NextFireTime ? State.NextFireTime - State.Settings.FireInterval : Now;
     return;
   }
   if (Now < State.NextReloadTime) {
@@ -715,7 +748,7 @@ var SoldierSettings = {
     FireFxTemplate: "rocket_fire_template"
   },
   SecondaryLauncher: void 0,
-  RocketDamage: 80,
+  RocketDamage: 90,
   RocketRadius: 160,
   RocketSpeed: 1200,
   RocketKnockback: 400,
@@ -758,7 +791,7 @@ var DemoSettings = {
   PipeLaunchSpeed: 1337,
   PipeLaunchUp: 150,
   PipeRadius: 160,
-  PipeDamage: 40,
+  PipeDamage: 33,
   PipeKnockback: 1e3,
   PipeFalloff: TF2RocketFalloff,
   PipeLifetime: 5
@@ -804,28 +837,45 @@ var RailerSettings = {
     ChargeTime: 1,
     FireFxTemplate: "rail_fire_template"
   },
-  ShotDamage: 6,
-  ShotKnockback: 120,
-  ShotRange: 4096,
-  ShotSpread: 2,
-  ShotFalloff: RailerShotFalloff,
-  BeamDamage: 110,
-  BeamRange: 8192,
-  BeamHeadshotMultiplier: 1.5,
-  bBeamPierces: true,
-  BeamFalloff: RailerBeamFalloff
+  PPsh: {
+    Damage: 7,
+    HeadshotMultiplier: 1,
+    Range: 4096,
+    Spread: 2,
+    bPierces: false,
+    Falloff: RailerShotFalloff,
+    Knockback: 400,
+    SelfKnockback: 200,
+    bBloodSplatter: false,
+    BeamTemplate: "rail_tracer_template",
+    BeamEndName: "rail_tracer_end",
+    BeamLifetime: 0.06,
+    ImpactTemplate: "",
+    ImpactLifetime: 0
+  },
+  Railgun: {
+    Damage: 110,
+    HeadshotMultiplier: 1.5,
+    Range: 8192,
+    Spread: 0,
+    bPierces: true,
+    Falloff: RailerBeamFalloff,
+    Knockback: 333,
+    SelfKnockback: 333,
+    bBloodSplatter: true,
+    BeamTemplate: "rail_beam_template",
+    BeamEndName: "rail_beam_end",
+    BeamLifetime: 0.4,
+    ImpactTemplate: "rail_impact_template",
+    ImpactLifetime: 2
+  }
 };
+var PlayableClasses = Object.values(EPlayerClass).filter((PlayerClass) => {
+  return PlayerClass !== "none" /* None */;
+});
 var StickyTemplateName = "sticky_template";
 var RocketTemplateName = "rocket_template";
 var PipeTemplateName = "pipe_template";
-var RailBeamTemplateName = "rail_beam_template";
-var RailBeamEndName = "rail_beam_end";
-var RailImpactTemplateName = "rail_impact_template";
-var RailBeamLifetime = 0.4;
-var RailImpactLifetime = 2;
-var RailTracerTemplateName = "rail_tracer_template";
-var RailTracerEndName = "rail_tracer_end";
-var RailTracerLifetime = 0.06;
 var MaxBeamHits = 8;
 var DefaultHealth = 100;
 var DefaultSizeScale = 1;
@@ -1257,42 +1307,36 @@ var URailerClass = class extends UPlayerClass {
     super(RailerSettings);
   }
   OnPrimaryFire(Pawn, Slot, Now) {
-    const Start = Pawn.GetEyePosition();
-    const Direction = GetSpreadDirection(Pawn.GetEyeAngles(), this.Settings.ShotSpread);
-    const Result = TraceHitscan(Pawn, Start, FVectorMath.Add(Start, FVectorMath.Scale(Direction, this.Settings.ShotRange)), 1);
-    const Weapon = Pawn.FindWeapon(this.Settings.Primary);
-    for (const Hit of Result.Hits) {
-      const RangeScale = EvaluateDamageCurve(this.Settings.ShotFalloff, GetHitDistance(Hit, Start));
-      DealShockDamage(Pawn, Hit.Victim, this.Settings.ShotDamage * RangeScale, Weapon);
-      ApplyKnockback(Hit.Victim, Direction, this.Settings.ShotKnockback * RangeScale);
-    }
-    SpawnBeam(RailTracerTemplateName, RailTracerEndName, FVectorMath.Subtract(Start, BeamStartDrop), Result.End, RailTracerLifetime, GetTeamColor(Pawn));
+    FireBeamWeapon(Pawn, this.Settings.PPsh, Pawn.FindWeapon(this.Settings.Primary));
   }
   OnSecondaryFire(Pawn, Slot, Now) {
-    const Start = Pawn.GetEyePosition();
-    const Direction = FVectorMath.GetForwardVector(Pawn.GetEyeAngles());
-    const MaxHits = this.Settings.bBeamPierces ? MaxBeamHits : 1;
-    const Result = TraceHitscan(Pawn, Start, FVectorMath.Add(Start, FVectorMath.Scale(Direction, this.Settings.BeamRange)), MaxHits);
-    const Weapon = Pawn.FindWeapon(this.Settings.Secondary);
-    for (const Hit of Result.Hits) {
-      this.HitWithBeam(Pawn, Hit, Start, Weapon);
-    }
-    SpawnBeam(RailBeamTemplateName, RailBeamEndName, FVectorMath.Subtract(Start, BeamStartDrop), Result.End, RailBeamLifetime, GetTeamColor(Pawn));
-    SpawnTemporaryTemplate(RailImpactTemplateName, Result.End, RailImpactLifetime);
+    FireBeamWeapon(Pawn, this.Settings.Railgun, Pawn.FindWeapon(this.Settings.Secondary));
   }
-  HitWithBeam(Shooter, Hit, Start, Weapon) {
+};
+function FireBeamWeapon(Shooter, Settings, Weapon) {
+  const Start = Shooter.GetEyePosition();
+  const Direction = GetSpreadDirection(Shooter.GetEyeAngles(), Settings.Spread);
+  const MaxHits = Settings.bPierces ? MaxBeamHits : 1;
+  const Result = TraceHitscan(Shooter, Start, FVectorMath.Add(Start, FVectorMath.Scale(Direction, Settings.Range)), MaxHits);
+  for (const Hit of Result.Hits) {
     const Distance = GetHitDistance(Hit, Start);
-    const RangeScale = EvaluateDamageCurve(this.Settings.BeamFalloff, Distance);
+    const RangeScale = EvaluateDamageCurve(Settings.Falloff, Distance);
     const bHeadshot = Hit.Trace.hitGroup === CSHitGroup.HEAD;
-    const Damage = this.Settings.BeamDamage * RangeScale * (bHeadshot ? this.Settings.BeamHeadshotMultiplier : 1);
-    if (DealShockDamage(Shooter, Hit.Victim, Damage, Weapon) > 0) {
+    const Damage = Settings.Damage * RangeScale * (bHeadshot ? Settings.HeadshotMultiplier : 1);
+    const Push = ApplyKnockback(Hit.Victim, Direction, Damage, Settings.Knockback, false);
+    if (DealShockDamage(Shooter, Hit.Victim, Damage, Weapon) > 0 && Settings.bBloodSplatter) {
       SpawnBloodSplatter(Start, Hit.Victim);
     }
     if (bDebug) {
-      Instance5.Msg(`${LogPrefix} rail beam: ${Math.round(Distance)}u x${RangeScale.toFixed(2)}${bHeadshot ? " headshot" : ""} -> ${Math.round(Damage)}`);
+      Instance5.Msg(`${LogPrefix} hitscan: ${Math.round(Distance)}u x${RangeScale.toFixed(2)}${bHeadshot ? " headshot" : ""} -> ${Math.round(Damage)}d, ${Math.round(FVectorMath.Size(Push))}k`);
     }
   }
-};
+  ApplyKnockback(Shooter, FVectorMath.Scale(Direction, -1), Settings.Damage, Settings.SelfKnockback, true);
+  SpawnBeam(Settings.BeamTemplate, Settings.BeamEndName, FVectorMath.Subtract(Start, BeamStartDrop), Result.End, Settings.BeamLifetime, GetTeamColor(Shooter));
+  if (Settings.ImpactTemplate !== "") {
+    SpawnTemporaryTemplate(Settings.ImpactTemplate, Result.End, Settings.ImpactLifetime);
+  }
+}
 function GetHitDistance(Hit, Start) {
   return FVectorMath.Size(FVectorMath.Subtract(Hit.Trace.end, Start));
 }
@@ -1316,6 +1360,10 @@ var ClassDefinitions = {
 };
 function GiveLoadout(Pawn, PlayerClass) {
   ClassDefinitions[PlayerClass].ApplyLoadout(Pawn);
+}
+function PickRandomClass() {
+  const Index = Math.floor(Math.random() * PlayableClasses.length);
+  return PlayableClasses[Index] ?? "soldier" /* Solider */;
 }
 function GiveNoClassLoadout(Pawn) {
   StripGearSlots(Pawn, NoClassStrippedGearSlots);
@@ -1511,7 +1559,7 @@ function PlaceBotOnMarker(Pawn, Assignment) {
   Assignment.bPlaced = true;
   Pawn.Teleport({ position: Assignment.Marker.GetAbsOrigin(), angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 }, velocity: ZeroVector });
   Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
-  Pawn.SetHealth(100);
+  Pawn.SetHealth(Pawn.GetMaxHealth());
 }
 function DriveBot(Pawn, Assignment) {
   if (Assignment.Mode === 0 /* Still */ || !Pawn.GetGroundEntity()) {
@@ -1525,7 +1573,7 @@ function DriveBot(Pawn, Assignment) {
   Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
 }
 
-// src/bm_class_ui.ts
+// src/bm_ui.ts
 import { Instance as Instance8, CSInputs as CSInputs3 } from "cs_script/point_script";
 var ClassUiName = "class_hud";
 var MenuPanelId = "ClassMenu";
@@ -1534,7 +1582,7 @@ var IndicatorPanelId = "ClassIndicator";
 var ClassNameLabelId = "ClassName";
 var PickButtonPrefix = "Pick_";
 var CloseButtonId = "CloseMenu";
-var MenuToggleKey = CSInputs3.LOOK_AT_WEAPON;
+var MenuToggleKey = CSInputs3.USE;
 var NoClassName = "No class";
 var AmmoPanelId = "AmmoPanel";
 var AmmoClipLabelId = "AmmoClip";
@@ -1547,7 +1595,10 @@ var CounterLabelId = "CounterLabel";
 var CounterValueId = "CounterValue";
 var CounterMaxId = "CounterMax";
 var ChargeBarId = "ChargeBar";
-var ChargeSteps = 10;
+var FireBarId = "FireBar";
+var BarSteps = 24;
+var BarCharacter = "0";
+var HiddenBar = -1;
 var HurtHealthFraction = 0.5;
 var CriticalHealthFraction = 0.25;
 var AllClasses = Object.values(EPlayerClass);
@@ -1555,7 +1606,7 @@ var GOpenMenus = /* @__PURE__ */ new Set();
 var GOfferedMenus = /* @__PURE__ */ new Set();
 var GShownAmmo = /* @__PURE__ */ new Map();
 var GShownHealth = /* @__PURE__ */ new Map();
-var GShownCharge = /* @__PURE__ */ new Map();
+var GShownBars = /* @__PURE__ */ new Map();
 var GShownCounter = /* @__PURE__ */ new Map();
 var GbWarnedNoClassUi = false;
 function OpenClassMenu(Slot) {
@@ -1635,7 +1686,8 @@ function ShowClassIndicator(Slot, PlayerClass, IsT) {
   }
 }
 function ShowAmmo(Slot, Ammo) {
-  ShowCharge(Slot, Ammo ? Ammo.ChargeFraction : 0);
+  ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeFraction > 0 ? Ammo.ChargeFraction : void 0);
+  ShowBar(Slot, FireBarId, Ammo ? Ammo.ReadyFraction : void 0);
   const Key = Ammo ? `${Ammo.Clip}|${Ammo.bReloading}` : "";
   if ((GShownAmmo.get(Slot) ?? "") === Key) {
     return;
@@ -1655,24 +1707,31 @@ function ShowAmmo(Slot, Ammo) {
   Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Empty", Ammo.Clip === 0);
   Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Shown", true);
 }
-function ShowCharge(Slot, Fraction) {
-  const Step = Fraction > 0 ? Math.min(ChargeSteps, Math.max(1, Math.ceil(Fraction * ChargeSteps))) : 0;
-  const LastStep = GShownCharge.get(Slot) ?? 0;
-  if (Step === LastStep) {
+function ShowBar(Slot, BarId, Fraction) {
+  const Steps = Fraction === void 0 ? HiddenBar : Math.floor(Math.min(1, Math.max(0, Fraction)) * BarSteps);
+  let ShownBars = GShownBars.get(Slot);
+  if (!ShownBars) {
+    ShownBars = /* @__PURE__ */ new Map();
+    GShownBars.set(Slot, ShownBars);
+  }
+  const LastSteps = ShownBars.get(BarId) ?? HiddenBar;
+  if (Steps === LastSteps) {
     return;
   }
   const Ui = FindClassUi();
   if (!Ui) {
     return;
   }
-  GShownCharge.set(Slot, Step);
-  if (LastStep > 0) {
-    Ui.SetHasClassForPlayer(Slot, ChargeBarId, `Charge_${LastStep}`, false);
+  ShownBars.set(BarId, Steps);
+  if (Steps === HiddenBar) {
+    Ui.SetHasClassForPlayer(Slot, BarId, "Shown", false);
+    return;
   }
-  if (Step > 0) {
-    Ui.SetHasClassForPlayer(Slot, ChargeBarId, `Charge_${Step}`, true);
+  Ui.SetDialogVariableStringForPlayer(Slot, `${BarId}Fill`, "fill", BarCharacter.repeat(Steps));
+  Ui.SetDialogVariableStringForPlayer(Slot, `${BarId}Empty`, "empty", BarCharacter.repeat(BarSteps - Steps));
+  if (LastSteps === HiddenBar) {
+    Ui.SetHasClassForPlayer(Slot, BarId, "Shown", true);
   }
-  Ui.SetHasClassForPlayer(Slot, ChargeBarId, "Shown", Step > 0);
 }
 function ShowCounter(Slot, Counter) {
   const Key = Counter ? `${Counter.Label}|${Counter.Count}|${Counter.Max}` : "";
@@ -1724,7 +1783,7 @@ function ResetClassUi(Slot) {
   GOfferedMenus.delete(Slot);
   GShownAmmo.delete(Slot);
   GShownHealth.delete(Slot);
-  GShownCharge.delete(Slot);
+  GShownBars.delete(Slot);
   GShownCounter.delete(Slot);
   const Ui = FindClassUi();
   if (!Ui) {
@@ -1927,6 +1986,7 @@ function Tick() {
     TickClassMenuKey();
     TickPlayerHud();
     TickNoBuying();
+    TickBotClasses();
     TickBots(Now);
   } catch (Exception) {
     Instance10.Msg(`${LogPrefix} error: ${String(Exception)}`);
@@ -1976,6 +2036,7 @@ function HandlePlayerReset(Event) {
   }
   ClearPlayer(Slot);
   ResetBotMode(Slot);
+  AssignRandomBotClass(Pawn, Slot);
   const bHadClass = GClassBySlot.has(Slot);
   ApplyPendingClass(Slot);
   RefreshClassUi(Pawn, Slot);
@@ -2153,6 +2214,24 @@ function SetPlayerClass(Player, PlayerClass) {
   ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === 2);
   const ClassLabel = PlayerClass === "none" /* None */ ? "normal" : PlayerClass;
   Instance10.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
+}
+function AssignRandomBotClass(Pawn, Slot) {
+  const Controller = Pawn.GetPlayerController();
+  if (!Controller || !Controller.IsBot() || GClassBySlot.has(Slot) || GPendingClassBySlot.has(Slot)) {
+    return false;
+  }
+  const PlayerClass = PickRandomClass();
+  GClassBySlot.set(Slot, PlayerClass);
+  Instance10.Msg(`${LogPrefix} ${Controller.GetPlayerName()} (bot) -> ${PlayerClass}`);
+  return true;
+}
+function TickBotClasses() {
+  ForEachLivePawn((Pawn, Slot) => {
+    const PlayerClass = AssignRandomBotClass(Pawn, Slot) ? GClassBySlot.get(Slot) : void 0;
+    if (PlayerClass !== void 0) {
+      GiveLoadout(Pawn, PlayerClass);
+    }
+  });
 }
 function RefreshClassUi(Pawn, Slot) {
   const Controller = Pawn.GetPlayerController();

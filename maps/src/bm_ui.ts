@@ -18,7 +18,7 @@ const IndicatorPanelId: string = "ClassIndicator";
 const ClassNameLabelId: string = "ClassName";
 const PickButtonPrefix: string = "Pick_";
 const CloseButtonId: string = "CloseMenu";
-const MenuToggleKey: CSInputs = CSInputs.LOOK_AT_WEAPON;
+const MenuToggleKey: CSInputs = CSInputs.USE;
 const NoClassName: string = "No class";
 const AmmoPanelId: string = "AmmoPanel";
 const AmmoClipLabelId: string = "AmmoClip";
@@ -31,7 +31,10 @@ const CounterLabelId: string = "CounterLabel";
 const CounterValueId: string = "CounterValue";
 const CounterMaxId: string = "CounterMax";
 const ChargeBarId: string = "ChargeBar";
-const ChargeSteps: number = 10;               // the bar fills in this many steps: classes Charge_1 .. Charge_10
+const FireBarId: string = "FireBar";
+const BarSteps: number = 24;
+const BarCharacter: string = "0";
+const HiddenBar: number = -1;
 const HurtHealthFraction: number = 0.5;
 const CriticalHealthFraction: number = 0.25;
 
@@ -41,7 +44,7 @@ const GOpenMenus: Set<number> = new Set<number>();
 const GOfferedMenus: Set<number> = new Set<number>();
 const GShownAmmo: Map<number, string> = new Map<number, string>();
 const GShownHealth: Map<number, string> = new Map<number, string>();
-const GShownCharge: Map<number, number> = new Map<number, number>();
+const GShownBars: Map<number, Map<string, number>> = new Map<number, Map<string, number>>();
 const GShownCounter: Map<number, string> = new Map<number, string>();
 let GbWarnedNoClassUi: boolean = false;
 
@@ -160,7 +163,8 @@ export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass, IsT:
 
 export function ShowAmmo(Slot: number, Ammo: FLauncherAmmo | undefined): void
 {
-	ShowCharge(Slot, Ammo ? Ammo.ChargeFraction : 0);
+	ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeFraction > 0 ? Ammo.ChargeFraction : undefined);
+	ShowBar(Slot, FireBarId, Ammo ? Ammo.ReadyFraction : undefined);
 
 	const Key: string = Ammo ? `${Ammo.Clip}|${Ammo.bReloading}` : "";
 	if ((GShownAmmo.get(Slot) ?? "") === Key)
@@ -186,12 +190,20 @@ export function ShowAmmo(Slot: number, Ammo: FLauncherAmmo | undefined): void
 	Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Shown", true);
 }
 
-// Charge bar under the crosshair, only while a launcher is charging
-function ShowCharge(Slot: number, Fraction: number): void
+// The HUD can't be given a width, only text, so a bar is two labels side by side: <Id>Fill holding the filled part
+// and <Id>Empty the rest, each a run of BarCharacter. CSS hides the characters and colours the labels' backgrounds,
+// so the fill's width comes straight from Fraction. undefined hides the bar.
+function ShowBar(Slot: number, BarId: string, Fraction: number | undefined): void
 {
-	const Step: number = Fraction > 0 ? Math.min(ChargeSteps, Math.max(1, Math.ceil(Fraction * ChargeSteps))) : 0;
-	const LastStep: number = GShownCharge.get(Slot) ?? 0;
-	if (Step === LastStep)
+	const Steps: number = Fraction === undefined ? HiddenBar : Math.floor(Math.min(1, Math.max(0, Fraction)) * BarSteps);
+	let ShownBars: Map<string, number> | undefined = GShownBars.get(Slot);
+	if (!ShownBars)
+	{
+		ShownBars = new Map<string, number>();
+		GShownBars.set(Slot, ShownBars);
+	}
+	const LastSteps: number = ShownBars.get(BarId) ?? HiddenBar;
+	if (Steps === LastSteps)
 	{
 		return;
 	}
@@ -200,17 +212,19 @@ function ShowCharge(Slot: number, Fraction: number): void
 	{
 		return;
 	}
-	GShownCharge.set(Slot, Step);
+	ShownBars.set(BarId, Steps);
 
-	if (LastStep > 0)
+	if (Steps === HiddenBar)
 	{
-		Ui.SetHasClassForPlayer(Slot, ChargeBarId, `Charge_${LastStep}`, false);
+		Ui.SetHasClassForPlayer(Slot, BarId, "Shown", false);
+		return;
 	}
-	if (Step > 0)
+	Ui.SetDialogVariableStringForPlayer(Slot, `${BarId}Fill`, "fill", BarCharacter.repeat(Steps));
+	Ui.SetDialogVariableStringForPlayer(Slot, `${BarId}Empty`, "empty", BarCharacter.repeat(BarSteps - Steps));
+	if (LastSteps === HiddenBar)
 	{
-		Ui.SetHasClassForPlayer(Slot, ChargeBarId, `Charge_${Step}`, true);
+		Ui.SetHasClassForPlayer(Slot, BarId, "Shown", true);
 	}
-	Ui.SetHasClassForPlayer(Slot, ChargeBarId, "Shown", Step > 0);
 }
 
 // A class's counter (e.g. stickies out) in the bottom bar, left of the ammo. undefined hides it.
@@ -277,7 +291,7 @@ export function ResetClassUi(Slot: number): void
 	GOfferedMenus.delete(Slot);
 	GShownAmmo.delete(Slot);
 	GShownHealth.delete(Slot);
-	GShownCharge.delete(Slot);
+	GShownBars.delete(Slot);
 	GShownCounter.delete(Slot);
 	const Ui: CustomHudLayout | undefined = FindClassUi();
 	if (!Ui)

@@ -329,80 +329,77 @@
 	letter-spacing: 1px;
 }
 
-.ChargeBar
+.Bar
 {
 	visibility: collapse;
-	horizontal-align: center;
-	vertical-align: center;
-	margin-top: 80px;
-	width: 140px;
-	height: 6px;
-	border-radius: 3px;
-	background-color: #0b0f14b0;
+	flow-children: right;
 }
  
-.ChargeBar.Shown
+.Bar.Shown
 {
 	visibility: visible;
 }
  
-.ChargeFill
+.BarFill
 {
-	width: 0%;
-	height: 100%;
-	border-radius: 3px;
+	height: 6px;
+	margin: 0px;
+	padding: 0px;
+	font-size: 10px;
+	letter-spacing: 0px;
+	color: #00000000;
+}
+ 
+.BarEmpty
+{
+	height: 6px;
+	margin: 0px;
+	padding: 0px;
+	font-size: 10px;
+	letter-spacing: 0px;
+	color: #00000000;
+	background-color: #0b0f14b0;
+}
+
+.CrosshairBars
+{
+	horizontal-align: center;
+	vertical-align: center;
+	margin-top: 80px;
+	height: 14px;
+	flow-children: down;
+}
+
+.FireBar
+{
+	horizontal-align: center;
+	margin-bottom: 4px;
+}
+
+.FireBar .BarFill
+{
+	height: 4px;
+	font-size: 6px;
+	background-color: #ffffff;
+}
+
+.FireBar .BarEmpty
+{
+	height: 4px;
+	font-size: 6px;
+	background-color: #ffffff30;
+}
+
+.ChargeBar
+{
+	horizontal-align: center;
+}
+
+.ChargeBar .BarFill
+{
 	background-color: #7fd4ff;
 }
- 
-.ChargeBar.Charge_1 .ChargeFill
-{
-	width: 10%;
-}
- 
-.ChargeBar.Charge_2 .ChargeFill
-{
-	width: 20%;
-}
- 
-.ChargeBar.Charge_3 .ChargeFill
-{
-	width: 30%;
-}
- 
-.ChargeBar.Charge_4 .ChargeFill
-{
-	width: 40%;
-}
- 
-.ChargeBar.Charge_5 .ChargeFill
-{
-	width: 50%;
-}
- 
-.ChargeBar.Charge_6 .ChargeFill
-{
-	width: 60%;
-}
- 
-.ChargeBar.Charge_7 .ChargeFill
-{
-	width: 70%;
-}
- 
-.ChargeBar.Charge_8 .ChargeFill
-{
-	width: 80%;
-}
- 
-.ChargeBar.Charge_9 .ChargeFill
-{
-	width: 90%;
-}
- 
-.ChargeBar.Charge_10 .ChargeFill
-{
-	width: 100%;
-}
+
  
 .RailerButton .ClassButtonName
 {

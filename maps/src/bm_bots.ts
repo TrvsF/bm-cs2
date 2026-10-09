@@ -133,7 +133,7 @@ function PlaceBotOnMarker(Pawn: CSPlayerPawn, Assignment: FBotAssignment): void
 	Assignment.bPlaced = true;
 	Pawn.Teleport({ position: Assignment.Marker.GetAbsOrigin(), angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 }, velocity: ZeroVector });
 	Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
-	Pawn.SetHealth(100);
+	Pawn.SetHealth(Pawn.GetMaxHealth());
 }
 
 function DriveBot(Pawn: CSPlayerPawn, Assignment: FBotAssignment): void

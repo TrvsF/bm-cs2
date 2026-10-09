@@ -21,6 +21,7 @@ export interface FLauncherAmmo
 	readonly MaxClip: number;
 	readonly bReloading: boolean;
 	readonly ChargeFraction: number;
+	readonly ReadyFraction: number;
 }
 
 interface FLauncherState
@@ -31,6 +32,7 @@ interface FLauncherState
 	MaxClip: number;
 	NextFireTime: number;
 	NextReloadTime: number | undefined;
+	ReloadWaitStart: number;
 	ChargeStartTime: number | undefined;
 }
 
@@ -56,6 +58,7 @@ export function EquipLauncher(Pawn: CSPlayerPawn, Slot: number, WeaponName: stri
 		MaxClip: Settings.ClipSize,
 		NextFireTime: 0,
 		NextReloadTime: undefined,
+		ReloadWaitStart: 0,
 		ChargeStartTime: undefined,
 	});
 	GLaunchers.set(Slot, Launchers);
@@ -106,7 +109,15 @@ export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo
 	{
 		if (Pawn.FindWeapon(State.WeaponName) === Active)
 		{
-			return { Clip: State.Clip, MaxClip: State.MaxClip, bReloading: State.NextReloadTime !== undefined, ChargeFraction: GetChargeFraction(State) };
+			const Ammo: FLauncherAmmo =
+			{
+				Clip: State.Clip,
+				MaxClip: State.MaxClip,
+				bReloading: State.NextReloadTime !== undefined,
+				ChargeFraction: GetChargeFraction(State),
+				ReadyFraction: GetReadyFraction(State),
+			};
+			return Ammo;
 		}
 	}
 	return undefined;
@@ -157,6 +168,29 @@ function GetChargeFraction(State: FLauncherState): number
 	return Math.min(1, (Instance.GetGameTime() - State.ChargeStartTime) / State.Settings.ChargeTime);
 }
 
+function GetReadyFraction(State: FLauncherState): number
+{
+	const Now: number = Instance.GetGameTime();
+	if (State.Clip > 0)
+	{
+		return GetWaitFraction(State.NextFireTime - State.Settings.FireInterval, State.NextFireTime, Now);
+	}
+	if (State.NextReloadTime === undefined)
+	{
+		return 0;
+	}
+	return GetWaitFraction(State.ReloadWaitStart, State.NextReloadTime, Now);
+}
+
+function GetWaitFraction(WaitStart: number, ReadyTime: number, Now: number): number
+{
+	if (Now >= ReadyTime || ReadyTime <= WaitStart)
+	{
+		return 1;
+	}
+	return Math.max(0, (Now - WaitStart) / (ReadyTime - WaitStart));
+}
+
 function TickReload(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): void
 {
 	if (!CanReload(State))
@@ -171,6 +205,7 @@ function TickReload(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): voi
 		// if (bWantsReload)
 		// {
 		State.NextReloadTime = Math.max(Now, State.NextFireTime) + State.Settings.ReloadFirstTime;
+		State.ReloadWaitStart = Now < State.NextFireTime ? State.NextFireTime - State.Settings.FireInterval : Now;
 		// }
 		return;
 	}
