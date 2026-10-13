@@ -464,3 +464,96 @@
 {
 	color: #e8823a;
 }
+
+.PayloadBar
+{
+	visibility: collapse;
+	horizontal-align: center;
+	vertical-align: bottom;
+	margin-bottom: 112px;
+	flow-children: right;
+}
+
+.PayloadBar.Shown
+{
+	visibility: visible;
+}
+
+.PayloadSide
+{
+	width: 30px;
+	height: 6px;
+}
+
+.PayloadFill
+{
+	vertical-align: center;
+	height: 6px;
+	margin: 0px;
+	padding: 0px;
+	font-size: 9px;
+	letter-spacing: 0px;
+	color: #00000000;
+	background-color: #ee5a5a;
+}
+
+.PayloadEmpty
+{
+	vertical-align: center;
+	height: 6px;
+	margin: 0px;
+	padding: 0px;
+	font-size: 9px;
+	letter-spacing: 0px;
+	color: #00000000;
+	background-color: #0b0f14b0;
+}
+
+.PayloadTick
+{
+	visibility: collapse;
+	vertical-align: center;
+	width: 2px;
+	height: 12px;
+	background-color: #6c7580;
+}
+
+.PayloadTick.Shown
+{
+	visibility: visible;
+}
+
+.PayloadTick.Reached
+{
+	background-color: #ffffff;
+}
+
+.PayloadPushers
+{
+	vertical-align: center;
+	width: 30px;
+	margin-left: 6px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 15px;
+	color: #ee5a5a;
+}
+
+.PayloadBar.Blocked .PayloadFill
+{
+	background-color: #7fd4ff;
+}
+
+.PayloadBar.RollingBack .PayloadFill
+{
+	background-color: #9aa2ac;
+}
+
+.PayloadBar.Overtime .PayloadFill
+{
+	background-color: #f0d080;
+}
+
+.PayloadBar.Delivered .PayloadFill
+{
+	background-color: #f0d080;
+}

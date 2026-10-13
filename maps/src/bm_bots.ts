@@ -1,6 +1,6 @@
 import { Instance } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, TraceResult } from "cs_script/point_script";
-import { ZeroVector, FVectorMath, ForEachLivePawn } from "./bm_core";
+import { ZeroVector, VectorMath, ForEachLivePawn } from "./bm_core";
 import type { FVector } from "./bm_core";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -149,6 +149,6 @@ function DriveBot(Pawn: CSPlayerPawn, Assignment: FBotAssignment): void
 		return;
 	}
 
-	const Forward: FVector = FVectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
+	const Forward: FVector = VectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
 	Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
 }

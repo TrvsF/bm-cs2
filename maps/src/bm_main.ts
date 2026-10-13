@@ -1,6 +1,6 @@
-import { Instance, CSDamageTypes, CSGearSlot } from "cs_script/point_script";
+import { Instance, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
 import type { CSPlayerPawn, CSPlayerController, CSWeaponBase } from "cs_script/point_script";
-import { bDebug, bFriendlyFire, TickInterval, LogPrefix, INDEX_NONE, GetPlayerSlot, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
+import { bDebug, IsFriendlyFire, SetFriendlyFire, TickInterval, LogPrefix, INDEX_NONE, GetPlayerSlot, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
 import type
 {
 	FPlayerChatEvent,
@@ -20,10 +20,12 @@ import type { EPlayableClass } from "./bm_classes";
 import { ClearDecals } from "./bm_effects";
 import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
-import { TickBots, ResetBotMode, ForgetBot } from "./bm_bots";
 import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ResetClassUi } from "./bm_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
+import { GameMode } from "./bm_gamemode";
+import { FreeForAllMode } from "./bm_freeforall";
+import { PayloadMode } from "./bm_payload";
 import type { FClassMenuChoice } from "./bm_ui";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,6 +41,10 @@ const ClassChatCommands: ReadonlyMap<string, EPlayerClass> = new Map<string, EPl
 		["!none", EPlayerClass.None],
 	]
 );
+
+const FreeForAll: FreeForAllMode = new FreeForAllMode();
+const GameModes: readonly GameMode[] = [new PayloadMode(), FreeForAll];
+let GActiveMode: GameMode = FreeForAll;
 
 // Main ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -80,13 +86,13 @@ function Tick(): void
 		{
 			Definition.TickWorldLate(Now, DeltaTime);
 		}
+		GActiveMode.Tick(Now, DeltaTime);
 		TickHealthKits(Now);
 
 		TickClassMenuKey();
 		TickPlayerHud();
 		TickNoBuying();
 		TickBotClasses();
-		TickBots(Now);
 	}
 	catch (Exception: unknown)
 	{
@@ -96,11 +102,13 @@ function Tick(): void
 
 function BeginPlay(): void
 {
+	SelectGameMode();
 	Instance.OnPlayerChat(HandlePlayerChat);
 	Instance.OnPlayerReset(HandlePlayerReset);
 	Instance.OnPlayerKill(HandlePlayerKill);
 	Instance.OnPlayerDisconnect(HandlePlayerDisconnect);
 	Instance.OnRoundStart(HandleRoundStart);
+	Instance.OnRoundEnd(HandleRoundEnd);
 	Instance.OnGunFire(HandleGunFire);
 	Instance.OnWeaponPickup(HandleWeaponPickup);
 	Instance.OnWeaponDrop(HandleWeaponDrop);
@@ -154,7 +162,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 	}
 
 	ClearPlayer(Slot);
-	ResetBotMode(Slot);
+	GActiveMode.OnPlayerSpawn(Pawn, Slot);
 	AssignRandomBotClass(Pawn, Slot);
 	const bHadClass: boolean = GClassBySlot.has(Slot);
 	ApplyPendingClass(Slot);
@@ -194,7 +202,10 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 {
 	ClearPlayer(Event.playerSlot);
-	ForgetBot(Event.playerSlot);
+	for (const Mode of GameModes)
+	{
+		Mode.OnPlayerLeave(Event.playerSlot);
+	}
 	ResetDamageNumbers(Event.playerSlot);
 	ResetClassUi(Event.playerSlot);
 	GClassBySlot.delete(Event.playerSlot);
@@ -209,8 +220,15 @@ function HandleRoundStart(): void
 	}
 	ClearDecals();
 	ResetHealthKits();
+	SelectGameMode();
+	GActiveMode.OnRoundStart();
 	ApplyMatchSettings();
-	Instance.Msg(`${LogPrefix} match settings applied`);
+	Instance.Msg(`${LogPrefix} match settings applied (${GActiveMode.DisplayName})`);
+}
+
+function HandleRoundEnd(): void
+{
+	GActiveMode.OnRoundEnd();
 }
 
 function HandleGunFire(Event: FGunFireEvent): void
@@ -286,6 +304,12 @@ function HandleCustomHudClicked(Event: FCustomHudClickedEvent): void
 
 function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResult
 {
+	// Forced deaths (a game mode ending the round) skip every damage rule, uber included
+	if ((Event.damageFlags & CSDamageFlags.FORCE_DEATH) !== 0)
+	{
+		return;
+	}
+
 	for (const Definition of Object.values(ClassDefinitions))
 	{
 		const Result: FModifyDamageResult = Definition.ModifyAnyDamage(Event);
@@ -326,21 +350,37 @@ let GLastThinkTime: number = 0;
 
 // Match //////////////////////////////////////////////////////////////////////////////////////////
 
+// Plays the first mode in GameModes the map is set up for, and takes its friendly fire rule
+function SelectGameMode(): void
+{
+	const Mode: GameMode = GameModes.find((Candidate: GameMode): boolean =>
+	{
+		return Candidate.IsMapSetUp();
+	}) ?? FreeForAll;
+
+	if (Mode !== GActiveMode)
+	{
+		GActiveMode.OnDeactivated();
+		GActiveMode = Mode;
+		Mode.OnActivated();
+		Instance.Msg(`${LogPrefix} game mode: ${Mode.DisplayName}`);
+	}
+	SetFriendlyFire(Mode.IsFriendlyFire());
+}
+
 function ApplyMatchSettings(): void
 {
 	const Commands: string[] = [];
 
-	// Both teams can hurt each other at full damage, with no team-kill penalties
-	Commands.push(`mp_teammates_are_enemies ${bFriendlyFire ? 1 : 0}`, `mp_friendlyfire ${bFriendlyFire ? 1 : 0}`);
+	Commands.push(`mp_teammates_are_enemies ${IsFriendlyFire() ? 1 : 0}`, `mp_friendlyfire ${IsFriendlyFire() ? 1 : 0}`);
 
 	if (bDebug)
 	{
 		Commands.push("mp_do_warmup_period 0", "mp_warmuptime 0", "mp_freezetime 0");
-		Commands.push("mp_roundtime 60", "mp_roundtime_defuse 60", "mp_roundtime_hostage 60");
-		Commands.push("mp_ignore_round_win_conditions 1", "mp_respawn_on_death_t 1", "mp_respawn_on_death_ct 1");
 		Commands.push("sv_infinite_ammo 1");
-		Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any", "bot_stop 1");
+		Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any");
 	}
+	Commands.push(...GActiveMode.GetMatchCommands());
 
 	for (const Command of Commands)
 	{
@@ -499,6 +539,7 @@ function TickPlayerHud(): void
 			ShowHealth(Slot, Pawn);
 			ShowAmmo(Slot, GetLauncherAmmo(Pawn, Slot));
 			ShowCounter(Slot, PlayerClass !== undefined ? ClassDefinitions[PlayerClass].GetHudCounter(Slot) : undefined);
+			GActiveMode.TickPlayerHud(Pawn, Slot);
 		}
 	});
 }

@@ -1,6 +1,6 @@
 import { Instance, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult } from "cs_script/point_script";
-import { bDebug, bFriendlyFire, LogPrefix, UpVector, ZeroVector, FVectorMath, FRotationMath, IsPlayerPawn, IsModelEntity, GetChestPosition, SpawnTemplateEntities, ForEachLivePawn } from "./bm_core";
+import { bDebug, IsFriendlyFire, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, GetChestPosition, SpawnTemplateEntities, ForEachLivePawn } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
 
@@ -69,9 +69,9 @@ const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };   // ground traces start 
 
 export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: number, GravityScale: number, TemplateName: string): FProjectile
 {
-	const Direction: FVector = FVectorMath.GetForwardVector(Owner.GetEyeAngles());
-	const Start: FVector = FVectorMath.Add(Owner.GetEyePosition(), ProjectileLaunchOffset);
-	const Velocity: FVector = FVectorMath.Add(FVectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed });
+	const Direction: FVector = VectorMath.GetForwardVector(Owner.GetEyeAngles());
+	const Start: FVector = VectorMath.Add(Owner.GetEyePosition(), ProjectileLaunchOffset);
+	const Velocity: FVector = VectorMath.Add(VectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed });
 	const Projectile: FProjectile =
 	{
 		Owner: Owner,
@@ -89,7 +89,7 @@ export function MoveProjectile(Projectile: FProjectile, DeltaTime: number, bHitP
 {
 	const Velocity: FVector = Projectile.Velocity;
 	Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
-	const NextPosition: FVector = FVectorMath.Add(Projectile.Position, FVectorMath.Scale(Projectile.Velocity, DeltaTime));
+	const NextPosition: FVector = VectorMath.Add(Projectile.Position, VectorMath.Scale(Projectile.Velocity, DeltaTime));
 	const IgnoredEntities: Entity[] = [Projectile.Owner];
 	for (const Model of Projectile.Models)
 	{
@@ -108,7 +108,7 @@ export function MoveProjectile(Projectile: FProjectile, DeltaTime: number, bHitP
 
 	if (Trace.didHit)
 	{
-		Projectile.Position = FVectorMath.Add(Trace.end, FVectorMath.Scale(Trace.normal, 2));
+		Projectile.Position = VectorMath.Add(Trace.end, VectorMath.Scale(Trace.normal, 2));
 	}
 	else
 	{
@@ -150,7 +150,7 @@ function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjec
 	const Models: FProjectileModel[] = [];
 	for (const Ent of SpawnTemplateEntities(TemplateName, Position, undefined))
 	{
-		Models.push({ Ent: Ent, LocalRotation: FRotationMath.FromRotator(Ent.GetAbsAngles()) });
+		Models.push({ Ent: Ent, LocalRotation: RotationMath.FromRotator(Ent.GetAbsAngles()) });
 	}
 	return Models;
 }
@@ -159,14 +159,14 @@ function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjec
 // template (a trail, a model) comes along. Move once it's flying, so it glides smoothly for players; Teleport to place it at launch.
 function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): void
 {
-	const Flight: FRotationMatrix = FRotationMath.FromRotator(FVectorMath.GetRotation(Projectile.Velocity));
+	const Flight: FRotationMatrix = RotationMath.FromRotator(VectorMath.GetRotation(Projectile.Velocity));
 	for (const Model of Projectile.Models)
 	{
 		if (!Model.Ent.IsValid() || Model.Ent.GetParent() !== undefined)
 		{
 			continue;
 		}
-		const Angles: FRotator = FRotationMath.ToRotator(FRotationMath.Multiply(Flight, Model.LocalRotation));
+		const Angles: FRotator = RotationMath.ToRotator(RotationMath.Multiply(Flight, Model.LocalRotation));
 		if (bTeleport)
 		{
 			Model.Ent.Teleport({ position: Projectile.Position, angles: Angles });
@@ -180,7 +180,7 @@ function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): voi
 
 export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined): void
 {
-	const Origin: FVector = FVectorMath.Add(Position, ExplosionOffset);
+	const Origin: FVector = VectorMath.Add(Position, ExplosionOffset);
 
 	if (!SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime))
 	{
@@ -195,8 +195,8 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 	ForEachLivePawn((Victim: CSPlayerPawn): void =>
 	{
 		const Target: FVector = GetChestPosition(Victim);
-		const Offset: FVector = FVectorMath.Subtract(Target, Origin);
-		const Distance: number = FVectorMath.Size(Offset);
+		const Offset: FVector = VectorMath.Subtract(Target, Origin);
+		const Distance: number = VectorMath.Size(Offset);
 		if (Distance > Radius)
 		{
 			return;
@@ -209,7 +209,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		}
 
 		const bIsSelf: boolean = Victim === Attacker;
-		if (!bIsSelf && !bFriendlyFire && Victim.GetTeamNumber() === Attacker.GetTeamNumber())
+		if (!bIsSelf && !IsFriendlyFire() && Victim.GetTeamNumber() === Attacker.GetTeamNumber())
 		{
 			return;
 		}
@@ -234,8 +234,8 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 			SpawnBloodSplatter(Origin, Victim);
 		}
 
-		const PushDirection: FVector = FVectorMath.GetSafeNormal(Push);
-		Instance.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${FVectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
+		const PushDirection: FVector = VectorMath.GetSafeNormal(Push);
+		Instance.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
 	});
 }
 
@@ -283,7 +283,7 @@ function GetRangeDamageScale(Attacker: CSPlayerPawn, Victim: CSPlayerPawn, Fallo
 	{
 		return 1;
 	}
-	const Distance: number = FVectorMath.Size(FVectorMath.Subtract(GetChestPosition(Victim), GetChestPosition(Attacker)));
+	const Distance: number = VectorMath.Size(VectorMath.Subtract(GetChestPosition(Victim), GetChestPosition(Attacker)));
 	return GetDistanceDamageScale(Distance, Falloff);
 }
 
@@ -310,7 +310,7 @@ export function TraceHitscan(Shooter: CSPlayerPawn, Start: FVector, End: FVector
 			break;
 		}
 		Ignored.push(Victim);
-		if (!Victim.IsAlive() || (!bFriendlyFire && Victim.GetTeamNumber() === Shooter.GetTeamNumber()))
+		if (!Victim.IsAlive() || (!IsFriendlyFire() && Victim.GetTeamNumber() === Shooter.GetTeamNumber()))
 		{
 			continue;
 		}
@@ -327,7 +327,7 @@ export function GetSpreadDirection(Aim: FRotator, SpreadDegrees: number): FVecto
 {
 	const Radius: number = SpreadDegrees * Math.sqrt(Math.random());
 	const Around: number = Math.random() * Math.PI * 2;
-	return FVectorMath.GetForwardVector(
+	return VectorMath.GetForwardVector(
 	{
 		pitch: Aim.pitch + Radius * Math.sin(Around),
 		yaw: Aim.yaw + Radius * Math.cos(Around),
@@ -340,10 +340,10 @@ export function ApplyKnockback(Victim: CSPlayerPawn, Direction: FVector, Damage:
 	const bOnGround: boolean = Victim.GetGroundEntity() !== undefined;
 	const bCrouched: boolean = Victim.IsDucking() || Victim.IsDucked();
 
-	let Push: FVector = FVectorMath.GetSafeNormal(Direction);
+	let Push: FVector = VectorMath.GetSafeNormal(Direction);
 	if (bOnGround)
 	{
-		Push = FVectorMath.GetSafeNormal(FVectorMath.Add(Push, GroundedKnockbackLift));
+		Push = VectorMath.GetSafeNormal(VectorMath.Add(Push, GroundedKnockbackLift));
 	}
 
 	let Scale: number = Strength;
@@ -357,8 +357,8 @@ export function ApplyKnockback(Victim: CSPlayerPawn, Direction: FVector, Damage:
 	{
 		return ZeroVector;
 	}
-	const Velocity: FVector = FVectorMath.Scale(Push, Speed);
-	Victim.Teleport({ velocity: FVectorMath.Add(Victim.GetAbsVelocity(), Velocity) });
+	const Velocity: FVector = VectorMath.Scale(Push, Speed);
+	Victim.Teleport({ velocity: VectorMath.Add(Victim.GetAbsVelocity(), Velocity) });
 	return Velocity;
 }
 
@@ -368,11 +368,11 @@ export function GetHeightAboveGround(Pawn: CSPlayerPawn, MaxDistance: number): n
 	{
 		return 0;
 	}
-	const Start: FVector = FVectorMath.Add(Pawn.GetAbsOrigin(), GroundTraceLift);
+	const Start: FVector = VectorMath.Add(Pawn.GetAbsOrigin(), GroundTraceLift);
 	const Trace: TraceResult = Instance.TraceLine(
 	{
 		start: Start,
-		end: FVectorMath.Add(Start, { x: 0, y: 0, z: -(MaxDistance + GroundTraceLift.z) }),
+		end: VectorMath.Add(Start, { x: 0, y: 0, z: -(MaxDistance + GroundTraceLift.z) }),
 		ignorePlayers: true,
 	});
 	if (!Trace.didHit)
@@ -397,7 +397,7 @@ export function ApplyBulletFalloff(Event: FModifyDamageEvent, Falloff: FDamageFa
 	}
 
 	// CS2 already scaled the damage by RangeModifier ^ (distance / 500), so undo that first
-	const BulletTravel: number = FVectorMath.Size(FVectorMath.Subtract(GetChestPosition(Event.player), Attacker.GetEyePosition()));
+	const BulletTravel: number = VectorMath.Size(VectorMath.Subtract(GetChestPosition(Event.player), Attacker.GetEyePosition()));
 	const CsRangeScale: number = Math.pow(Weapon.GetData().GetRangeModifier(), BulletTravel / 500);
 	const RangeScale: number = GetRangeDamageScale(Attacker, Event.player, Falloff);
 	const Damage: number = Math.max(1, Math.round((Event.damage / CsRangeScale) * RangeScale));

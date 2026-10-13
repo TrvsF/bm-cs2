@@ -4,6 +4,7 @@ import { LogPrefix, ForEachLivePawn } from "./bm_core";
 import { EPlayerClass, ClassDefinitions } from "./bm_classes";
 import type { FHudCounter } from "./bm_classes";
 import type { FLauncherAmmo } from "./bm_launcher";
+import type { FPayloadStatus } from "./bm_payload";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,6 +36,13 @@ const FireBarId: string = "FireBar";
 const BarSteps: number = 24;
 const BarCharacter: string = "0";
 const HiddenBar: number = -1;
+const PayloadBarId: string = "PayloadBar";
+const PayloadSectionPrefix: string = "PayloadSection";
+const PayloadTickPrefix: string = "PayloadTick";
+const PayloadPushersLabelId: string = "PayloadPushers";
+const PayloadBarSteps: number = 60;
+const MaxPayloadTicks: number = 5;
+const PayloadStateClasses: readonly string[] = ["Pushing", "Blocked", "RollingBack", "Overtime", "Delivered"];
 const HurtHealthFraction: number = 0.5;
 const CriticalHealthFraction: number = 0.25;
 
@@ -46,6 +54,7 @@ const GShownAmmo: Map<number, string> = new Map<number, string>();
 const GShownHealth: Map<number, string> = new Map<number, string>();
 const GShownBars: Map<number, Map<string, number>> = new Map<number, Map<string, number>>();
 const GShownCounter: Map<number, string> = new Map<number, string>();
+const GSentPayload: Map<number, Map<string, string>> = new Map<number, Map<string, string>>();
 let GbWarnedNoClassUi: boolean = false;
 
 // Menu ////////////////////////////////////////////////////////////////////////////////////////////
@@ -255,6 +264,96 @@ export function ShowCounter(Slot: number, Counter: FHudCounter | undefined): voi
 	Ui.SetHasClassForPlayer(Slot, CounterPanelId, "Shown", true);
 }
 
+export function ShowPayload(Slot: number, Status: FPayloadStatus | undefined): void
+{
+	const Ui: CustomHudLayout | undefined = FindClassUi();
+	if (!Ui)
+	{
+		return;
+	}
+	let Sent: Map<string, string> | undefined = GSentPayload.get(Slot);
+	if (!Sent)
+	{
+		Sent = new Map<string, string>();
+		GSentPayload.set(Slot, Sent);
+	}
+	if (!Status)
+	{
+		SetPayloadClass(Ui, Slot, Sent, PayloadBarId, "Shown", false);
+		return;
+	}
+
+	const Boundaries: number[] = [0, ...Status.CheckpointFractions.slice(0, MaxPayloadTicks), 1];
+	const Filled: number = Math.floor(Math.min(1, Math.max(0, Status.Progress)) * PayloadBarSteps);
+	for (let Section: number = 0; Section <= MaxPayloadTicks; Section++)
+	{
+		const bUsed: boolean = Section < Boundaries.length - 1;
+		const Start: number = bUsed ? Math.round((Boundaries[Section] ?? 1) * PayloadBarSteps) : PayloadBarSteps;
+		const End: number = bUsed ? Math.round((Boundaries[Section + 1] ?? 1) * PayloadBarSteps) : PayloadBarSteps;
+		const Fill: number = Math.min(Math.max(Filled - Start, 0), End - Start);
+		SendPayloadText(Ui, Slot, Sent, `${PayloadSectionPrefix}${Section}Fill`, "fill", BarCharacter.repeat(Fill));
+		SendPayloadText(Ui, Slot, Sent, `${PayloadSectionPrefix}${Section}Empty`, "empty", BarCharacter.repeat(End - Start - Fill));
+	}
+	for (let Tick: number = 1; Tick <= MaxPayloadTicks; Tick++)
+	{
+		SetPayloadClass(Ui, Slot, Sent, `${PayloadTickPrefix}${Tick}`, "Shown", Tick < Boundaries.length - 1);
+		SetPayloadClass(Ui, Slot, Sent, `${PayloadTickPrefix}${Tick}`, "Reached", Tick <= Status.CheckpointsReached);
+	}
+
+	const State: string = GetPayloadState(Status);
+	for (const StateClass of PayloadStateClasses)
+	{
+		SetPayloadClass(Ui, Slot, Sent, PayloadBarId, StateClass, StateClass === State);
+	}
+	SendPayloadText(Ui, Slot, Sent, PayloadPushersLabelId, "pushers", State === "Pushing" ? `x${Status.Pushers}` : "");
+	SetPayloadClass(Ui, Slot, Sent, PayloadBarId, "Shown", true);
+}
+
+function GetPayloadState(Status: FPayloadStatus): string
+{
+	if (Status.bDelivered)
+	{
+		return "Delivered";
+	}
+	if (Status.bOvertime)
+	{
+		return "Overtime";
+	}
+	if (Status.bBlocked)
+	{
+		return "Blocked";
+	}
+	if (Status.Pushers > 0)
+	{
+		return "Pushing";
+	}
+	return Status.bRollingBack ? "RollingBack" : "";
+}
+
+// The payload bar is a lot of small pieces, so each is only sent when it changes
+function SendPayloadText(Ui: CustomHudLayout, Slot: number, Sent: Map<string, string>, LabelId: string, VariableName: string, Text: string): void
+{
+	const Key: string = `${LabelId}|${VariableName}`;
+	if (Sent.get(Key) === Text)
+	{
+		return;
+	}
+	Sent.set(Key, Text);
+	Ui.SetDialogVariableStringForPlayer(Slot, LabelId, VariableName, Text);
+}
+
+function SetPayloadClass(Ui: CustomHudLayout, Slot: number, Sent: Map<string, string>, PanelId: string, ClassName: string, bHasClass: boolean): void
+{
+	const Key: string = `${PanelId}.${ClassName}`;
+	const Value: string = bHasClass ? "1" : "0";
+	if ((Sent.get(Key) ?? "0") === Value)
+	{
+		return;
+	}
+	Sent.set(Key, Value);
+	Ui.SetHasClassForPlayer(Slot, PanelId, ClassName, bHasClass);
+}
+
 export function ShowHealth(Slot: number, Pawn: CSPlayerPawn | undefined): void
 {
 	const Health: number = Pawn ? Pawn.GetHealth() : 0;
@@ -293,6 +392,7 @@ export function ResetClassUi(Slot: number): void
 	GShownHealth.delete(Slot);
 	GShownBars.delete(Slot);
 	GShownCounter.delete(Slot);
+	GSentPayload.delete(Slot);
 	const Ui: CustomHudLayout | undefined = FindClassUi();
 	if (!Ui)
 	{

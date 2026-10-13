@@ -1,6 +1,6 @@
 import { Instance } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { FVectorMath, UpVector, IsPointTemplate, GetChestPosition, SetTimer } from "./bm_core";
+import { VectorMath, UpVector, IsPointTemplate, GetChestPosition, SetTimer } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,11 +27,11 @@ export function SpawnScorchMark(Position: FVector): void
 export function SpawnBloodSplatter(ExplosionOrigin: FVector, Victim: CSPlayerPawn): void
 {
 	const Chest: FVector = GetChestPosition(Victim);
-	const Away: FVector = FVectorMath.GetSafeNormal(FVectorMath.Subtract(Chest, ExplosionOrigin));
+	const Away: FVector = VectorMath.GetSafeNormal(VectorMath.Subtract(Chest, ExplosionOrigin));
 	const Behind: TraceResult = Instance.TraceLine(
 	{
 		start: Chest,
-		end: FVectorMath.Add(Chest, FVectorMath.Scale(Away, BloodSplatterDistance)),
+		end: VectorMath.Add(Chest, VectorMath.Scale(Away, BloodSplatterDistance)),
 		ignorePlayers: true,
 	});
 	if (Behind.didHit && !Behind.startedInSolid)
@@ -43,7 +43,7 @@ export function SpawnBloodSplatter(ExplosionOrigin: FVector, Victim: CSPlayerPaw
 	const Below: TraceResult = Instance.TraceLine(
 	{
 		start: Chest,
-		end: FVectorMath.Add(Chest, FVectorMath.Scale(UpVector, -BloodSplatterDistance)),
+		end: VectorMath.Add(Chest, VectorMath.Scale(UpVector, -BloodSplatterDistance)),
 		ignorePlayers: true,
 	});
 	if (Below.didHit && !Below.startedInSolid)
@@ -81,7 +81,7 @@ export function SpawnBeam(TemplateName: string, EndMarkerName: string, Start: FV
 		return;
 	}
 
-	const Spawned: Entity[] | undefined = Template.ForceSpawn(Start, FVectorMath.GetRotation(FVectorMath.Subtract(End, Start)));
+	const Spawned: Entity[] | undefined = Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start)));
 	if (!Spawned || Spawned.length === 0)
 	{
 		return;
@@ -116,7 +116,7 @@ function SpawnDecal(TemplateName: string, Position: FVector, SurfaceNormal: FVec
 		return;
 	}
 
-	const Rotation: FRotator = FVectorMath.GetRotation(FVectorMath.Scale(SurfaceNormal, -1), Math.random() * 360);
+	const Rotation: FRotator = VectorMath.GetRotation(VectorMath.Scale(SurfaceNormal, -1), Math.random() * 360);
 	const Spawned: Entity[] | undefined = Template.ForceSpawn(Position, Rotation);
 	if (!Spawned || Spawned.length === 0)
 	{
@@ -152,7 +152,7 @@ function FindNearbySurface(Position: FVector, MaxDistance: number): TraceResult 
 		const Trace: TraceResult = Instance.TraceLine(
 		{
 			start: Position,
-			end: FVectorMath.Add(Position, FVectorMath.Scale(Direction, MaxDistance)),
+			end: VectorMath.Add(Position, VectorMath.Scale(Direction, MaxDistance)),
 			ignorePlayers: true,
 		});
 		if (Trace.didHit && !Trace.startedInSolid && (!Closest || Trace.fraction < Closest.fraction))

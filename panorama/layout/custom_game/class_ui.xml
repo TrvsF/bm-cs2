@@ -15,6 +15,28 @@
 			</Panel>
 		</Panel>
 
+		<Panel id="PayloadBar" class="PayloadBar" hittest="false">
+			<Panel class="PayloadSide" hittest="false" />
+			<Label id="PayloadSection0Fill" class="PayloadFill" text="{s:fill}" hittest="false" />
+			<Label id="PayloadSection0Empty" class="PayloadEmpty" text="{s:empty}" hittest="false" />
+			<Panel id="PayloadTick1" class="PayloadTick" hittest="false" />
+			<Label id="PayloadSection1Fill" class="PayloadFill" text="{s:fill}" hittest="false" />
+			<Label id="PayloadSection1Empty" class="PayloadEmpty" text="{s:empty}" hittest="false" />
+			<Panel id="PayloadTick2" class="PayloadTick" hittest="false" />
+			<Label id="PayloadSection2Fill" class="PayloadFill" text="{s:fill}" hittest="false" />
+			<Label id="PayloadSection2Empty" class="PayloadEmpty" text="{s:empty}" hittest="false" />
+			<Panel id="PayloadTick3" class="PayloadTick" hittest="false" />
+			<Label id="PayloadSection3Fill" class="PayloadFill" text="{s:fill}" hittest="false" />
+			<Label id="PayloadSection3Empty" class="PayloadEmpty" text="{s:empty}" hittest="false" />
+			<Panel id="PayloadTick4" class="PayloadTick" hittest="false" />
+			<Label id="PayloadSection4Fill" class="PayloadFill" text="{s:fill}" hittest="false" />
+			<Label id="PayloadSection4Empty" class="PayloadEmpty" text="{s:empty}" hittest="false" />
+			<Panel id="PayloadTick5" class="PayloadTick" hittest="false" />
+			<Label id="PayloadSection5Fill" class="PayloadFill" text="{s:fill}" hittest="false" />
+			<Label id="PayloadSection5Empty" class="PayloadEmpty" text="{s:empty}" hittest="false" />
+			<Label id="PayloadPushers" class="PayloadPushers" text="{s:pushers}" hittest="false" />
+		</Panel>
+
 		<Panel id="BottomBar" class="BottomBar" hittest="false">
 
 			<Panel id="ClassIndicator" class="ClassIndicator" hittest="false">

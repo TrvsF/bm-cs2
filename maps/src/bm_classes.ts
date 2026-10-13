@@ -1,6 +1,6 @@
 import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSDamageFlags, CSWeaponType, CSHitGroup } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
-import { bDebug, bFriendlyFire, TickInterval, LogPrefix, FVectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
+import { bDebug, TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { LaunchProjectile, MoveProjectile, DestroyProjectile, TintProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
 import type { FProjectile, FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
@@ -374,7 +374,7 @@ function StripGearSlots(Pawn: CSPlayerPawn, GearSlots: readonly CSGearSlot[]): v
 
 // Classes /////////////////////////////////////////////////////////////////////////////////////////
 
-abstract class UPlayerClass<TSettings extends FClassSettings>
+abstract class PlayerClass<TSettings extends FClassSettings>
 {
 	public readonly Settings: TSettings;
 
@@ -488,7 +488,7 @@ abstract class UPlayerClass<TSettings extends FClassSettings>
 
 // Soldier /////////////////////////////////////////////////////////////////////////////////////////
 
-class USoldierClass extends UPlayerClass<FSoliderSettings>
+class SoldierClass extends PlayerClass<FSoliderSettings>
 {
 	private Rockets: FRocket[] = [];
 
@@ -545,7 +545,7 @@ class USoldierClass extends UPlayerClass<FSoliderSettings>
 
 // Demoman /////////////////////////////////////////////////////////////////////////////////////////
 
-class UDemomanClass extends UPlayerClass<FDemoSettings>
+class DemomanClass extends PlayerClass<FDemoSettings>
 {
 	private PlayerStates: Map<number, FDemoPlayerState> = new Map<number, FDemoPlayerState>();
 	private Pipes: FPipe[] = [];
@@ -713,7 +713,7 @@ class UDemomanClass extends UPlayerClass<FDemoSettings>
 
 // Medic ///////////////////////////////////////////////////////////////////////////////////////////
 
-class UMedicClass extends UPlayerClass<FMedicSettings>
+class MedicClass extends PlayerClass<FMedicSettings>
 {
 	private PlayerStates: Map<number, FMedicPlayerState> = new Map<number, FMedicPlayerState>();
 	private DecayAccumulators: Map<number, number> = new Map<number, number>();   // overheal decay, for any player
@@ -786,7 +786,7 @@ class UMedicClass extends UPlayerClass<FMedicSettings>
 			// Placeholder beam (tools mode only). Swap for an env_beam for real servers.
 			Instance.DebugLine(
 			{
-				start: FVectorMath.Subtract(Pawn.GetEyePosition(), BeamStartDrop),
+				start: VectorMath.Subtract(Pawn.GetEyePosition(), BeamStartDrop),
 				end: GetChestPosition(Target),
 				duration: TickInterval * 2,
 				color: GetTeamColor(Pawn),
@@ -880,7 +880,7 @@ class UMedicClass extends UPlayerClass<FMedicSettings>
 		}
 		const EyePosition: FVector = Medic.GetEyePosition();
 		const TargetChest: FVector = GetChestPosition(Target);
-		if (FVectorMath.Size(FVectorMath.Subtract(TargetChest, EyePosition)) > this.Settings.BreakRange)
+		if (VectorMath.Size(VectorMath.Subtract(TargetChest, EyePosition)) > this.Settings.BreakRange)
 		{
 			return false;
 		}
@@ -890,8 +890,8 @@ class UMedicClass extends UPlayerClass<FMedicSettings>
 	private AcquireHealTarget(Medic: CSPlayerPawn): CSPlayerPawn | undefined
 	{
 		const EyePosition: FVector = Medic.GetEyePosition();
-		const Forward: FVector = FVectorMath.GetForwardVector(Medic.GetEyeAngles());
-		const End: FVector = FVectorMath.Add(EyePosition, FVectorMath.Scale(Forward, this.Settings.Range));
+		const Forward: FVector = VectorMath.GetForwardVector(Medic.GetEyeAngles());
+		const End: FVector = VectorMath.Add(EyePosition, VectorMath.Scale(Forward, this.Settings.Range));
 		const HitEntity: Entity | undefined = Instance.TraceSphere({ start: EyePosition, end: End, radius: 12, ignoreEntity: Medic }).hitEntity;
 		if (IsPlayerPawn(HitEntity) && HitEntity.IsAlive() && HitEntity.GetTeamNumber() === Medic.GetTeamNumber())
 		{
@@ -946,7 +946,7 @@ class UMedicClass extends UPlayerClass<FMedicSettings>
 
 // Railer //////////////////////////////////////////////////////////////////////////////////////////
 
-class URailerClass extends UPlayerClass<FRailerSettings>
+class RailerClass extends PlayerClass<FRailerSettings>
 {
 	constructor()
 	{
@@ -969,7 +969,7 @@ function FireBeamWeapon(Shooter: CSPlayerPawn, Settings: FBeamWeaponSettings, We
 	const Start: FVector = Shooter.GetEyePosition();
 	const Direction: FVector = GetSpreadDirection(Shooter.GetEyeAngles(), Settings.Spread);
 	const MaxHits: number = Settings.bPierces ? MaxBeamHits : 1;
-	const Result: FHitscanResult = TraceHitscan(Shooter, Start, FVectorMath.Add(Start, FVectorMath.Scale(Direction, Settings.Range)), MaxHits);
+	const Result: FHitscanResult = TraceHitscan(Shooter, Start, VectorMath.Add(Start, VectorMath.Scale(Direction, Settings.Range)), MaxHits);
 
 	for (const Hit of Result.Hits)
 	{
@@ -985,9 +985,9 @@ function FireBeamWeapon(Shooter: CSPlayerPawn, Settings: FBeamWeaponSettings, We
 		}
 	}
 
-	ApplyKnockback(Shooter, FVectorMath.Scale(Direction, -1), Settings.Damage, Settings.SelfKnockback, true);
+	ApplyKnockback(Shooter, VectorMath.Scale(Direction, -1), Settings.Damage, Settings.SelfKnockback, true);
 
-	SpawnBeam(Settings.BeamTemplate, Settings.BeamEndName, FVectorMath.Subtract(Start, BeamStartDrop), Result.End, Settings.BeamLifetime, GetTeamColor(Shooter));
+	SpawnBeam(Settings.BeamTemplate, Settings.BeamEndName, VectorMath.Subtract(Start, BeamStartDrop), Result.End, Settings.BeamLifetime, GetTeamColor(Shooter));
 	if (Settings.ImpactTemplate !== "")
 	{
 		SpawnTemporaryTemplate(Settings.ImpactTemplate, Result.End, Settings.ImpactLifetime);
@@ -996,7 +996,7 @@ function FireBeamWeapon(Shooter: CSPlayerPawn, Settings: FBeamWeaponSettings, We
 
 function GetHitDistance(Hit: FHitscanHit, Start: FVector): number
 {
-	return FVectorMath.Size(FVectorMath.Subtract(Hit.Trace.end, Start));
+	return VectorMath.Size(VectorMath.Subtract(Hit.Trace.end, Start));
 }
 
 function DealShockDamage(Shooter: CSPlayerPawn, Victim: CSPlayerPawn, Damage: number, Weapon: CSWeaponBase | undefined): number
@@ -1014,12 +1014,12 @@ function DealShockDamage(Shooter: CSPlayerPawn, Victim: CSPlayerPawn, Damage: nu
 
 // Common //////////////////////////////////////////////////////////////////////////////////////////
 
-export const ClassDefinitions: Readonly<Record<EPlayableClass, UPlayerClass<FClassSettings>>> =
+export const ClassDefinitions: Readonly<Record<EPlayableClass, PlayerClass<FClassSettings>>> =
 {
-	[EPlayerClass.Demoman]: new UDemomanClass(),
-	[EPlayerClass.Solider]: new USoldierClass(),
-	[EPlayerClass.Medic]: new UMedicClass(),
-	[EPlayerClass.Railer]: new URailerClass(),
+	[EPlayerClass.Demoman]: new DemomanClass(),
+	[EPlayerClass.Solider]: new SoldierClass(),
+	[EPlayerClass.Medic]: new MedicClass(),
+	[EPlayerClass.Railer]: new RailerClass(),
 };
 
 export function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void

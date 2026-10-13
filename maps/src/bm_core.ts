@@ -14,7 +14,6 @@ import type
 } from "cs_script/point_script";
 
 export const bDebug: boolean = true;
-export const bFriendlyFire: boolean = true;
 export const TickInterval: number = 1 / 64;
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +39,7 @@ export type FCustomHudClickedEvent = TEventOf<typeof Instance.OnCustomHudClicked
 export type FModifyDamageEvent = TEventOf<typeof Instance.OnModifyPlayerDamage>;
 export type FModifyDamageResult = ReturnType<Parameters<typeof Instance.OnModifyPlayerDamage>[0]>;
 
-enum ETeam
+export enum ETeam
 {
 	Unassigned = 0,
 	Spectator = 1,
@@ -68,6 +67,7 @@ const TerroristColor: FColor = { r: 220, g: 60, b: 50 };
 const CounterTerroristColor: FColor = { r: 70, g: 130, b: 230 };
 
 const GPendingTimers: FPendingTimer[] = [];
+let GbFriendlyFire: boolean = false;
 
 // Timers //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,9 +89,21 @@ export function TickTimers(Now: number): void
 	}
 }
 
+// Game rules //////////////////////////////////////////////////////////////////////////////////////
+
+export function SetFriendlyFire(bFriendlyFire: boolean): void
+{
+	GbFriendlyFire = bFriendlyFire;
+}
+
+export function IsFriendlyFire(): boolean
+{
+	return GbFriendlyFire;
+}
+
 // Util ///////////////////////////////////////////////////////////////////////////////////////////
 
-export abstract class FVectorMath
+export abstract class VectorMath
 {
 	public static Add(A: FVector, B: FVector): FVector
 	{
@@ -126,10 +138,9 @@ export abstract class FVectorMath
 		return { x: Math.cos(Pitch) * Math.cos(Yaw), y: Math.cos(Pitch) * Math.sin(Yaw), z: -Math.sin(Pitch) };
 	}
 
-	// The rotation whose forward vector points along Direction (the inverse of GetForwardVector)
 	public static GetRotation(Direction: FVector, Roll: number = 0): FRotator
 	{
-		const Normal: FVector = FVectorMath.GetSafeNormal(Direction);
+		const Normal: FVector = VectorMath.GetSafeNormal(Direction);
 		const Pitch: number = (-Math.asin(Math.max(-1, Math.min(1, Normal.z))) * 180) / Math.PI;
 		const Yaw: number = (Math.atan2(Normal.y, Normal.x) * 180) / Math.PI;
 		return { pitch: Pitch, yaw: Yaw, roll: Roll };
@@ -143,7 +154,7 @@ export interface FRotationMatrix
 	readonly Up: FVector;
 }
 
-export class FRotationMath
+export class RotationMath
 {
 	public static FromRotator(Rotation: FRotator): FRotationMatrix
 	{
@@ -195,13 +206,27 @@ export class FRotationMath
 		return Result;
 	}
 
+	public static Inverse(Matrix: FRotationMatrix): FRotationMatrix
+	{
+		const F: FVector = Matrix.Forward;
+		const L: FVector = Matrix.Left;
+		const U: FVector = Matrix.Up;
+		const Result: FRotationMatrix =
+		{
+			Forward: { x: F.x, y: L.x, z: U.x },
+			Left: { x: F.y, y: L.y, z: U.y },
+			Up: { x: F.z, y: L.z, z: U.z },
+		};
+		return Result;
+	}
+
 	public static Multiply(A: FRotationMatrix, B: FRotationMatrix): FRotationMatrix
 	{
 		const Result: FRotationMatrix =
 		{
-			Forward: FRotationMath.RotateVector(A, B.Forward),
-			Left: FRotationMath.RotateVector(A, B.Left),
-			Up: FRotationMath.RotateVector(A, B.Up),
+			Forward: RotationMath.RotateVector(A, B.Forward),
+			Left: RotationMath.RotateVector(A, B.Left),
+			Up: RotationMath.RotateVector(A, B.Up),
 		};
 		return Result;
 	}
@@ -226,7 +251,7 @@ export function IsPointTemplate(Ent: Entity | undefined): Ent is PointTemplate
 
 export function GetChestPosition(Pawn: CSPlayerPawn): FVector
 {
-	return FVectorMath.Add(Pawn.GetAbsOrigin(), ChestOffset);
+	return VectorMath.Add(Pawn.GetAbsOrigin(), ChestOffset);
 }
 
 export function GetTeamColor(Ent: Entity): FColor
