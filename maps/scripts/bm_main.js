@@ -3,7 +3,7 @@ import { Instance as Instance11, CSDamageTypes as CSDamageTypes3, CSDamageFlags 
 
 // src/bm_core.ts
 import { Instance } from "cs_script/point_script";
-var bDebug = true;
+var bDebug = false;
 var TickInterval = 1 / 64;
 var INDEX_NONE = -1;
 var LogPrefix = "[BM]";
