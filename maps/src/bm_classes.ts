@@ -1,10 +1,11 @@
 import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSDamageFlags, CSWeaponType, CSHitGroup } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
 import { bDebug, TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
-import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
+import type { FVector, FRotator, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DestroyProjectile, TintProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
 import type { FProjectile, FBouncingProjectile, FBounceSettings, FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
-import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
+import { SpawnBloodSplatter, SpawnBeam, SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam, SpawnTemporaryTemplate } from "./bm_effects";
+import type { FHeldBeam } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
 import type { FLauncherSettings } from "./bm_launcher";
 
@@ -17,6 +18,7 @@ export enum EPlayerClass
 	Solider = "soldier",
 	Medic = "medic",
 	Railer = "railer",
+	Beamer = "beamer",
 }
 
 export type EPlayableClass = Exclude<EPlayerClass, EPlayerClass.None>;
@@ -95,11 +97,13 @@ export interface FBeamWeaponSettings
 	readonly HeadshotMultiplier: number;
 	readonly Range: number;
 	readonly Spread: number;
+	readonly Pellets: number;
 	readonly bPierces: boolean;
 	readonly Falloff: FDamageCurve;
 	readonly Knockback: number;
 	readonly SelfKnockback: number;
 	readonly bBloodSplatter: boolean;
+	readonly bHeldBeam: boolean;
 	readonly BeamTemplate: string;
 	readonly BeamEndName: string;
 	readonly BeamLifetime: number;
@@ -111,6 +115,12 @@ export interface FRailerSettings extends FClassSettings
 {
 	readonly PPsh: FBeamWeaponSettings;
 	readonly Railgun: FBeamWeaponSettings;
+}
+
+export interface FBeamerSettings extends FClassSettings
+{
+	readonly EnergyBeam: FBeamWeaponSettings;
+	readonly Shotgun: FBeamWeaponSettings;
 }
 
 export interface FRocket extends FProjectile
@@ -132,6 +142,12 @@ interface FDemoPlayerState
 {
 	Stickies: FStickyBomb[];
 	bDetonateHeld: boolean;
+}
+
+interface FBeamerPlayerState
+{
+	Beam: FHeldBeam | undefined;
+	LastBeamTime: number;
 }
 
 interface FMedicPlayerState
@@ -160,6 +176,20 @@ const RailerBeamFalloff: FDamageCurve =
 	{ Distance: 0, Scale: 1.0 },
 	{ Distance: 1024, Scale: 1.0 },
 	{ Distance: 3072, Scale: 0.5 },
+];
+
+const BeamerBeamFalloff: FDamageCurve =
+[
+	{ Distance: 0, Scale: 1.0 },
+	{ Distance: 512, Scale: 0.5 },
+	{ Distance: 1200, Scale: 0.2 },
+];
+
+const BeamerShotgunFalloff: FDamageCurve =
+[
+	{ Distance: 0, Scale: 1.0 },
+	{ Distance: 256, Scale: 1.0 },
+	{ Distance: 1024, Scale: 0.3 },
 ];
 
 export const SoldierSettings: FSoliderSettings =
@@ -232,7 +262,7 @@ export const DemoSettings: FDemoSettings =
 	PipeLaunchSpeed: 1337,
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
-	PipeDamage: 33,
+	PipeDamage: 75,
 	PipeRolledDamageScale: 0.6,
 	PipeKnockback: 1000,
 	PipeFalloff: TF2RocketFalloff,
@@ -302,11 +332,13 @@ export const RailerSettings: FRailerSettings =
 		HeadshotMultiplier: 1,
 		Range: 4096,
 		Spread: 2,
+		Pellets: 1,
 		bPierces: false,
 		Falloff: RailerShotFalloff,
 		Knockback: 400,
 		SelfKnockback: 200,
 		bBloodSplatter: false,
+		bHeldBeam: false,
 		BeamTemplate: "rail_tracer_template",
 		BeamEndName: "rail_tracer_end",
 		BeamLifetime: 0.06,
@@ -320,16 +352,88 @@ export const RailerSettings: FRailerSettings =
 		HeadshotMultiplier: 1.5,
 		Range: 8192,
 		Spread: 0,
+		Pellets: 1,
 		bPierces: true,
 		Falloff: RailerBeamFalloff,
 		Knockback: 333,
 		SelfKnockback: 333,
 		bBloodSplatter: true,
+		bHeldBeam: false,
 		BeamTemplate: "rail_beam_template",
 		BeamEndName: "rail_beam_end",
 		BeamLifetime: 0.4,
 		ImpactTemplate: "rail_impact_template",
 		ImpactLifetime: 2,
+	},
+};
+
+export const BeamerSettings: FBeamerSettings =
+{
+	DisplayName: "Beamer",
+	Primary: "weapon_negev",
+	Secondary: "weapon_elite",
+	Melee: "",
+	Health: 200,
+	SizeScale: 1.4,
+	PrimaryLauncher:
+	{
+		FireInterval: 0.05,
+		ClipSize: 100,
+		ReloadFirstTime: 2.5,
+		ReloadEachTime: 0,
+		ChargeTime: 0,
+		FireFxTemplate: "",
+		ReloadFxTemplate: "beamer_beam_reload_template",
+	},
+	SecondaryLauncher:
+	{
+		FireInterval: 0.3,
+		ClipSize: 2,
+		ReloadFirstTime: 1.4,
+		ReloadEachTime: 0,
+		ChargeTime: 0,
+		FireFxTemplate: "beamer_shot_fire_template",
+		ReloadFxTemplate: "beamer_shot_reload_template",
+	},
+
+	EnergyBeam:
+	{
+		Damage: 5,
+		HeadshotMultiplier: 1,
+		Range: 2048,
+		Spread: 0,
+		Pellets: 1,
+		bPierces: false,
+		Falloff: BeamerBeamFalloff,
+		Knockback: 0,
+		SelfKnockback: 0,
+		bBloodSplatter: false,
+		bHeldBeam: true,
+		BeamTemplate: "beamer_beam_template",
+		BeamEndName: "beamer_beam_end",
+		BeamLifetime: 0,
+		ImpactTemplate: "",
+		ImpactLifetime: 0,
+	},
+
+	Shotgun:
+	{
+		Damage: 10,
+		HeadshotMultiplier: 1,
+		Range: 2048,
+		Spread: 6,
+		Pellets: 10,
+		bPierces: false,
+		Falloff: BeamerShotgunFalloff,
+		Knockback: 600,
+		SelfKnockback: 200,
+		bBloodSplatter: false,
+		bHeldBeam: false,
+		BeamTemplate: "beamer_shot_tracer_template",
+		BeamEndName: "beamer_shot_tracer_end",
+		BeamLifetime: 0.06,
+		ImpactTemplate: "",
+		ImpactLifetime: 0,
 	},
 };
 
@@ -990,34 +1094,47 @@ class RailerClass extends PlayerClass<FRailerSettings>
 	}
 }
 
+// Fires one shot: each pellet is its own hitscan ray, and the shooter is pushed back once for the whole shot
 function FireBeamWeapon(Shooter: CSPlayerPawn, Settings: FBeamWeaponSettings, Weapon: CSWeaponBase | undefined): void
 {
 	const Start: FVector = Shooter.GetEyePosition();
-	const Direction: FVector = GetSpreadDirection(Shooter.GetEyeAngles(), Settings.Spread);
-	const MaxHits: number = Settings.bPierces ? MaxBeamHits : 1;
-	const Result: FHitscanResult = TraceHitscan(Shooter, Start, VectorMath.Add(Start, VectorMath.Scale(Direction, Settings.Range)), MaxHits);
-
-	for (const Hit of Result.Hits)
+	const Aim: FRotator = Shooter.GetEyeAngles();
+	for (let Pellet: number = 0; Pellet < Settings.Pellets; Pellet++)
 	{
-		const Distance: number = GetHitDistance(Hit, Start);
-		const RangeScale: number = EvaluateDamageCurve(Settings.Falloff, Distance);
-		const bHeadshot: boolean = Hit.Trace.hitGroup === CSHitGroup.HEAD;
-		const Damage: number = Settings.Damage * RangeScale * (bHeadshot ? Settings.HeadshotMultiplier : 1);
-
-		ApplyKnockback(Hit.Victim, Direction, Damage, Settings.Knockback, false);
-		if (DealShockDamage(Shooter, Hit.Victim, Damage, Weapon) > 0 && Settings.bBloodSplatter)
+		const Direction: FVector = GetSpreadDirection(Aim, Settings.Spread);
+		const Result: FHitscanResult = TraceBeamWeapon(Shooter, Settings, Start, Direction);
+		for (const Hit of Result.Hits)
 		{
-			SpawnBloodSplatter(Start, Hit.Victim);
+			const Distance: number = GetHitDistance(Hit, Start);
+			const RangeScale: number = EvaluateDamageCurve(Settings.Falloff, Distance);
+			const bHeadshot: boolean = Hit.Trace.hitGroup === CSHitGroup.HEAD;
+			const Damage: number = Settings.Damage * RangeScale * (bHeadshot ? Settings.HeadshotMultiplier : 1);
+
+			ApplyKnockback(Hit.Victim, Direction, Damage, Settings.Knockback, false);
+			if (DealShockDamage(Shooter, Hit.Victim, Damage, Weapon) > 0 && Settings.bBloodSplatter)
+			{
+				SpawnBloodSplatter(Start, Hit.Victim);
+			}
+		}
+
+		if (!Settings.bHeldBeam)
+		{
+			SpawnBeam(Settings.BeamTemplate, Settings.BeamEndName, VectorMath.Subtract(Start, BeamStartDrop), Result.End, Settings.BeamLifetime, GetTeamColor(Shooter));
+		}
+		if (Settings.ImpactTemplate !== "")
+		{
+			SpawnTemporaryTemplate(Settings.ImpactTemplate, Result.End, Settings.ImpactLifetime);
 		}
 	}
 
-	ApplyKnockback(Shooter, VectorMath.Scale(Direction, -1), Settings.Damage, Settings.SelfKnockback, true);
+	const Backwards: FVector = VectorMath.Scale(VectorMath.GetForwardVector(Aim), -1);
+	ApplyKnockback(Shooter, Backwards, Settings.Damage * Settings.Pellets, Settings.SelfKnockback, true);
+}
 
-	SpawnBeam(Settings.BeamTemplate, Settings.BeamEndName, VectorMath.Subtract(Start, BeamStartDrop), Result.End, Settings.BeamLifetime, GetTeamColor(Shooter));
-	if (Settings.ImpactTemplate !== "")
-	{
-		SpawnTemporaryTemplate(Settings.ImpactTemplate, Result.End, Settings.ImpactLifetime);
-	}
+function TraceBeamWeapon(Shooter: CSPlayerPawn, Settings: FBeamWeaponSettings, Start: FVector, Direction: FVector): FHitscanResult
+{
+	const MaxHits: number = Settings.bPierces ? MaxBeamHits : 1;
+	return TraceHitscan(Shooter, Start, VectorMath.Add(Start, VectorMath.Scale(Direction, Settings.Range)), MaxHits);
 }
 
 function GetHitDistance(Hit: FHitscanHit, Start: FVector): number
@@ -1038,6 +1155,101 @@ function DealShockDamage(Shooter: CSPlayerPawn, Victim: CSPlayerPawn, Damage: nu
 	});
 }
 
+// Beamer //////////////////////////////////////////////////////////////////////////////////////////
+
+class BeamerClass extends PlayerClass<FBeamerSettings>
+{
+	private PlayerStates: Map<number, FBeamerPlayerState> = new Map<number, FBeamerPlayerState>();
+
+	constructor()
+	{
+		super(BeamerSettings);
+	}
+
+	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	{
+		FireBeamWeapon(Pawn, this.Settings.EnergyBeam, Pawn.FindWeapon(this.Settings.Primary));
+		this.GetPlayerState(Slot).LastBeamTime = Now;
+	}
+
+	public override OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	{
+		FireBeamWeapon(Pawn, this.Settings.Shotgun, Pawn.FindWeapon(this.Settings.Secondary));
+	}
+
+	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
+	{
+		const State: FBeamerPlayerState | undefined = this.PlayerStates.get(Slot);
+		if (!State)
+		{
+			return;
+		}
+		if (!this.IsBeamOn(Pawn, State, Now))
+		{
+			this.StopBeam(State);
+			return;
+		}
+
+		const Beam: FBeamWeaponSettings = this.Settings.EnergyBeam;
+		const Start: FVector = Pawn.GetEyePosition();
+		const End: FVector = TraceBeamWeapon(Pawn, Beam, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
+		const BeamStart: FVector = VectorMath.Subtract(Start, BeamStartDrop);
+		if (State.Beam)
+		{
+			MoveHeldBeam(State.Beam, BeamStart, End);
+		}
+		else
+		{
+			State.Beam = SpawnHeldBeam(Beam.BeamTemplate, Beam.BeamEndName, BeamStart, End, GetTeamColor(Pawn));
+		}
+	}
+
+	public override OnRoundStart(): void
+	{
+		for (const Slot of this.PlayerStates.keys())
+		{
+			this.ClearPlayer(Slot);
+		}
+	}
+
+	public override ClearPlayer(Slot: number): void
+	{
+		const State: FBeamerPlayerState | undefined = this.PlayerStates.get(Slot);
+		if (State)
+		{
+			this.StopBeam(State);
+			this.PlayerStates.delete(Slot);
+		}
+	}
+
+	private GetPlayerState(Slot: number): FBeamerPlayerState
+	{
+		let State: FBeamerPlayerState | undefined = this.PlayerStates.get(Slot);
+		if (!State)
+		{
+			State = { Beam: undefined, LastBeamTime: 0 };
+			this.PlayerStates.set(Slot, State);
+		}
+		return State;
+	}
+
+	private IsBeamOn(Pawn: CSPlayerPawn, State: FBeamerPlayerState, Now: number): boolean
+	{
+		const FireInterval: number = this.Settings.PrimaryLauncher ? this.Settings.PrimaryLauncher.FireInterval : 0;
+		const bStillFiring: boolean = Now - State.LastBeamTime <= FireInterval + TickInterval * 1.5;
+		return bStillFiring && Pawn.IsInputPressed(CSInputs.ATTACK) && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Primary);
+	}
+
+	private StopBeam(State: FBeamerPlayerState): void
+	{
+		if (State.Beam)
+		{
+			RemoveHeldBeam(State.Beam);
+			State.Beam = undefined;
+		}
+	}
+}
+
 // Common //////////////////////////////////////////////////////////////////////////////////////////
 
 export const ClassDefinitions: Readonly<Record<EPlayableClass, PlayerClass<FClassSettings>>> =
@@ -1046,6 +1258,7 @@ export const ClassDefinitions: Readonly<Record<EPlayableClass, PlayerClass<FClas
 	[EPlayerClass.Solider]: new SoldierClass(),
 	[EPlayerClass.Medic]: new MedicClass(),
 	[EPlayerClass.Railer]: new RailerClass(),
+	[EPlayerClass.Beamer]: new BeamerClass(),
 };
 
 export function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void

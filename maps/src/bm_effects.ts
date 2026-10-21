@@ -1,7 +1,16 @@
 import { Instance } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { VectorMath, UpVector, IsPointTemplate, GetChestPosition, SetTimer } from "./bm_core";
+import { TickInterval, VectorMath, UpVector, IsPointTemplate, GetChestPosition, SetTimer } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";
+
+// Types ///////////////////////////////////////////////////////////////////////////////////////////
+
+export interface FHeldBeam
+{
+	readonly Entities: Entity[];
+	readonly EndMarkerName: string;
+	readonly FallbackColor: FColor;
+}
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,6 +106,57 @@ export function SpawnBeam(TemplateName: string, EndMarkerName: string, Start: FV
 	{
 		RemoveEntities(Spawned);
 	});
+}
+
+export function SpawnHeldBeam(TemplateName: string, EndMarkerName: string, Start: FVector, End: FVector, FallbackColor: FColor): FHeldBeam
+{
+	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
+	const Entities: Entity[] = IsPointTemplate(Template) ? Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start))) ?? [] : [];
+	const Beam: FHeldBeam = { Entities: Entities, EndMarkerName: EndMarkerName, FallbackColor: FallbackColor };
+	PlaceHeldBeam(Beam, Start, End, true);
+	return Beam;
+}
+
+export function MoveHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector): void
+{
+	PlaceHeldBeam(Beam, Start, End, false);
+}
+
+export function RemoveHeldBeam(Beam: FHeldBeam): void
+{
+	RemoveEntities(Beam.Entities);
+}
+
+function PlaceHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector, bTeleport: boolean): void
+{
+	if (Beam.Entities.length === 0)
+	{
+		Instance.DebugLine({ start: Start, end: End, duration: TickInterval * 2, color: Beam.FallbackColor });
+		return;
+	}
+
+	const Angles: FRotator = VectorMath.GetRotation(VectorMath.Subtract(End, Start));
+	for (const Ent of Beam.Entities)
+	{
+		if (!Ent.IsValid())
+		{
+			continue;
+		}
+		const bEndMarker: boolean = Ent.GetEntityName().startsWith(Beam.EndMarkerName);
+		if (!bEndMarker && Ent.GetParent() !== undefined)
+		{
+			continue;
+		}
+		const Placement: { position: FVector, angles?: FRotator } = bEndMarker ? { position: End } : { position: Start, angles: Angles };
+		if (bTeleport)
+		{
+			Ent.Teleport(Placement);
+		}
+		else
+		{
+			Ent.Move(Placement);
+		}
+	}
 }
 
 export function ClearDecals(): void

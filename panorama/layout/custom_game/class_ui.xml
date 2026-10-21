@@ -38,7 +38,6 @@
 		</Panel>
 
 		<Panel id="BottomBar" class="BottomBar" hittest="false">
-
 			<Panel id="ClassIndicator" class="ClassIndicator" hittest="false">
 				<Label id="ClassName" class="ClassName" text="{s:classname}" hittest="false" />
 				<Label class="ClassHint" text="E : Switch" hittest="false" />
@@ -65,8 +64,6 @@
 					<Label id="CounterMax" class="CounterMax" text="{s:countermax}" hittest="false" />
 				</Panel>
 			</Panel>
-
-
 		</Panel>
 
 		<Panel id="ClassMenu" class="ClassMenu">
@@ -88,8 +85,12 @@
 					<Label class="ClassButtonName" text="Railer" hittest="false" />
 					<Label class="ClassButtonInfo" text="Chargin ur Lazor" hittest="false" />
 				</Button>
-
+				<Button id="Pick_beamer" class="ClassButton BeamerButton">
+					<Label class="ClassButtonName" text="Beamer" hittest="false" />
+					<Label class="ClassButtonInfo" text="Beam &amp; Boomstick" hittest="false" />
+				</Button>
 			</Panel>
+			
 			<Panel class="MenuFooter">
 				<Button id="Pick_none" class="FooterButton">
 					<Label class="FooterButtonText" text="No class" hittest="false" />

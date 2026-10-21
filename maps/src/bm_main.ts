@@ -38,6 +38,7 @@ const ClassChatCommands: ReadonlyMap<string, EPlayerClass> = new Map<string, EPl
 		["!medic", EPlayerClass.Medic],
 		["!solider", EPlayerClass.Solider],
 		["!railer", EPlayerClass.Railer],
+		["!beamer", EPlayerClass.Beamer],
 		["!none", EPlayerClass.None],
 	]
 );

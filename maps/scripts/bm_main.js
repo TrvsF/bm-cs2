@@ -260,6 +260,41 @@ function SpawnBeam(TemplateName, EndMarkerName, Start, End, Lifetime, FallbackCo
     RemoveEntities(Spawned);
   });
 }
+function SpawnHeldBeam(TemplateName, EndMarkerName, Start, End, FallbackColor) {
+  const Template = Instance2.FindEntityByName(TemplateName);
+  const Entities = IsPointTemplate(Template) ? Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start))) ?? [] : [];
+  const Beam = { Entities, EndMarkerName, FallbackColor };
+  PlaceHeldBeam(Beam, Start, End, true);
+  return Beam;
+}
+function MoveHeldBeam(Beam, Start, End) {
+  PlaceHeldBeam(Beam, Start, End, false);
+}
+function RemoveHeldBeam(Beam) {
+  RemoveEntities(Beam.Entities);
+}
+function PlaceHeldBeam(Beam, Start, End, bTeleport) {
+  if (Beam.Entities.length === 0) {
+    Instance2.DebugLine({ start: Start, end: End, duration: TickInterval * 2, color: Beam.FallbackColor });
+    return;
+  }
+  const Angles = VectorMath.GetRotation(VectorMath.Subtract(End, Start));
+  for (const Ent of Beam.Entities) {
+    if (!Ent.IsValid()) {
+      continue;
+    }
+    const bEndMarker = Ent.GetEntityName().startsWith(Beam.EndMarkerName);
+    if (!bEndMarker && Ent.GetParent() !== void 0) {
+      continue;
+    }
+    const Placement = bEndMarker ? { position: End } : { position: Start, angles: Angles };
+    if (bTeleport) {
+      Ent.Teleport(Placement);
+    } else {
+      Ent.Move(Placement);
+    }
+  }
+}
 function ClearDecals() {
   for (const Decal of GDecals) {
     RemoveEntities(Decal);
@@ -834,6 +869,7 @@ var EPlayerClass = /* @__PURE__ */ ((EPlayerClass2) => {
   EPlayerClass2["Solider"] = "soldier";
   EPlayerClass2["Medic"] = "medic";
   EPlayerClass2["Railer"] = "railer";
+  EPlayerClass2["Beamer"] = "beamer";
   return EPlayerClass2;
 })(EPlayerClass || {});
 var TF2HitscanFalloff = { RampUp: 1.5, FallOff: 0.5, OptimalDistance: 512 };
@@ -848,6 +884,16 @@ var RailerBeamFalloff = [
   { Distance: 0, Scale: 1 },
   { Distance: 1024, Scale: 1 },
   { Distance: 3072, Scale: 0.5 }
+];
+var BeamerBeamFalloff = [
+  { Distance: 0, Scale: 1 },
+  { Distance: 512, Scale: 0.5 },
+  { Distance: 1200, Scale: 0.2 }
+];
+var BeamerShotgunFalloff = [
+  { Distance: 0, Scale: 1 },
+  { Distance: 256, Scale: 1 },
+  { Distance: 1024, Scale: 0.3 }
 ];
 var SoldierSettings = {
   DisplayName: "Soldier",
@@ -911,7 +957,7 @@ var DemoSettings = {
   PipeLaunchSpeed: 1337,
   PipeLaunchUp: 150,
   PipeRadius: 160,
-  PipeDamage: 33,
+  PipeDamage: 75,
   PipeRolledDamageScale: 0.6,
   PipeKnockback: 1e3,
   PipeFalloff: TF2RocketFalloff,
@@ -971,11 +1017,13 @@ var RailerSettings = {
     HeadshotMultiplier: 1,
     Range: 4096,
     Spread: 2,
+    Pellets: 1,
     bPierces: false,
     Falloff: RailerShotFalloff,
     Knockback: 400,
     SelfKnockback: 200,
     bBloodSplatter: false,
+    bHeldBeam: false,
     BeamTemplate: "rail_tracer_template",
     BeamEndName: "rail_tracer_end",
     BeamLifetime: 0.06,
@@ -987,16 +1035,80 @@ var RailerSettings = {
     HeadshotMultiplier: 1.5,
     Range: 8192,
     Spread: 0,
+    Pellets: 1,
     bPierces: true,
     Falloff: RailerBeamFalloff,
     Knockback: 333,
     SelfKnockback: 333,
     bBloodSplatter: true,
+    bHeldBeam: false,
     BeamTemplate: "rail_beam_template",
     BeamEndName: "rail_beam_end",
     BeamLifetime: 0.4,
     ImpactTemplate: "rail_impact_template",
     ImpactLifetime: 2
+  }
+};
+var BeamerSettings = {
+  DisplayName: "Beamer",
+  Primary: "weapon_negev",
+  Secondary: "weapon_elite",
+  Melee: "",
+  Health: 200,
+  SizeScale: 1.4,
+  PrimaryLauncher: {
+    FireInterval: 0.05,
+    ClipSize: 100,
+    ReloadFirstTime: 2.5,
+    ReloadEachTime: 0,
+    ChargeTime: 0,
+    FireFxTemplate: "",
+    ReloadFxTemplate: "beamer_beam_reload_template"
+  },
+  SecondaryLauncher: {
+    FireInterval: 0.3,
+    ClipSize: 2,
+    ReloadFirstTime: 1.4,
+    ReloadEachTime: 0,
+    ChargeTime: 0,
+    FireFxTemplate: "beamer_shot_fire_template",
+    ReloadFxTemplate: "beamer_shot_reload_template"
+  },
+  EnergyBeam: {
+    Damage: 5,
+    HeadshotMultiplier: 1,
+    Range: 2048,
+    Spread: 0,
+    Pellets: 1,
+    bPierces: false,
+    Falloff: BeamerBeamFalloff,
+    Knockback: 0,
+    SelfKnockback: 0,
+    bBloodSplatter: false,
+    bHeldBeam: true,
+    BeamTemplate: "beamer_beam_template",
+    BeamEndName: "beamer_beam_end",
+    BeamLifetime: 0,
+    ImpactTemplate: "",
+    ImpactLifetime: 0
+  },
+  Shotgun: {
+    Damage: 10,
+    HeadshotMultiplier: 1,
+    Range: 2048,
+    Spread: 6,
+    Pellets: 10,
+    bPierces: false,
+    Falloff: BeamerShotgunFalloff,
+    Knockback: 600,
+    SelfKnockback: 200,
+    bBloodSplatter: false,
+    bHeldBeam: false,
+    BeamTemplate: "beamer_shot_tracer_template",
+    BeamEndName: "beamer_shot_tracer_end",
+    BeamLifetime: 0.06,
+    ImpactTemplate: "",
+    ImpactLifetime: 0
   }
 };
 var PlayableClasses = Object.values(EPlayerClass).filter((PlayerClass2) => {
@@ -1452,24 +1564,33 @@ var RailerClass = class extends PlayerClass {
 };
 function FireBeamWeapon(Shooter, Settings, Weapon) {
   const Start = Shooter.GetEyePosition();
-  const Direction = GetSpreadDirection(Shooter.GetEyeAngles(), Settings.Spread);
-  const MaxHits = Settings.bPierces ? MaxBeamHits : 1;
-  const Result = TraceHitscan(Shooter, Start, VectorMath.Add(Start, VectorMath.Scale(Direction, Settings.Range)), MaxHits);
-  for (const Hit of Result.Hits) {
-    const Distance = GetHitDistance(Hit, Start);
-    const RangeScale = EvaluateDamageCurve(Settings.Falloff, Distance);
-    const bHeadshot = Hit.Trace.hitGroup === CSHitGroup.HEAD;
-    const Damage = Settings.Damage * RangeScale * (bHeadshot ? Settings.HeadshotMultiplier : 1);
-    ApplyKnockback(Hit.Victim, Direction, Damage, Settings.Knockback, false);
-    if (DealShockDamage(Shooter, Hit.Victim, Damage, Weapon) > 0 && Settings.bBloodSplatter) {
-      SpawnBloodSplatter(Start, Hit.Victim);
+  const Aim = Shooter.GetEyeAngles();
+  for (let Pellet = 0; Pellet < Settings.Pellets; Pellet++) {
+    const Direction = GetSpreadDirection(Aim, Settings.Spread);
+    const Result = TraceBeamWeapon(Shooter, Settings, Start, Direction);
+    for (const Hit of Result.Hits) {
+      const Distance = GetHitDistance(Hit, Start);
+      const RangeScale = EvaluateDamageCurve(Settings.Falloff, Distance);
+      const bHeadshot = Hit.Trace.hitGroup === CSHitGroup.HEAD;
+      const Damage = Settings.Damage * RangeScale * (bHeadshot ? Settings.HeadshotMultiplier : 1);
+      ApplyKnockback(Hit.Victim, Direction, Damage, Settings.Knockback, false);
+      if (DealShockDamage(Shooter, Hit.Victim, Damage, Weapon) > 0 && Settings.bBloodSplatter) {
+        SpawnBloodSplatter(Start, Hit.Victim);
+      }
+    }
+    if (!Settings.bHeldBeam) {
+      SpawnBeam(Settings.BeamTemplate, Settings.BeamEndName, VectorMath.Subtract(Start, BeamStartDrop), Result.End, Settings.BeamLifetime, GetTeamColor(Shooter));
+    }
+    if (Settings.ImpactTemplate !== "") {
+      SpawnTemporaryTemplate(Settings.ImpactTemplate, Result.End, Settings.ImpactLifetime);
     }
   }
-  ApplyKnockback(Shooter, VectorMath.Scale(Direction, -1), Settings.Damage, Settings.SelfKnockback, true);
-  SpawnBeam(Settings.BeamTemplate, Settings.BeamEndName, VectorMath.Subtract(Start, BeamStartDrop), Result.End, Settings.BeamLifetime, GetTeamColor(Shooter));
-  if (Settings.ImpactTemplate !== "") {
-    SpawnTemporaryTemplate(Settings.ImpactTemplate, Result.End, Settings.ImpactLifetime);
-  }
+  const Backwards = VectorMath.Scale(VectorMath.GetForwardVector(Aim), -1);
+  ApplyKnockback(Shooter, Backwards, Settings.Damage * Settings.Pellets, Settings.SelfKnockback, true);
+}
+function TraceBeamWeapon(Shooter, Settings, Start, Direction) {
+  const MaxHits = Settings.bPierces ? MaxBeamHits : 1;
+  return TraceHitscan(Shooter, Start, VectorMath.Add(Start, VectorMath.Scale(Direction, Settings.Range)), MaxHits);
 }
 function GetHitDistance(Hit, Start) {
   return VectorMath.Size(VectorMath.Subtract(Hit.Trace.end, Start));
@@ -1486,11 +1607,75 @@ function DealShockDamage(Shooter, Victim, Damage, Weapon) {
     }
   );
 }
+var BeamerClass = class extends PlayerClass {
+  PlayerStates = /* @__PURE__ */ new Map();
+  constructor() {
+    super(BeamerSettings);
+  }
+  OnPrimaryFire(Pawn, Slot, Now) {
+    FireBeamWeapon(Pawn, this.Settings.EnergyBeam, Pawn.FindWeapon(this.Settings.Primary));
+    this.GetPlayerState(Slot).LastBeamTime = Now;
+  }
+  OnSecondaryFire(Pawn, Slot, Now) {
+    FireBeamWeapon(Pawn, this.Settings.Shotgun, Pawn.FindWeapon(this.Settings.Secondary));
+  }
+  TickPlayer(Pawn, Slot, Now, DeltaTime) {
+    const State = this.PlayerStates.get(Slot);
+    if (!State) {
+      return;
+    }
+    if (!this.IsBeamOn(Pawn, State, Now)) {
+      this.StopBeam(State);
+      return;
+    }
+    const Beam = this.Settings.EnergyBeam;
+    const Start = Pawn.GetEyePosition();
+    const End = TraceBeamWeapon(Pawn, Beam, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
+    const BeamStart = VectorMath.Subtract(Start, BeamStartDrop);
+    if (State.Beam) {
+      MoveHeldBeam(State.Beam, BeamStart, End);
+    } else {
+      State.Beam = SpawnHeldBeam(Beam.BeamTemplate, Beam.BeamEndName, BeamStart, End, GetTeamColor(Pawn));
+    }
+  }
+  OnRoundStart() {
+    for (const Slot of this.PlayerStates.keys()) {
+      this.ClearPlayer(Slot);
+    }
+  }
+  ClearPlayer(Slot) {
+    const State = this.PlayerStates.get(Slot);
+    if (State) {
+      this.StopBeam(State);
+      this.PlayerStates.delete(Slot);
+    }
+  }
+  GetPlayerState(Slot) {
+    let State = this.PlayerStates.get(Slot);
+    if (!State) {
+      State = { Beam: void 0, LastBeamTime: 0 };
+      this.PlayerStates.set(Slot, State);
+    }
+    return State;
+  }
+  IsBeamOn(Pawn, State, Now) {
+    const FireInterval = this.Settings.PrimaryLauncher ? this.Settings.PrimaryLauncher.FireInterval : 0;
+    const bStillFiring = Now - State.LastBeamTime <= FireInterval + TickInterval * 1.5;
+    return bStillFiring && Pawn.IsInputPressed(CSInputs2.ATTACK) && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Primary);
+  }
+  StopBeam(State) {
+    if (State.Beam) {
+      RemoveHeldBeam(State.Beam);
+      State.Beam = void 0;
+    }
+  }
+};
 var ClassDefinitions = {
   ["demo" /* Demoman */]: new DemomanClass(),
   ["soldier" /* Solider */]: new SoldierClass(),
   ["medic" /* Medic */]: new MedicClass(),
-  ["railer" /* Railer */]: new RailerClass()
+  ["railer" /* Railer */]: new RailerClass(),
+  ["beamer" /* Beamer */]: new BeamerClass()
 };
 function GiveLoadout(Pawn, PlayerClass2) {
   ClassDefinitions[PlayerClass2].ApplyLoadout(Pawn);
@@ -2648,6 +2833,7 @@ var ClassChatCommands = /* @__PURE__ */ new Map(
     ["!medic", "medic" /* Medic */],
     ["!solider", "soldier" /* Solider */],
     ["!railer", "railer" /* Railer */],
+    ["!beamer", "beamer" /* Beamer */],
     ["!none", "none" /* None */]
   ]
 );

@@ -286,6 +286,16 @@
 	color: #ee5a5a;
 }
 
+.BeamerButton .ClassButtonName
+{
+	color: #b07cff;
+}
+ 
+.RailerButton .ClassButtonName
+{
+	color: #7fd4ff;
+}
+
 .ClassButtonInfo
 {
 	width: 100%;
@@ -398,12 +408,6 @@
 .ChargeBar .BarFill
 {
 	background-color: #7fd4ff;
-}
-
- 
-.RailerButton .ClassButtonName
-{
-	color: #7fd4ff;
 }
 
 .CounterPanel
