@@ -22,6 +22,20 @@ export interface FProjectileModel
 	readonly LocalRotation: FRotationMatrix;
 }
 
+export interface FBouncingProjectile extends FProjectile
+{
+	bTouchedWorld: boolean;
+	GroundNormal: FVector | undefined;
+}
+
+export interface FBounceSettings
+{
+	readonly Restitution: number;
+	readonly ImpactFriction: number;
+	readonly RollFriction: number;
+	readonly SettleSpeed: number;
+}
+
 export interface FDamageFalloff
 {
 	readonly RampUp: number;
@@ -64,6 +78,10 @@ const SelfBlastDamageScale: number = 0.33;
 const ExplosionDebugColor: FColor = { r: 255, g: 140, b: 0 };
 const MaxHitscanTraces: number = 8;
 const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };
+const SurfaceGap: number = 2;
+const MinGroundNormalZ: number = 0.7;
+const GroundProbeDistance: number = 8;
+const MinFacingSpeed: number = 1;
 
 // Projectile //////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,7 +107,121 @@ export function MoveProjectile(Projectile: FProjectile, DeltaTime: number, bHitP
 {
 	const Velocity: FVector = Projectile.Velocity;
 	Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
+	const Hit: TraceResult | undefined = SweepProjectile(Projectile, DeltaTime, bHitPlayers);
+	PlaceProjectileModels(Projectile, false);
+	return Hit;
+}
+
+export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): CSPlayerPawn | undefined
+{
+	if (Projectile.GroundNormal)
+	{
+		return RollProjectile(Projectile, Projectile.GroundNormal, DeltaTime, bHitPlayers, Bounce);
+	}
+
+	const Hit: TraceResult | undefined = MoveProjectile(Projectile, DeltaTime, bHitPlayers);
+	if (!Hit)
+	{
+		return undefined;
+	}
+	if (IsPlayerPawn(Hit.hitEntity))
+	{
+		return Hit.hitEntity;
+	}
+	BounceProjectile(Projectile, Hit.normal, Bounce);
+	return undefined;
+}
+
+function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): CSPlayerPawn | undefined
+{
+	const Pull: FVector = { x: 0, y: 0, z: -Gravity * Projectile.GravityScale * DeltaTime };
+	const Rolling: FVector = VectorMath.ProjectOnPlane(VectorMath.Add(Projectile.Velocity, Pull), Ground);
+	const Speed: number = VectorMath.Size(Rolling);
+	const SlowedSpeed: number = Math.max(0, Speed - Bounce.RollFriction * DeltaTime);
+	Projectile.Velocity = Speed > 0 ? VectorMath.Scale(Rolling, SlowedSpeed / Speed) : ZeroVector;
+
+	const Hit: TraceResult | undefined = SlowedSpeed > 0 ? SweepProjectile(Projectile, DeltaTime, bHitPlayers) : undefined;
+	if (Hit && IsPlayerPawn(Hit.hitEntity))
+	{
+		PlaceProjectileModels(Projectile, false);
+		return Hit.hitEntity;
+	}
+	if (Hit)
+	{
+		BounceProjectile(Projectile, Hit.normal, Bounce);
+	}
+	FollowGround(Projectile);
+	PlaceProjectileModels(Projectile, false);
+	return undefined;
+}
+
+function BounceProjectile(Projectile: FBouncingProjectile, Normal: FVector, Bounce: FBounceSettings): void
+{
+	Projectile.bTouchedWorld = true;
+	const IntoSpeed: number = -VectorMath.Dot(Projectile.Velocity, Normal);
+	if (IntoSpeed <= 0)
+	{
+		return;
+	}
+
+	const Along: FVector = VectorMath.Scale(VectorMath.ProjectOnPlane(Projectile.Velocity, Normal), 1 - Bounce.ImpactFriction);
+	const OutSpeed: number = IntoSpeed * Bounce.Restitution;
+	if (Normal.z >= MinGroundNormalZ && OutSpeed < Bounce.SettleSpeed)
+	{
+		Projectile.GroundNormal = Normal;
+		Projectile.Velocity = Along;
+		return;
+	}
+	Projectile.Velocity = VectorMath.Add(Along, VectorMath.Scale(Normal, OutSpeed));
+}
+
+function FollowGround(Projectile: FBouncingProjectile): void
+{
+	if (!Projectile.GroundNormal)
+	{
+		return;
+	}
+	const Trace: TraceResult = Instance.TraceLine(
+	{
+		start: Projectile.Position,
+		end: VectorMath.Add(Projectile.Position, { x: 0, y: 0, z: -(SurfaceGap + GroundProbeDistance) }),
+		ignoreEntity: GetIgnoredEntities(Projectile),
+		ignorePlayers: true,
+	});
+	if (!Trace.didHit || Trace.normal.z < MinGroundNormalZ)
+	{
+		Projectile.GroundNormal = undefined;
+		return;
+	}
+	Projectile.Position = VectorMath.Add(Trace.end, VectorMath.Scale(Trace.normal, SurfaceGap));
+	Projectile.GroundNormal = Trace.normal;
+	Projectile.Velocity = VectorMath.ProjectOnPlane(Projectile.Velocity, Trace.normal);
+}
+
+function SweepProjectile(Projectile: FProjectile, DeltaTime: number, bHitPlayers: boolean): TraceResult | undefined
+{
 	const NextPosition: FVector = VectorMath.Add(Projectile.Position, VectorMath.Scale(Projectile.Velocity, DeltaTime));
+	const Trace: TraceResult = Instance.TraceLine(
+	{
+		start: Projectile.Position,
+		end: NextPosition,
+		ignoreEntity: GetIgnoredEntities(Projectile),
+		ignorePlayers: !bHitPlayers,
+	});
+
+	if (Trace.didHit)
+	{
+		Projectile.Position = VectorMath.Add(Trace.end, VectorMath.Scale(Trace.normal, SurfaceGap));
+	}
+	else
+	{
+		Projectile.Position = NextPosition;
+	}
+	return Trace.didHit ? Trace : undefined;
+}
+
+function GetIgnoredEntities(Projectile: FProjectile): Entity[]
+{
 	const IgnoredEntities: Entity[] = [Projectile.Owner];
 	for (const Model of Projectile.Models)
 	{
@@ -98,25 +230,7 @@ export function MoveProjectile(Projectile: FProjectile, DeltaTime: number, bHitP
 			IgnoredEntities.push(Model.Ent);
 		}
 	}
-	const Trace: TraceResult = Instance.TraceLine(
-	{
-		start: Projectile.Position,
-		end: NextPosition,
-		ignoreEntity: IgnoredEntities,
-		ignorePlayers: !bHitPlayers,
-	});
-
-	if (Trace.didHit)
-	{
-		Projectile.Position = VectorMath.Add(Trace.end, VectorMath.Scale(Trace.normal, 2));
-	}
-	else
-	{
-		Projectile.Position = NextPosition;
-	}
-
-	PlaceProjectileModels(Projectile, false);
-	return Trace.didHit ? Trace : undefined;
+	return IgnoredEntities;
 }
 
 export function DestroyProjectile(Projectile: FProjectile): void
@@ -154,6 +268,8 @@ function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjec
 
 function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): void
 {
+	// Something that has stopped moving keeps facing the way it was
+	const bTurn: boolean = VectorMath.Size(Projectile.Velocity) >= MinFacingSpeed;
 	const Flight: FRotationMatrix = RotationMath.FromRotator(VectorMath.GetRotation(Projectile.Velocity));
 	for (const Model of Projectile.Models)
 	{
@@ -161,14 +277,18 @@ function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): voi
 		{
 			continue;
 		}
-		const Angles: FRotator = RotationMath.ToRotator(RotationMath.Multiply(Flight, Model.LocalRotation));
+		const Placement: { position: FVector, angles?: FRotator } = { position: Projectile.Position };
+		if (bTurn)
+		{
+			Placement.angles = RotationMath.ToRotator(RotationMath.Multiply(Flight, Model.LocalRotation));
+		}
 		if (bTeleport)
 		{
-			Model.Ent.Teleport({ position: Projectile.Position, angles: Angles });
+			Model.Ent.Teleport(Placement);
 		}
 		else
 		{
-			Model.Ent.Move({ position: Projectile.Position, angles: Angles });
+			Model.Ent.Move(Placement);
 		}
 	}
 }

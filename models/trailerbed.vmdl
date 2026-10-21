@@ -45,7 +45,7 @@
 							},
 						]
 						filename = "models/payload/trailerbed.fbx"
-						import_scale = 0.25
+						import_scale = 0.33
 						import_filter = 
 						{
 							exclude_by_default = false

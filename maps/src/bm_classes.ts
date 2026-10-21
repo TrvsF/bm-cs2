@@ -2,8 +2,8 @@ import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSDamageFlags, CSWeaponT
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
 import { bDebug, TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
-import { LaunchProjectile, MoveProjectile, DestroyProjectile, TintProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
-import type { FProjectile, FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
+import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DestroyProjectile, TintProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
+import type { FProjectile, FBouncingProjectile, FBounceSettings, FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
 import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
 import type { FLauncherSettings } from "./bm_launcher";
@@ -61,9 +61,11 @@ export interface FDemoSettings extends FClassSettings
 	readonly PipeLaunchUp: number,
 	readonly PipeRadius: number,
 	readonly PipeDamage: number,
+	readonly PipeRolledDamageScale: number,
 	readonly PipeKnockback: number,
 	readonly PipeFalloff: FDamageFalloff | undefined,
-	readonly PipeLifetime: number,
+	readonly PipeFuseTime: number,
+	readonly PipeBounce: FBounceSettings,
 	readonly StickyDetonateKey: CSInputs;
 	readonly StickyMax: number;
 	readonly StickyArmTime: number;
@@ -115,7 +117,7 @@ export interface FRocket extends FProjectile
 {
 }
 
-export interface FPipe extends FProjectile
+export interface FPipe extends FBouncingProjectile
 {
 }
 
@@ -176,6 +178,7 @@ export const SoldierSettings: FSoliderSettings =
 		ReloadEachTime: 0.8,
 		ChargeTime: 0,
 		FireFxTemplate: "rocket_fire_template",
+		ReloadFxTemplate: "rocket_reload_template",
 	},
 	SecondaryLauncher: undefined,
 
@@ -203,6 +206,7 @@ export const DemoSettings: FDemoSettings =
 		ReloadEachTime: 0.67,
 		ChargeTime: 0,
 		FireFxTemplate: "sticky_fire_template",
+		ReloadFxTemplate: "sticky_reload_template",
 	},
 	SecondaryLauncher:
 	{
@@ -212,6 +216,7 @@ export const DemoSettings: FDemoSettings =
 		ReloadEachTime: 0.6,
 		ChargeTime: 0,
 		FireFxTemplate: "pipe_fire_template",
+		ReloadFxTemplate: "pipe_reload_template",
 	},
 	
 	StickyDetonateKey: CSInputs.ATTACK2,
@@ -228,9 +233,17 @@ export const DemoSettings: FDemoSettings =
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
 	PipeDamage: 33,
+	PipeRolledDamageScale: 0.6,
 	PipeKnockback: 1000,
 	PipeFalloff: TF2RocketFalloff,
-	PipeLifetime: 5,
+	PipeFuseTime: 1.6,
+	PipeBounce:
+	{
+		Restitution: 0.2,
+		ImpactFriction: 0.5,
+		RollFriction: 1200,
+		SettleSpeed: 100,
+	},
 };
 
 export const MedicSettings: FMedicSettings =
@@ -270,6 +283,7 @@ export const RailerSettings: FRailerSettings =
 		ReloadEachTime: 0,
 		ChargeTime: 0,
 		FireFxTemplate: "rail_shot_fire_template",
+		ReloadFxTemplate: "rail_shot_reload_template",
 	},
 	SecondaryLauncher:
 	{
@@ -279,6 +293,7 @@ export const RailerSettings: FRailerSettings =
 		ReloadEachTime: 3,
 		ChargeTime: 1,
 		FireFxTemplate: "rail_fire_template",
+		ReloadFxTemplate: "rail_reload_template",
 	},
 
 	PPsh:
@@ -583,7 +598,12 @@ class DemomanClass extends PlayerClass<FDemoSettings>
 
 	public override OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
-		const Pipe: FPipe = LaunchProjectile(Pawn, this.Settings.PipeLaunchSpeed, this.Settings.PipeLaunchUp, 1, PipeTemplateName);
+		const Pipe: FPipe =
+		{
+			...LaunchProjectile(Pawn, this.Settings.PipeLaunchSpeed, this.Settings.PipeLaunchUp, 1, PipeTemplateName),
+			bTouchedWorld: false,
+			GroundNormal: undefined,
+		};
 		this.Pipes.push(Pipe);
 	}
 
@@ -690,16 +710,15 @@ class DemomanClass extends PlayerClass<FDemoSettings>
 
 	private StepPipe(Pipe: FPipe, Now: number, DeltaTime: number): boolean
 	{
-		if (!Pipe.Owner.IsValid() || Now - Pipe.SpawnedAt > this.Settings.PipeLifetime)
+		if (!Pipe.Owner.IsValid())
 		{
 			DestroyProjectile(Pipe);
 			return false;
 		}
 
-		if (MoveProjectile(Pipe, DeltaTime, true))
+		if (Now - Pipe.SpawnedAt >= this.Settings.PipeFuseTime || MoveBouncingProjectile(Pipe, DeltaTime, !Pipe.bTouchedWorld, this.Settings.PipeBounce))
 		{
-			DestroyProjectile(Pipe);
-			Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, this.Settings.PipeDamage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
+			this.DetonatePipe(Pipe);
 			return false;
 		}
 
@@ -708,6 +727,13 @@ class DemomanClass extends PlayerClass<FDemoSettings>
 			Instance.DebugSphere({ center: Pipe.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Pipe.Owner) });
 		}
 		return true;
+	}
+
+	private DetonatePipe(Pipe: FPipe): void
+	{
+		DestroyProjectile(Pipe);
+		const Damage: number = this.Settings.PipeDamage * (Pipe.bTouchedWorld ? this.Settings.PipeRolledDamageScale : 1);
+		Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
 	}
 }
 

@@ -1,5 +1,5 @@
 import { Instance, CSInputs } from "cs_script/point_script";
-import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
 import { TickInterval } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
 
@@ -13,6 +13,7 @@ export interface FLauncherSettings
 	readonly ReloadEachTime: number;
 	readonly ChargeTime: number;
 	readonly FireFxTemplate: string;
+	readonly ReloadFxTemplate: string;
 }
 
 export interface FLauncherAmmo
@@ -39,6 +40,7 @@ interface FLauncherState
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 const FireFxLifetime: number = 3;
+const ReloadFxLifetime: number = 3;
 
 const GLaunchers: Map<number, FLauncherState[]> = new Map<number, FLauncherState[]>();
 
@@ -215,6 +217,7 @@ function TickReload(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): voi
 		return;
 	}
 	State.Clip = State.Settings.ReloadEachTime > 0 ? State.Clip + 1 : State.Settings.ClipSize;
+	SpawnReloadFx(Pawn, State.Settings);
 	State.NextReloadTime = CanReload(State) ? Now + State.Settings.ReloadEachTime : undefined;
 }
 
@@ -246,5 +249,21 @@ function SpawnFireFx(Pawn: CSPlayerPawn, Settings: FLauncherSettings): void
 	if (Settings.FireFxTemplate !== "")
 	{
 		SpawnTemporaryTemplate(Settings.FireFxTemplate, Pawn.GetEyePosition(), FireFxLifetime);
+	}
+}
+
+function SpawnReloadFx(Pawn: CSPlayerPawn, Settings: FLauncherSettings): void
+{
+	if (Settings.ReloadFxTemplate === "")
+	{
+		return;
+	}
+	const Spawned: Entity[] = SpawnTemporaryTemplate(Settings.ReloadFxTemplate, Pawn.GetEyePosition(), ReloadFxLifetime) ?? [];
+	for (const Ent of Spawned)
+	{
+		if (Ent.GetParent() === undefined)
+		{
+			Ent.SetParent(Pawn);
+		}
 	}
 }

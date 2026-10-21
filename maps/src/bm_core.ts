@@ -125,10 +125,20 @@ export abstract class VectorMath
 		return Math.hypot(V.x, V.y, V.z);
 	}
 
+	public static Dot(A: FVector, B: FVector): number
+	{
+		return A.x * B.x + A.y * B.y + A.z * B.z;
+	}
+
 	public static GetSafeNormal(V: FVector): FVector
 	{
 		const Length: number = Math.hypot(V.x, V.y, V.z) || 1;
 		return { x: V.x / Length, y: V.y / Length, z: V.z / Length };
+	}
+
+	public static ProjectOnPlane(V: FVector, PlaneNormal: FVector): FVector
+	{
+		return VectorMath.Subtract(V, VectorMath.Scale(PlaneNormal, VectorMath.Dot(V, PlaneNormal)));
 	}
 
 	public static GetForwardVector(Rotation: FRotator): FVector

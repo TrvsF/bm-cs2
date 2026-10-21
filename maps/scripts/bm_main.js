@@ -46,9 +46,15 @@ var VectorMath = class _VectorMath {
   static Size(V) {
     return Math.hypot(V.x, V.y, V.z);
   }
+  static Dot(A, B) {
+    return A.x * B.x + A.y * B.y + A.z * B.z;
+  }
   static GetSafeNormal(V) {
     const Length = Math.hypot(V.x, V.y, V.z) || 1;
     return { x: V.x / Length, y: V.y / Length, z: V.z / Length };
+  }
+  static ProjectOnPlane(V, PlaneNormal) {
+    return _VectorMath.Subtract(V, _VectorMath.Scale(PlaneNormal, _VectorMath.Dot(V, PlaneNormal)));
   }
   static GetForwardVector(Rotation) {
     const Pitch = Rotation.pitch * Math.PI / 180;
@@ -324,6 +330,10 @@ var SelfBlastDamageScale = 0.33;
 var ExplosionDebugColor = { r: 255, g: 140, b: 0 };
 var MaxHitscanTraces = 8;
 var GroundTraceLift = { x: 0, y: 0, z: 2 };
+var SurfaceGap = 2;
+var MinGroundNormalZ = 0.7;
+var GroundProbeDistance = 8;
+var MinFacingSpeed = 1;
 function LaunchProjectile(Owner, Speed, UpSpeed, GravityScale, TemplateName) {
   const Direction = VectorMath.GetForwardVector(Owner.GetEyeAngles());
   const Start = VectorMath.Add(Owner.GetEyePosition(), ProjectileLaunchOffset);
@@ -342,28 +352,102 @@ function LaunchProjectile(Owner, Speed, UpSpeed, GravityScale, TemplateName) {
 function MoveProjectile(Projectile, DeltaTime, bHitPlayers) {
   const Velocity = Projectile.Velocity;
   Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
+  const Hit = SweepProjectile(Projectile, DeltaTime, bHitPlayers);
+  PlaceProjectileModels(Projectile, false);
+  return Hit;
+}
+function MoveBouncingProjectile(Projectile, DeltaTime, bHitPlayers, Bounce) {
+  if (Projectile.GroundNormal) {
+    return RollProjectile(Projectile, Projectile.GroundNormal, DeltaTime, bHitPlayers, Bounce);
+  }
+  const Hit = MoveProjectile(Projectile, DeltaTime, bHitPlayers);
+  if (!Hit) {
+    return void 0;
+  }
+  if (IsPlayerPawn(Hit.hitEntity)) {
+    return Hit.hitEntity;
+  }
+  BounceProjectile(Projectile, Hit.normal, Bounce);
+  return void 0;
+}
+function RollProjectile(Projectile, Ground, DeltaTime, bHitPlayers, Bounce) {
+  const Pull = { x: 0, y: 0, z: -Gravity * Projectile.GravityScale * DeltaTime };
+  const Rolling = VectorMath.ProjectOnPlane(VectorMath.Add(Projectile.Velocity, Pull), Ground);
+  const Speed = VectorMath.Size(Rolling);
+  const SlowedSpeed = Math.max(0, Speed - Bounce.RollFriction * DeltaTime);
+  Projectile.Velocity = Speed > 0 ? VectorMath.Scale(Rolling, SlowedSpeed / Speed) : ZeroVector;
+  const Hit = SlowedSpeed > 0 ? SweepProjectile(Projectile, DeltaTime, bHitPlayers) : void 0;
+  if (Hit && IsPlayerPawn(Hit.hitEntity)) {
+    PlaceProjectileModels(Projectile, false);
+    return Hit.hitEntity;
+  }
+  if (Hit) {
+    BounceProjectile(Projectile, Hit.normal, Bounce);
+  }
+  FollowGround(Projectile);
+  PlaceProjectileModels(Projectile, false);
+  return void 0;
+}
+function BounceProjectile(Projectile, Normal, Bounce) {
+  Projectile.bTouchedWorld = true;
+  const IntoSpeed = -VectorMath.Dot(Projectile.Velocity, Normal);
+  if (IntoSpeed <= 0) {
+    return;
+  }
+  const Along = VectorMath.Scale(VectorMath.ProjectOnPlane(Projectile.Velocity, Normal), 1 - Bounce.ImpactFriction);
+  const OutSpeed = IntoSpeed * Bounce.Restitution;
+  if (Normal.z >= MinGroundNormalZ && OutSpeed < Bounce.SettleSpeed) {
+    Projectile.GroundNormal = Normal;
+    Projectile.Velocity = Along;
+    return;
+  }
+  Projectile.Velocity = VectorMath.Add(Along, VectorMath.Scale(Normal, OutSpeed));
+}
+function FollowGround(Projectile) {
+  if (!Projectile.GroundNormal) {
+    return;
+  }
+  const Trace = Instance3.TraceLine(
+    {
+      start: Projectile.Position,
+      end: VectorMath.Add(Projectile.Position, { x: 0, y: 0, z: -(SurfaceGap + GroundProbeDistance) }),
+      ignoreEntity: GetIgnoredEntities(Projectile),
+      ignorePlayers: true
+    }
+  );
+  if (!Trace.didHit || Trace.normal.z < MinGroundNormalZ) {
+    Projectile.GroundNormal = void 0;
+    return;
+  }
+  Projectile.Position = VectorMath.Add(Trace.end, VectorMath.Scale(Trace.normal, SurfaceGap));
+  Projectile.GroundNormal = Trace.normal;
+  Projectile.Velocity = VectorMath.ProjectOnPlane(Projectile.Velocity, Trace.normal);
+}
+function SweepProjectile(Projectile, DeltaTime, bHitPlayers) {
   const NextPosition = VectorMath.Add(Projectile.Position, VectorMath.Scale(Projectile.Velocity, DeltaTime));
+  const Trace = Instance3.TraceLine(
+    {
+      start: Projectile.Position,
+      end: NextPosition,
+      ignoreEntity: GetIgnoredEntities(Projectile),
+      ignorePlayers: !bHitPlayers
+    }
+  );
+  if (Trace.didHit) {
+    Projectile.Position = VectorMath.Add(Trace.end, VectorMath.Scale(Trace.normal, SurfaceGap));
+  } else {
+    Projectile.Position = NextPosition;
+  }
+  return Trace.didHit ? Trace : void 0;
+}
+function GetIgnoredEntities(Projectile) {
   const IgnoredEntities = [Projectile.Owner];
   for (const Model of Projectile.Models) {
     if (Model.Ent.IsValid()) {
       IgnoredEntities.push(Model.Ent);
     }
   }
-  const Trace = Instance3.TraceLine(
-    {
-      start: Projectile.Position,
-      end: NextPosition,
-      ignoreEntity: IgnoredEntities,
-      ignorePlayers: !bHitPlayers
-    }
-  );
-  if (Trace.didHit) {
-    Projectile.Position = VectorMath.Add(Trace.end, VectorMath.Scale(Trace.normal, 2));
-  } else {
-    Projectile.Position = NextPosition;
-  }
-  PlaceProjectileModels(Projectile, false);
-  return Trace.didHit ? Trace : void 0;
+  return IgnoredEntities;
 }
 function DestroyProjectile(Projectile) {
   for (const Model of Projectile.Models) {
@@ -388,16 +472,20 @@ function SpawnProjectileModels(TemplateName, Position) {
   return Models;
 }
 function PlaceProjectileModels(Projectile, bTeleport) {
+  const bTurn = VectorMath.Size(Projectile.Velocity) >= MinFacingSpeed;
   const Flight = RotationMath.FromRotator(VectorMath.GetRotation(Projectile.Velocity));
   for (const Model of Projectile.Models) {
     if (!Model.Ent.IsValid() || Model.Ent.GetParent() !== void 0) {
       continue;
     }
-    const Angles = RotationMath.ToRotator(RotationMath.Multiply(Flight, Model.LocalRotation));
+    const Placement = { position: Projectile.Position };
+    if (bTurn) {
+      Placement.angles = RotationMath.ToRotator(RotationMath.Multiply(Flight, Model.LocalRotation));
+    }
     if (bTeleport) {
-      Model.Ent.Teleport({ position: Projectile.Position, angles: Angles });
+      Model.Ent.Teleport(Placement);
     } else {
-      Model.Ent.Move({ position: Projectile.Position, angles: Angles });
+      Model.Ent.Move(Placement);
     }
   }
 }
@@ -576,6 +664,7 @@ function ApplyBulletFalloff(Event, Falloff) {
 // src/bm_launcher.ts
 import { Instance as Instance4, CSInputs } from "cs_script/point_script";
 var FireFxLifetime = 3;
+var ReloadFxLifetime = 3;
 var GLaunchers = /* @__PURE__ */ new Map();
 function EquipLauncher(Pawn, Slot, WeaponName, Settings) {
   const Launchers = (GLaunchers.get(Slot) ?? []).filter((Other) => {
@@ -702,6 +791,7 @@ function TickReload(Pawn, State, Now) {
     return;
   }
   State.Clip = State.Settings.ReloadEachTime > 0 ? State.Clip + 1 : State.Settings.ClipSize;
+  SpawnReloadFx(Pawn, State.Settings);
   State.NextReloadTime = CanReload(State) ? Now + State.Settings.ReloadEachTime : void 0;
 }
 function CanReload(State) {
@@ -723,6 +813,17 @@ function EmptyRealGun(Pawn, WeaponName) {
 function SpawnFireFx(Pawn, Settings) {
   if (Settings.FireFxTemplate !== "") {
     SpawnTemporaryTemplate(Settings.FireFxTemplate, Pawn.GetEyePosition(), FireFxLifetime);
+  }
+}
+function SpawnReloadFx(Pawn, Settings) {
+  if (Settings.ReloadFxTemplate === "") {
+    return;
+  }
+  const Spawned = SpawnTemporaryTemplate(Settings.ReloadFxTemplate, Pawn.GetEyePosition(), ReloadFxLifetime) ?? [];
+  for (const Ent of Spawned) {
+    if (Ent.GetParent() === void 0) {
+      Ent.SetParent(Pawn);
+    }
   }
 }
 
@@ -761,7 +862,8 @@ var SoldierSettings = {
     ReloadFirstTime: 0.92,
     ReloadEachTime: 0.8,
     ChargeTime: 0,
-    FireFxTemplate: "rocket_fire_template"
+    FireFxTemplate: "rocket_fire_template",
+    ReloadFxTemplate: "rocket_reload_template"
   },
   SecondaryLauncher: void 0,
   RocketDamage: 90,
@@ -784,7 +886,8 @@ var DemoSettings = {
     ReloadFirstTime: 1.09,
     ReloadEachTime: 0.67,
     ChargeTime: 0,
-    FireFxTemplate: "sticky_fire_template"
+    FireFxTemplate: "sticky_fire_template",
+    ReloadFxTemplate: "sticky_reload_template"
   },
   SecondaryLauncher: {
     FireInterval: 0.6,
@@ -792,7 +895,8 @@ var DemoSettings = {
     ReloadFirstTime: 1.24,
     ReloadEachTime: 0.6,
     ChargeTime: 0,
-    FireFxTemplate: "pipe_fire_template"
+    FireFxTemplate: "pipe_fire_template",
+    ReloadFxTemplate: "pipe_reload_template"
   },
   StickyDetonateKey: CSInputs2.ATTACK2,
   StickyMax: 6,
@@ -808,9 +912,16 @@ var DemoSettings = {
   PipeLaunchUp: 150,
   PipeRadius: 160,
   PipeDamage: 33,
+  PipeRolledDamageScale: 0.6,
   PipeKnockback: 1e3,
   PipeFalloff: TF2RocketFalloff,
-  PipeLifetime: 5
+  PipeFuseTime: 1.6,
+  PipeBounce: {
+    Restitution: 0.2,
+    ImpactFriction: 0.5,
+    RollFriction: 1200,
+    SettleSpeed: 100
+  }
 };
 var MedicSettings = {
   DisplayName: "Medic",
@@ -843,7 +954,8 @@ var RailerSettings = {
     ReloadFirstTime: 1.6,
     ReloadEachTime: 0,
     ChargeTime: 0,
-    FireFxTemplate: "rail_shot_fire_template"
+    FireFxTemplate: "rail_shot_fire_template",
+    ReloadFxTemplate: "rail_shot_reload_template"
   },
   SecondaryLauncher: {
     FireInterval: 0.5,
@@ -851,7 +963,8 @@ var RailerSettings = {
     ReloadFirstTime: 3,
     ReloadEachTime: 3,
     ChargeTime: 1,
-    FireFxTemplate: "rail_fire_template"
+    FireFxTemplate: "rail_fire_template",
+    ReloadFxTemplate: "rail_reload_template"
   },
   PPsh: {
     Damage: 7,
@@ -1056,7 +1169,11 @@ var DemomanClass = class extends PlayerClass {
     }
   }
   OnSecondaryFire(Pawn, Slot, Now) {
-    const Pipe = LaunchProjectile(Pawn, this.Settings.PipeLaunchSpeed, this.Settings.PipeLaunchUp, 1, PipeTemplateName);
+    const Pipe = {
+      ...LaunchProjectile(Pawn, this.Settings.PipeLaunchSpeed, this.Settings.PipeLaunchUp, 1, PipeTemplateName),
+      bTouchedWorld: false,
+      GroundNormal: void 0
+    };
     this.Pipes.push(Pipe);
   }
   TickWorld(Now, DeltaTime) {
@@ -1131,19 +1248,23 @@ var DemomanClass = class extends PlayerClass {
     return State;
   }
   StepPipe(Pipe, Now, DeltaTime) {
-    if (!Pipe.Owner.IsValid() || Now - Pipe.SpawnedAt > this.Settings.PipeLifetime) {
+    if (!Pipe.Owner.IsValid()) {
       DestroyProjectile(Pipe);
       return false;
     }
-    if (MoveProjectile(Pipe, DeltaTime, true)) {
-      DestroyProjectile(Pipe);
-      Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, this.Settings.PipeDamage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
+    if (Now - Pipe.SpawnedAt >= this.Settings.PipeFuseTime || MoveBouncingProjectile(Pipe, DeltaTime, !Pipe.bTouchedWorld, this.Settings.PipeBounce)) {
+      this.DetonatePipe(Pipe);
       return false;
     }
     if (Pipe.Models.length === 0) {
       Instance5.DebugSphere({ center: Pipe.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Pipe.Owner) });
     }
     return true;
+  }
+  DetonatePipe(Pipe) {
+    DestroyProjectile(Pipe);
+    const Damage = this.Settings.PipeDamage * (Pipe.bTouchedWorld ? this.Settings.PipeRolledDamageScale : 1);
+    Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
   }
 };
 var MedicClass = class extends PlayerClass {
