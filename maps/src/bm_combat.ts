@@ -13,13 +13,13 @@ export interface FProjectile
 	Velocity: FVector;
 	GravityScale: number;
 	SpawnedAt: number;
-	Models: FProjectileModel[];   // everything spawned from the projectile's template. Empty when the template isn't in the map
+	Models: FProjectileModel[];
 }
 
 export interface FProjectileModel
 {
 	readonly Ent: Entity;
-	readonly LocalRotation: FRotationMatrix;   // how it's turned in the template. +X in Hammer is the way it flies
+	readonly LocalRotation: FRotationMatrix;
 }
 
 export interface FDamageFalloff
@@ -53,7 +53,7 @@ export interface FHitscanResult
 
 const Gravity: number = 800;
 const ExplosionTemplateName: string = "boom_template";
-const ExplosionFxLifetime: number = 5;   // explosion fx entities are removed after this, so they don't pile up
+const ExplosionFxLifetime: number = 5;
 const ProjectileLaunchOffset: FVector = { x: 0, y: 0, z: -8 };
 const ExplosionOffset: FVector = { x: 0, y: 0, z: 6 };
 const GroundedKnockbackLift: FVector = { x: 0, y: 0, z: 0.6 };
@@ -63,7 +63,7 @@ const AirborneSelfKnockbackScale: number = 1.33;
 const SelfBlastDamageScale: number = 0.33;
 const ExplosionDebugColor: FColor = { r: 255, g: 140, b: 0 };
 const MaxHitscanTraces: number = 8;
-const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };   // ground traces start just above the feet, so they don't begin inside the floor
+const GroundTraceLift: FVector = { x: 0, y: 0, z: 2 };
 
 // Projectile //////////////////////////////////////////////////////////////////////////////////////
 
@@ -131,7 +131,6 @@ export function DestroyProjectile(Projectile: FProjectile): void
 	Projectile.Models = [];
 }
 
-// Tints the projectile's models, e.g. stickies turning team coloured once armed. Multiplies the model's own colours.
 export function TintProjectile(Projectile: FProjectile, Color: FColor): void
 {
 	for (const Model of Projectile.Models)
@@ -143,8 +142,6 @@ export function TintProjectile(Projectile: FProjectile, Color: FColor): void
 	}
 }
 
-// Spawns the template as it was built in Hammer and remembers how each part is turned, so a model rotated in the
-// template (e.g. one whose nose is +Z, turned to face +X) keeps that turn on top of the flight direction.
 function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjectileModel[]
 {
 	const Models: FProjectileModel[] = [];
@@ -155,8 +152,6 @@ function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjec
 	return Models;
 }
 
-// Puts the template's top-level entities on the projectile, turned to its flight. Anything parented to them in the
-// template (a trail, a model) comes along. Move once it's flying, so it glides smoothly for players; Teleport to place it at launch.
 function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): void
 {
 	const Flight: FRotationMatrix = RotationMath.FromRotator(VectorMath.GetRotation(Projectile.Velocity));

@@ -5,12 +5,6 @@ import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
 import { GameMode } from "./bm_gamemode";
 import { ShowPayload } from "./bm_ui";
 
-// Payload: Ts push a cart along a track to the end, CTs stop them. Built in Hammer from named entities:
-//   payload_cart         the cart (a prop_dynamic, Not Solid). The script moves it, keeping how you turned it.
-//   payload_path_1, _2.. points along the track, in order (info_target or path_track). The cart starts on the first.
-//                        Put "checkpoint" in a point's name (payload_path_6_checkpoint) to make it a checkpoint.
-// Teams as in the base game: no friendly fire, and bots play normally. Only runs on maps with a cart and 2+ path points.
-
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
 export interface FPayloadSettings
@@ -297,7 +291,6 @@ function FindCartCrowd(CartPosition: FVector): FCartCrowd
 	return { Attackers: Attackers, Defenders: Defenders };
 }
 
-// The cart heals the Ts near it, like a TF2 dispenser. Never past max health.
 function HealPushers(Attackers: CSPlayerPawn[], DeltaTime: number): void
 {
 	if (PayloadSettings.PusherHealPerSecond <= 0)
