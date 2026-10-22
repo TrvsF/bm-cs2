@@ -713,7 +713,7 @@ function EquipLauncher(Pawn, Slot, WeaponName, Settings) {
       MaxClip: Settings.ClipSize,
       NextFireTime: 0,
       NextReloadTime: void 0,
-      ReloadWaitStart: 0,
+      ReloadStartTime: 0,
       ChargeStartTime: void 0
     }
   );
@@ -756,7 +756,7 @@ function GetLauncherAmmo(Pawn, Slot) {
         MaxClip: State.MaxClip,
         bReloading: State.NextReloadTime !== void 0,
         ChargeFraction: GetChargeFraction(State),
-        ReadyFraction: GetReadyFraction(State)
+        ReloadFraction: GetReloadFraction(State)
       };
       return Ammo;
     }
@@ -796,15 +796,11 @@ function GetChargeFraction(State) {
   }
   return Math.min(1, (Instance4.GetGameTime() - State.ChargeStartTime) / State.Settings.ChargeTime);
 }
-function GetReadyFraction(State) {
-  const Now = Instance4.GetGameTime();
-  if (State.Clip > 0) {
-    return GetWaitFraction(State.NextFireTime - State.Settings.FireInterval, State.NextFireTime, Now);
-  }
+function GetReloadFraction(State) {
   if (State.NextReloadTime === void 0) {
     return 0;
   }
-  return GetWaitFraction(State.ReloadWaitStart, State.NextReloadTime, Now);
+  return GetWaitFraction(State.ReloadStartTime, State.NextReloadTime, Instance4.GetGameTime());
 }
 function GetWaitFraction(WaitStart, ReadyTime, Now) {
   if (Now >= ReadyTime || ReadyTime <= WaitStart) {
@@ -818,8 +814,8 @@ function TickReload(Pawn, State, Now) {
     return;
   }
   if (State.NextReloadTime === void 0) {
-    State.NextReloadTime = Math.max(Now, State.NextFireTime) + State.Settings.ReloadFirstTime;
-    State.ReloadWaitStart = Now < State.NextFireTime ? State.NextFireTime - State.Settings.FireInterval : Now;
+    State.ReloadStartTime = Math.max(Now, State.NextFireTime);
+    State.NextReloadTime = State.ReloadStartTime + State.Settings.ReloadFirstTime;
     return;
   }
   if (Now < State.NextReloadTime) {
@@ -827,6 +823,7 @@ function TickReload(Pawn, State, Now) {
   }
   State.Clip = State.Settings.ReloadEachTime > 0 ? State.Clip + 1 : State.Settings.ClipSize;
   SpawnReloadFx(Pawn, State.Settings);
+  State.ReloadStartTime = Now;
   State.NextReloadTime = CanReload(State) ? Now + State.Settings.ReloadEachTime : void 0;
 }
 function CanReload(State) {
@@ -1819,7 +1816,7 @@ var CounterLabelId = "CounterLabel";
 var CounterValueId = "CounterValue";
 var CounterMaxId = "CounterMax";
 var ChargeBarId = "ChargeBar";
-var FireBarId = "FireBar";
+var ReloadBarId = "ReloadBar";
 var BarSteps = 24;
 var BarCharacter = "0";
 var HiddenBar = -1;
@@ -1919,7 +1916,7 @@ function ShowClassIndicator(Slot, PlayerClass2, IsT) {
 }
 function ShowAmmo(Slot, Ammo) {
   ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeFraction > 0 ? Ammo.ChargeFraction : void 0);
-  ShowBar(Slot, FireBarId, Ammo ? Ammo.ReadyFraction : void 0);
+  ShowBar(Slot, ReloadBarId, Ammo && Ammo.bReloading ? Ammo.ReloadFraction : void 0);
   const Key = Ammo ? `${Ammo.Clip}|${Ammo.bReloading}` : "";
   if ((GShownAmmo.get(Slot) ?? "") === Key) {
     return;
@@ -2121,7 +2118,7 @@ var HealthKitSettings = {
   RespawnFxTemplate: "healthkit_respawn_template"
 };
 var HiddenScale = 1e-3;
-var PickupBelowTolerance = 32;
+var PickupBelowTolerance = 64;
 var FxLifetime = 3;
 var RescanInterval = 1;
 var KitClassNames = ["prop_dynamic", "prop_dynamic_override"];
@@ -2146,8 +2143,6 @@ function TickHealthKits(Now) {
     const Taker = FindKitTaker(Kit);
     if (Taker) {
       TakeKit(Kit, Taker, Now);
-    } else if (IsModelEntity2(Kit.Entity)) {
-      SpinKit(Kit, Kit.Entity, Now);
     } else if (bDebug) {
       Instance8.DebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
     }
@@ -2222,13 +2217,6 @@ function RespawnKit(Kit) {
   Kit.RespawnTime = void 0;
   SetKitVisible(Kit, true);
   SpawnKitFx(HealthKitSettings.RespawnFxTemplate, Kit);
-}
-function SpinKit(Kit, Model, Now) {
-  if (HealthKitSettings.SpinDegreesPerSecond === 0) {
-    return;
-  }
-  const Yaw = (Kit.BaseAngles.yaw + Now * HealthKitSettings.SpinDegreesPerSecond) % 360;
-  Model.Move({ angles: { pitch: Kit.BaseAngles.pitch, yaw: Yaw, roll: Kit.BaseAngles.roll } });
 }
 function SetKitVisible(Kit, bVisible) {
   if (IsModelEntity2(Kit.Entity)) {

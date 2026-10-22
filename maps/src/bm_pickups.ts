@@ -41,7 +41,7 @@ export const HealthKitSettings: FHealthKitSettings =
 };
 
 const HiddenScale: number = 0.001;
-const PickupBelowTolerance: number = 32
+const PickupBelowTolerance: number = 64
 const FxLifetime: number = 3;
 const RescanInterval: number = 1;
 const KitClassNames: readonly string[] = ["prop_dynamic", "prop_dynamic_override"];
@@ -80,10 +80,10 @@ export function TickHealthKits(Now: number): void
 		{
 			TakeKit(Kit, Taker, Now);
 		}
-		else if (IsModelEntity(Kit.Entity))
-		{
-			SpinKit(Kit, Kit.Entity, Now);
-		}
+		// else if (IsModelEntity(Kit.Entity))
+		// {
+		// 	SpinKit(Kit, Kit.Entity, Now);
+		// }
 		else if (bDebug)
 		{
 			Instance.DebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });

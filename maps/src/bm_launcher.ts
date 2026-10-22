@@ -22,7 +22,7 @@ export interface FLauncherAmmo
 	readonly MaxClip: number;
 	readonly bReloading: boolean;
 	readonly ChargeFraction: number;
-	readonly ReadyFraction: number;
+	readonly ReloadFraction: number;
 }
 
 interface FLauncherState
@@ -33,7 +33,7 @@ interface FLauncherState
 	MaxClip: number;
 	NextFireTime: number;
 	NextReloadTime: number | undefined;
-	ReloadWaitStart: number;
+	ReloadStartTime: number;
 	ChargeStartTime: number | undefined;
 }
 
@@ -60,7 +60,7 @@ export function EquipLauncher(Pawn: CSPlayerPawn, Slot: number, WeaponName: stri
 		MaxClip: Settings.ClipSize,
 		NextFireTime: 0,
 		NextReloadTime: undefined,
-		ReloadWaitStart: 0,
+		ReloadStartTime: 0,
 		ChargeStartTime: undefined,
 	});
 	GLaunchers.set(Slot, Launchers);
@@ -117,7 +117,7 @@ export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo
 				MaxClip: State.MaxClip,
 				bReloading: State.NextReloadTime !== undefined,
 				ChargeFraction: GetChargeFraction(State),
-				ReadyFraction: GetReadyFraction(State),
+				ReloadFraction: GetReloadFraction(State),
 			};
 			return Ammo;
 		}
@@ -170,18 +170,14 @@ function GetChargeFraction(State: FLauncherState): number
 	return Math.min(1, (Instance.GetGameTime() - State.ChargeStartTime) / State.Settings.ChargeTime);
 }
 
-function GetReadyFraction(State: FLauncherState): number
+// How far through loading the next round (or the whole clip) the reload is
+function GetReloadFraction(State: FLauncherState): number
 {
-	const Now: number = Instance.GetGameTime();
-	if (State.Clip > 0)
-	{
-		return GetWaitFraction(State.NextFireTime - State.Settings.FireInterval, State.NextFireTime, Now);
-	}
 	if (State.NextReloadTime === undefined)
 	{
 		return 0;
 	}
-	return GetWaitFraction(State.ReloadWaitStart, State.NextReloadTime, Now);
+	return GetWaitFraction(State.ReloadStartTime, State.NextReloadTime, Instance.GetGameTime());
 }
 
 function GetWaitFraction(WaitStart: number, ReadyTime: number, Now: number): number
@@ -206,8 +202,8 @@ function TickReload(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): voi
 		// const bWantsReload: boolean = State.Clip === 0 || Pawn.WasInputJustPressed(CSInputs.RELOAD);
 		// if (bWantsReload)
 		// {
-		State.NextReloadTime = Math.max(Now, State.NextFireTime) + State.Settings.ReloadFirstTime;
-		State.ReloadWaitStart = Now < State.NextFireTime ? State.NextFireTime - State.Settings.FireInterval : Now;
+		State.ReloadStartTime = Math.max(Now, State.NextFireTime);
+		State.NextReloadTime = State.ReloadStartTime + State.Settings.ReloadFirstTime;
 		// }
 		return;
 	}
@@ -218,6 +214,7 @@ function TickReload(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): voi
 	}
 	State.Clip = State.Settings.ReloadEachTime > 0 ? State.Clip + 1 : State.Settings.ClipSize;
 	SpawnReloadFx(Pawn, State.Settings);
+	State.ReloadStartTime = Now;
 	State.NextReloadTime = CanReload(State) ? Now + State.Settings.ReloadEachTime : undefined;
 }
 

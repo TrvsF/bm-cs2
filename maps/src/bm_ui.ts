@@ -32,7 +32,7 @@ const CounterLabelId: string = "CounterLabel";
 const CounterValueId: string = "CounterValue";
 const CounterMaxId: string = "CounterMax";
 const ChargeBarId: string = "ChargeBar";
-const FireBarId: string = "FireBar";
+const ReloadBarId: string = "ReloadBar";
 const BarSteps: number = 24;
 const BarCharacter: string = "0";
 const HiddenBar: number = -1;
@@ -173,7 +173,7 @@ export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass, IsT:
 export function ShowAmmo(Slot: number, Ammo: FLauncherAmmo | undefined): void
 {
 	ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeFraction > 0 ? Ammo.ChargeFraction : undefined);
-	ShowBar(Slot, FireBarId, Ammo ? Ammo.ReadyFraction : undefined);
+	ShowBar(Slot, ReloadBarId, Ammo && Ammo.bReloading ? Ammo.ReloadFraction : undefined);
 
 	const Key: string = Ammo ? `${Ammo.Clip}|${Ammo.bReloading}` : "";
 	if ((GShownAmmo.get(Slot) ?? "") === Key)

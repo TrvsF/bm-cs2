@@ -5,10 +5,6 @@
 	<Panel class="ClassScreen" hittest="false">
 
 		<Panel class="CrosshairBars" hittest="false">
-			<Panel id="FireBar" class="Bar FireBar" hittest="false">
-				<Label id="FireBarFill" class="BarFill" text="{s:fill}" hittest="false" />
-				<Label id="FireBarEmpty" class="BarEmpty" text="{s:empty}" hittest="false" />
-			</Panel>
 			<Panel id="ChargeBar" class="Bar ChargeBar" hittest="false">
 				<Label id="ChargeBarFill" class="BarFill" text="{s:fill}" hittest="false" />
 				<Label id="ChargeBarEmpty" class="BarEmpty" text="{s:empty}" hittest="false" />
@@ -53,8 +49,14 @@
 			</Panel>
 
 			<Panel id="AmmoPanel" class="AmmoPanel" hittest="false">
-				<Label id="AmmoClip" class="AmmoClip" text="{s:ammoclip}" hittest="false" />
-				<Label id="AmmoSpare" class="AmmoSpare" text="/ {s:ammospare}" hittest="false" />
+				<Panel class="AmmoRow" hittest="false">
+					<Label id="AmmoClip" class="AmmoClip" text="{s:ammoclip}" hittest="false" />
+					<Label id="AmmoSpare" class="AmmoSpare" text="/ {s:ammospare}" hittest="false" />
+				</Panel>
+				<Panel id="ReloadBar" class="Bar ReloadBar" hittest="false">
+					<Label id="ReloadBarFill" class="BarFill" text="{s:fill}" hittest="false" />
+					<Label id="ReloadBarEmpty" class="BarEmpty" text="{s:empty}" hittest="false" />
+				</Panel>
 			</Panel>
 
 			<Panel id="CounterPanel" class="CounterPanel" hittest="false">

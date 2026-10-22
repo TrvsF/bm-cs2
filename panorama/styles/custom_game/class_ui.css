@@ -166,9 +166,15 @@
 	horizontal-align: right;
 	vertical-align: center;
 	margin-right: 28px;
-	flow-children: right;
+	flow-children: down;
 	padding: 4px 12px 4px 14px;
 	border-right: 4px solid #9aa2ac;
+}
+
+.AmmoRow
+{
+	horizontal-align: right;
+	flow-children: right;
 }
 
 .AmmoPanel.Shown
@@ -380,26 +386,6 @@
 	flow-children: down;
 }
 
-.FireBar
-{
-	horizontal-align: center;
-	margin-bottom: 4px;
-}
-
-.FireBar .BarFill
-{
-	height: 4px;
-	font-size: 6px;
-	background-color: #ffffff;
-}
-
-.FireBar .BarEmpty
-{
-	height: 4px;
-	font-size: 6px;
-	background-color: #ffffff30;
-}
-
 .ChargeBar
 {
 	horizontal-align: center;
@@ -408,6 +394,33 @@
 .ChargeBar .BarFill
 {
 	background-color: #7fd4ff;
+}
+
+.ReloadBar
+{
+	visibility: visible;
+	opacity: 0;
+	horizontal-align: right;
+	margin-top: 2px;
+}
+
+.ReloadBar.Shown
+{
+	opacity: 1;
+}
+
+.ReloadBar .BarFill
+{
+	height: 4px;
+	font-size: 7px;
+	background-color: #f0d080;
+}
+
+.ReloadBar .BarEmpty
+{
+	height: 4px;
+	font-size: 7px;
+	background-color: #ffffff30;
 }
 
 .CounterPanel
