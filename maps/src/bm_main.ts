@@ -1,6 +1,6 @@
-import { Instance, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
+import { Instance, Console, GameRules, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
 import type { CSPlayerPawn, CSPlayerController, CSWeaponBase } from "cs_script/point_script";
-import { bDebug, IsFriendlyFire, SetFriendlyFire, TickInterval, LogPrefix, INDEX_NONE, GetPlayerSlot, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
+import { bDebug, IsFriendlyFire, SetFriendlyFire, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, GetPlayerSlot, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
 import type
 {
 	FPlayerChatEvent,
@@ -23,6 +23,7 @@ import { GetHeightAboveGround } from "./bm_combat";
 import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ResetClassUi } from "./bm_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
+import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer } from "./bm_spawnzones";
 import { GameMode } from "./bm_gamemode";
 import { FreeForAllMode } from "./bm_freeforall";
 import { PayloadMode } from "./bm_payload";
@@ -31,17 +32,6 @@ import type { FClassMenuChoice } from "./bm_ui";
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 const AirshotMinHeight: number = 64;
-
-const ClassChatCommands: ReadonlyMap<string, EPlayerClass> = new Map<string, EPlayerClass>(
-	[
-		["!demo", EPlayerClass.Demoman],
-		["!medic", EPlayerClass.Medic],
-		["!solider", EPlayerClass.Solider],
-		["!railer", EPlayerClass.Railer],
-		["!beamer", EPlayerClass.Beamer],
-		["!none", EPlayerClass.None],
-	]
-);
 
 const FreeForAll: FreeForAllMode = new FreeForAllMode();
 const GameModes: readonly GameMode[] = [new PayloadMode(), FreeForAll];
@@ -89,6 +79,7 @@ function Tick(): void
 		}
 		GActiveMode.Tick(Now, DeltaTime);
 		TickHealthKits(Now);
+		TickSpawnZones(Now);
 
 		TickClassMenuKey();
 		TickPlayerHud();
@@ -97,7 +88,7 @@ function Tick(): void
 	}
 	catch (Exception: unknown)
 	{
-		Instance.Msg(`${LogPrefix} error: ${String(Exception)}`);
+		Console.Log(`${LogPrefix} error: ${String(Exception)}`);
 	}
 }
 
@@ -119,7 +110,7 @@ function BeginPlay(): void
 
 	Instance.SetThink(Tick);
 	Instance.SetNextThink(Instance.GetGameTime());
-	Instance.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
+	Console.Log(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
 }
 
 BeginPlay(); // !
@@ -129,27 +120,37 @@ BeginPlay(); // !
 function HandlePlayerChat(Event: FPlayerChatEvent): void
 {
 	const Player: CSPlayerController | undefined = Event.player;
-	if (!Player)
+	const Text: string = Event.text.trim().toLowerCase();
+	if (!Player || !Text.startsWith(ChatCommandPrefix))
 	{
 		return;
 	}
 
-	const Command: string = Event.text.trim().toLowerCase();
-	if (bDebug && Command === "!hudtest")
+	const Command: string = Text.substring(ChatCommandPrefix.length);
+	const PlayerClass: EPlayerClass | undefined = Object.values(EPlayerClass).find((Candidate: EPlayerClass): boolean =>
 	{
-		ShowDamageNumber(Player.GetPlayerSlot(), 123);
-		return;
-	}
-	if (Command === "!class")
+		return Candidate === Command;
+	});
+
+	if (Command === "class")
 	{
 		OpenClassMenu(Player.GetPlayerSlot());
-		return;
 	}
-
-	const PlayerClass: EPlayerClass | undefined = ClassChatCommands.get(Command);
-	if (PlayerClass !== undefined)
+	else if (Command === "start")
+	{
+		EndWarmupNow(Player);
+	}
+	else if (Command === "hudtest" && bDebug)
+	{
+		ShowDamageNumber(Player.GetPlayerSlot(), 123);
+	}
+	else if (PlayerClass !== undefined)
 	{
 		RequestPlayerClass(Player, PlayerClass);
+	}
+	else
+	{
+		Console.Log(`${LogPrefix} ${Player.GetPlayerName()} typed an unknown command: ${ChatCommandPrefix}${Command}`);
 	}
 }
 
@@ -163,6 +164,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 	}
 
 	ClearPlayer(Slot);
+	ForgetSpawnZonePlayer(Slot);
 	GActiveMode.OnPlayerSpawn(Pawn, Slot);
 	AssignRandomBotClass(Pawn, Slot);
 	const bHadClass: boolean = GClassBySlot.has(Slot);
@@ -197,12 +199,14 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 	if (Slot !== INDEX_NONE)
 	{
 		ClearPlayer(Slot);
+		ForgetSpawnZonePlayer(Slot);
 	}
 }
 
 function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 {
 	ClearPlayer(Event.playerSlot);
+	ForgetSpawnZonePlayer(Event.playerSlot);
 	for (const Mode of GameModes)
 	{
 		Mode.OnPlayerLeave(Event.playerSlot);
@@ -221,10 +225,11 @@ function HandleRoundStart(): void
 	}
 	ClearDecals();
 	ResetHealthKits();
+	ResetSpawnZones();
 	SelectGameMode();
 	GActiveMode.OnRoundStart();
 	ApplyMatchSettings();
-	Instance.Msg(`${LogPrefix} match settings applied (${GActiveMode.DisplayName})`);
+	Console.Log(`${LogPrefix} match settings applied (${GActiveMode.DisplayName})`);
 }
 
 function HandleRoundEnd(): void
@@ -305,7 +310,7 @@ function HandleCustomHudClicked(Event: FCustomHudClickedEvent): void
 
 function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResult
 {
-	// Forced deaths (a game mode ending the round) skip every damage rule, uber included
+	// Forced deaths skip every damage rule, uber included
 	if ((Event.damageFlags & CSDamageFlags.FORCE_DEATH) !== 0)
 	{
 		return;
@@ -364,7 +369,7 @@ function SelectGameMode(): void
 		GActiveMode.OnDeactivated();
 		GActiveMode = Mode;
 		Mode.OnActivated();
-		Instance.Msg(`${LogPrefix} game mode: ${Mode.DisplayName}`);
+		Console.Log(`${LogPrefix} game mode: ${Mode.DisplayName}`);
 	}
 	SetFriendlyFire(Mode.IsFriendlyFire());
 }
@@ -385,15 +390,26 @@ function ApplyMatchSettings(): void
 
 	for (const Command of Commands)
 	{
-		Instance.ServerCommand(Command);
+		Console.ServerCommand(Command);
 	}
+}
+
+function EndWarmupNow(Player: CSPlayerController): void
+{
+	if (!GameRules.IsWarmupPeriod())
+	{
+		Console.Log(`${LogPrefix} ${Player.GetPlayerName()} typed ${ChatCommandPrefix}start, but warmup is already over`);
+		return;
+	}
+	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} ended warmup`);
+	GameRules.EndWarmup();
 }
 
 function TickMatch(Now: number): void
 {
-	if (bDebug && Instance.IsWarmupPeriod())
+	if (bDebug && GameRules.IsWarmupPeriod())
 	{
-		Instance.ServerCommand("mp_warmup_end");
+		Console.ServerCommand("mp_warmup_end");
 	}
 }
 
@@ -422,7 +438,7 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 		GPendingClassBySlot.set(Slot, PlayerClass);
 	}
 	ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
-	Instance.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass} on respawn`);
+	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass} on respawn`);
 }
 
 function ApplyPendingClass(Slot: number): void
@@ -470,7 +486,7 @@ function SetPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): 
 	ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === 2);
 
 	const ClassLabel: string = PlayerClass === EPlayerClass.None ? "normal" : PlayerClass;
-	Instance.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
+	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
 }
 
 function AssignRandomBotClass(Pawn: CSPlayerPawn, Slot: number): boolean
@@ -482,7 +498,7 @@ function AssignRandomBotClass(Pawn: CSPlayerPawn, Slot: number): boolean
 	}
 	const PlayerClass: EPlayableClass = PickRandomClass();
 	GClassBySlot.set(Slot, PlayerClass);
-	Instance.Msg(`${LogPrefix} ${Controller.GetPlayerName()} (bot) -> ${PlayerClass}`);
+	Console.Log(`${LogPrefix} ${Controller.GetPlayerName()} (bot) -> ${PlayerClass}`);
 	return true;
 }
 

@@ -1,4 +1,4 @@
-import { Instance, CSInputs } from "cs_script/point_script";
+import { Instance, GameRules, CSInputs } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
 import { TickInterval } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
@@ -127,7 +127,7 @@ export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo
 
 function TickHeldLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): boolean
 {
-	const bFireHeld: boolean = Pawn.IsInputPressed(CSInputs.ATTACK) && !Pawn.IsBuyMenuOpen() && !Instance.IsFreezePeriod();
+	const bFireHeld: boolean = Pawn.IsInputPressed(CSInputs.ATTACK) && !Pawn.IsBuyMenuOpen() && !GameRules.IsFreezePeriod();
 	if (bFireHeld && State.Clip > 0)
 	{
 		State.NextReloadTime = undefined;

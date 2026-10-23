@@ -1,4 +1,4 @@
-import { Instance } from "cs_script/point_script";
+import { Instance, Console } from "cs_script/point_script";
 import type { Entity, CustomHudLayout } from "cs_script/point_script";
 import { LogPrefix, SetTimer } from "./bm_core";
 
@@ -115,7 +115,7 @@ function FindDamageHud(): CustomHudLayout | undefined
 	{
 		GbWarnedNoDamageHud = true;
 		const Problem: string = Hud ? "exists but isn't a custom_hud_layout" : "wasn't found";
-		Instance.Msg(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+		Console.Log(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
 	}
 	return undefined;
 }

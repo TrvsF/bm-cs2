@@ -1,4 +1,4 @@
-import { Instance, CSInputs } from "cs_script/point_script";
+import { Instance, Console, CSInputs } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CustomHudLayout } from "cs_script/point_script";
 import { LogPrefix, ForEachLivePawn } from "./bm_core";
 import { EPlayerClass, ClassDefinitions } from "./bm_classes";
@@ -413,7 +413,7 @@ function FindClassUi(): CustomHudLayout | undefined
 	{
 		GbWarnedNoClassUi = true;
 		const Problem: string = Ui ? "exists but isn't a custom_hud_layout" : "wasn't found";
-		Instance.Msg(`${LogPrefix} class menu: an entity named "${ClassUiName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+		Console.Log(`${LogPrefix} class menu: an entity named "${ClassUiName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
 	}
 	return undefined;
 }

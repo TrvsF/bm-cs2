@@ -57,6 +57,7 @@ interface FPendingTimer
 
 export const INDEX_NONE: number = -1;
 export const LogPrefix: string = "[BM]";
+export const ChatCommandPrefix: string = "-";
 const MaxPlayerSlots: number = 64;
 
 export const UpVector: FVector = { x: 0, y: 0, z: 1 };

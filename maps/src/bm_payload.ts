@@ -1,4 +1,4 @@
-import { Instance, CSDamageFlags } from "cs_script/point_script";
+import { Instance, Console, GameRules, CSRoundEndReason } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn } from "cs_script/point_script";
 import { bDebug, LogPrefix, TickInterval, ETeam, VectorMath, RotationMath, GetPlayerSlot, ForEachLivePawn } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
@@ -23,6 +23,7 @@ export interface FPayloadSettings
 	readonly CheckpointBonusTime: number;
 	readonly PusherHealPerSecond: number;
 	readonly TurnBlendDistance: number;
+	readonly BuyTime: number;
 }
 
 export interface FPayloadStatus
@@ -76,6 +77,7 @@ export const PayloadSettings: FPayloadSettings =
 	CheckpointBonusTime: 120,
 	PusherHealPerSecond: 10,
 	TurnBlendDistance: 48,
+	BuyTime: 3,
 };
 
 const AttackingTeam: ETeam = ETeam.Terrorist;
@@ -83,8 +85,6 @@ const DefendingTeam: ETeam = ETeam.CounterTerrorist;
 const PathPointClasses: readonly string[] = ["info_target", "path_track"];
 const CartClasses: readonly string[] = ["prop_dynamic", "prop_dynamic_override"];
 const RescanInterval: number = 1;
-const WinEliminationDelay: number = 0.2;
-const WinEliminationTimeout: number = 3;
 const TrackDebugColor: FColor = { r: 240, g: 200, b: 60 };
 const CheckpointDebugColor: FColor = { r: 120, g: 230, b: 120 };
 const CartDebugColor: FColor = { r: 220, g: 60, b: 50 };
@@ -100,9 +100,6 @@ let GbRoundOver: boolean = false;
 let GbDelivered: boolean = false;
 let GNextScanTime: number = 0;
 let GStatus: FPayloadStatus | undefined = undefined;
-let GPendingWinner: ETeam | undefined = undefined;
-let GWinStartedAt: number = 0;
-let GbWinFellBack: boolean = false;
 let GLastScanReport: string = "";
 const GHealAccumulators: Map<number, number> = new Map<number, number>();
 
@@ -128,8 +125,10 @@ export class PayloadMode extends GameMode
 		const Minutes: number = PayloadSettings.RoundTime / 60;
 		return [
 			"mp_ignore_round_win_conditions 1",
+			"mp_warmup_pausetimer 0",
 			"mp_respawn_on_death_t 1",
 			"mp_respawn_on_death_ct 1",
+			`mp_buytime ${PayloadSettings.BuyTime}`,
 			`mp_roundtime ${Minutes}`,
 			`mp_roundtime_defuse ${Minutes}`,
 			`mp_roundtime_hostage ${Minutes}`,
@@ -159,7 +158,6 @@ export class PayloadMode extends GameMode
 		GbRoundTimerSet = false;
 		GbRoundOver = false;
 		GbDelivered = false;
-		GPendingWinner = undefined;
 		GHealAccumulators.clear();
 		GStatus = undefined;
 		PlaceCart(true);
@@ -168,7 +166,6 @@ export class PayloadMode extends GameMode
 	public override OnRoundEnd(): void
 	{
 		GbRoundOver = true;
-		GPendingWinner = undefined;
 	}
 
 	public override Tick(Now: number, DeltaTime: number): void
@@ -204,11 +201,7 @@ function TickPayload(Now: number, DeltaTime: number): void
 	{
 		DrawTrack(Track);
 	}
-	if (GPendingWinner !== undefined)
-	{
-		TickPendingWin(GPendingWinner, Now);
-	}
-	if (GbRoundOver || Instance.IsWarmupPeriod() || Instance.IsFreezePeriod())
+	if (GbRoundOver || GameRules.IsWarmupPeriod() || GameRules.IsFreezePeriod())
 	{
 		GStatus = MakeStatus(Track, 0, false, false, false, Now);
 		return;
@@ -217,7 +210,7 @@ function TickPayload(Now: number, DeltaTime: number): void
 	{
 		GbRoundTimerSet = true;
 		GLastAttendedTime = Now;
-		Instance.SetRoundRemainingTime(PayloadSettings.RoundTime);
+		GameRules.SetRoundRemainingTime(PayloadSettings.RoundTime);
 	}
 
 	const Crowd: FCartCrowd = FindCartCrowd(GetTrackPosition(Track, GDistance));
@@ -242,15 +235,15 @@ function TickPayload(Now: number, DeltaTime: number): void
 	ReachCheckpoints(Track, Now);
 	PlaceCart(false);
 
-	const bTimeUp: boolean = Instance.GetRoundRemainingTime() <= 0;
+	const bTimeUp: boolean = GameRules.GetRoundRemainingTime() <= 0;
 	if (GDistance >= Track.Length)
 	{
 		GbDelivered = true;
-		EndRound(AttackingTeam, Now);
+		EndRound(AttackingTeam);
 	}
 	else if (bTimeUp && Crowd.Attackers.length === 0)
 	{
-		EndRound(DefendingTeam, Now);
+		EndRound(DefendingTeam);
 	}
 	GStatus = MakeStatus(Track, Pushers, bBlocked && !GbRoundOver, bRollingBack, bTimeUp && !GbRoundOver, Now);
 }
@@ -328,53 +321,22 @@ function ReachCheckpoints(Track: FPayloadTrack, Now: number): void
 		}
 		GCheckpointsReached++;
 		GSavedDistance = CheckpointDistance;
-		Instance.SetRoundRemainingTime(Math.max(0, Instance.GetRoundRemainingTime()) + PayloadSettings.CheckpointBonusTime);
-		Instance.Msg(`${LogPrefix} payload: checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached, +${PayloadSettings.CheckpointBonusTime}s`);
+		GameRules.SetRoundRemainingTime(Math.max(0, GameRules.GetRoundRemainingTime()) + PayloadSettings.CheckpointBonusTime);
+		Console.Log(`${LogPrefix} payload: checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached, +${PayloadSettings.CheckpointBonusTime}s`);
 	}
 }
 
-function EndRound(Winner: ETeam, Now: number): void
+// The winner scores a point, then the round ends the base game's way, win banner and all
+function EndRound(Winner: ETeam): void
 {
 	if (GbRoundOver)
 	{
 		return;
 	}
 	GbRoundOver = true;
-	GPendingWinner = Winner;
-	GWinStartedAt = Now;
-	GbWinFellBack = false;
-	const Loser: ETeam = GetOtherTeam(Winner);
-	Instance.ServerCommand("mp_ignore_round_win_conditions 0");
-	Instance.ServerCommand(`mp_respawn_on_death_${Loser === ETeam.Terrorist ? "t" : "ct"} 0`);
-	Instance.Msg(`${LogPrefix} payload: ${Winner === AttackingTeam ? "Ts delivered the cart" : "time's up, CTs held"}`);
-}
-
-function TickPendingWin(Winner: ETeam, Now: number): void
-{
-	const Elapsed: number = Now - GWinStartedAt;
-	if (Elapsed < WinEliminationDelay)
-	{
-		return;
-	}
-	const Loser: ETeam = GetOtherTeam(Winner);
-	ForEachLivePawn((Pawn: CSPlayerPawn): void =>
-	{
-		if (Pawn.GetTeamNumber() === Loser)
-		{
-			Pawn.TakeDamage({ damage: Pawn.GetHealth() + 1000, damageFlags: CSDamageFlags.FORCE_DEATH | CSDamageFlags.IGNORE_ARMOR });
-		}
-	});
-	if (Elapsed > WinEliminationTimeout && !GbWinFellBack)
-	{
-		GbWinFellBack = true;
-		Instance.SetRoundRemainingTime(0);
-		Instance.Msg(`${LogPrefix} payload: the round didn't end on its own (is the losing side empty?), so the clock was run out`);
-	}
-}
-
-function GetOtherTeam(Team: ETeam): ETeam
-{
-	return Team === ETeam.Terrorist ? ETeam.CounterTerrorist : ETeam.Terrorist;
+	GameRules.AddTeamScore(Winner, 1);
+	GameRules.TerminateRound(Winner === ETeam.Terrorist ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
+	Console.Log(`${LogPrefix} payload: ${Winner === AttackingTeam ? "Ts delivered the cart" : "time's up, CTs held"}`);
 }
 
 function MakeStatus(Track: FPayloadTrack, Pushers: number, bBlocked: boolean, bRollingBack: boolean, bOvertime: boolean, Now: number): FPayloadStatus
@@ -424,7 +386,7 @@ function ScanPayload(): void
 			: "";
 	if (Report !== "" && Report !== GLastScanReport)
 	{
-		Instance.Msg(`${LogPrefix} ${Report}`);
+		Console.Log(`${LogPrefix} ${Report}`);
 	}
 	GLastScanReport = Report;
 }

@@ -1,5 +1,5 @@
 // src/bm_main.ts
-import { Instance as Instance11, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags3, CSGearSlot as CSGearSlot2 } from "cs_script/point_script";
+import { Instance as Instance12, Console as Console7, GameRules as GameRules3, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2, CSGearSlot as CSGearSlot2 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance } from "cs_script/point_script";
@@ -7,6 +7,7 @@ var bDebug = false;
 var TickInterval = 1 / 64;
 var INDEX_NONE = -1;
 var LogPrefix = "[BM]";
+var ChatCommandPrefix = "-";
 var MaxPlayerSlots = 64;
 var UpVector = { x: 0, y: 0, z: 1 };
 var ZeroVector = { x: 0, y: 0, z: 0 };
@@ -187,7 +188,7 @@ function ForEachLivePawn(Visitor) {
 import { Instance as Instance5, CSInputs as CSInputs2, CSGearSlot, CSDamageTypes as CSDamageTypes2, CSDamageFlags, CSWeaponType as CSWeaponType2, CSHitGroup } from "cs_script/point_script";
 
 // src/bm_combat.ts
-import { Instance as Instance3, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
+import { Instance as Instance3, Console, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 
 // src/bm_effects.ts
 import { Instance as Instance2 } from "cs_script/point_script";
@@ -566,7 +567,7 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff) {
       SpawnBloodSplatter(Origin, Victim);
     }
     const PushDirection = VectorMath.GetSafeNormal(Push);
-    Instance3.Msg(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
+    Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
   });
 }
 function GetDistanceDamageScale(Distance, Falloff) {
@@ -691,13 +692,13 @@ function ApplyBulletFalloff(Event, Falloff) {
   const RangeScale = GetRangeDamageScale(Attacker, Event.player, Falloff);
   const Damage = Math.max(1, Math.round(Event.damage / CsRangeScale * RangeScale));
   if (bDebug) {
-    Instance3.Msg(`${LogPrefix} bullet falloff: ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)} (${Math.round(Event.damage)} -> ${Damage})`);
+    Console.Log(`${LogPrefix} bullet falloff: ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)} (${Math.round(Event.damage)} -> ${Damage})`);
   }
   return { damage: Damage };
 }
 
 // src/bm_launcher.ts
-import { Instance as Instance4, CSInputs } from "cs_script/point_script";
+import { Instance as Instance4, GameRules, CSInputs } from "cs_script/point_script";
 var FireFxLifetime = 3;
 var ReloadFxLifetime = 3;
 var GLaunchers = /* @__PURE__ */ new Map();
@@ -764,7 +765,7 @@ function GetLauncherAmmo(Pawn, Slot) {
   return void 0;
 }
 function TickHeldLauncher(Pawn, State, Now) {
-  const bFireHeld = Pawn.IsInputPressed(CSInputs.ATTACK) && !Pawn.IsBuyMenuOpen() && !Instance4.IsFreezePeriod();
+  const bFireHeld = Pawn.IsInputPressed(CSInputs.ATTACK) && !Pawn.IsBuyMenuOpen() && !GameRules.IsFreezePeriod();
   if (bFireHeld && State.Clip > 0) {
     State.NextReloadTime = void 0;
     if (Now < State.NextFireTime) {
@@ -1712,7 +1713,7 @@ function IsWeaponAllowed(PlayerClass2, Weapon) {
 }
 
 // src/bm_hud.ts
-import { Instance as Instance6 } from "cs_script/point_script";
+import { Instance as Instance6, Console as Console2 } from "cs_script/point_script";
 var DamageHudName = "damage_hud";
 var DamageLabelId = "DamageNumber";
 var DamageBatchWindow = 0.6;
@@ -1786,7 +1787,7 @@ function FindDamageHud() {
   if (!GbWarnedNoDamageHud) {
     GbWarnedNoDamageHud = true;
     const Problem = Hud ? "exists but isn't a custom_hud_layout" : "wasn't found";
-    Instance6.Msg(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+    Console2.Log(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
   }
   return void 0;
 }
@@ -1795,7 +1796,7 @@ function IsCustomHudLayout(Ent) {
 }
 
 // src/bm_ui.ts
-import { Instance as Instance7, CSInputs as CSInputs3 } from "cs_script/point_script";
+import { Instance as Instance7, Console as Console3, CSInputs as CSInputs3 } from "cs_script/point_script";
 var ClassUiName = "class_hud";
 var MenuPanelId = "ClassMenu";
 var BottomBarId = "BottomBar";
@@ -2097,7 +2098,7 @@ function FindClassUi() {
   if (!GbWarnedNoClassUi) {
     GbWarnedNoClassUi = true;
     const Problem = Ui ? "exists but isn't a custom_hud_layout" : "wasn't found";
-    Instance7.Msg(`${LogPrefix} class menu: an entity named "${ClassUiName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+    Console3.Log(`${LogPrefix} class menu: an entity named "${ClassUiName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
   }
   return void 0;
 }
@@ -2106,7 +2107,7 @@ function IsCustomHudLayout2(Ent) {
 }
 
 // src/bm_pickups.ts
-import { Instance as Instance8 } from "cs_script/point_script";
+import { Instance as Instance8, Console as Console4 } from "cs_script/point_script";
 var HealthKitSettings = {
   Name: "healthkit",
   HealFraction: 0.5,
@@ -2118,7 +2119,7 @@ var HealthKitSettings = {
   RespawnFxTemplate: "healthkit_respawn_template"
 };
 var HiddenScale = 1e-3;
-var PickupBelowTolerance = 64;
+var PickupBelowTolerance = 32;
 var FxLifetime = 3;
 var RescanInterval = 1;
 var KitClassNames = ["prop_dynamic", "prop_dynamic_override"];
@@ -2210,7 +2211,7 @@ function TakeKit(Kit, Taker, Now) {
   SpawnKitFx(HealthKitSettings.PickupFxTemplate, Kit);
   if (bDebug) {
     const Name = Taker.GetPlayerController()?.GetPlayerName() ?? "someone";
-    Instance8.Msg(`${LogPrefix} ${Name} took a health kit: ${OldHealth} -> ${NewHealth}`);
+    Console4.Log(`${LogPrefix} ${Name} took a health kit: ${OldHealth} -> ${NewHealth}`);
   }
 }
 function RespawnKit(Kit) {
@@ -2230,6 +2231,119 @@ function SpawnKitFx(TemplateName, Kit) {
 }
 function IsModelEntity2(Ent) {
   return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
+}
+
+// src/bm_spawnzones.ts
+import { Instance as Instance9, Console as Console5 } from "cs_script/point_script";
+var SpawnZoneSettings = {
+  TerroristZoneName: "spawnzone_t",
+  CounterTerroristZoneName: "spawnzone_ct",
+  PushOutSpeed: 250
+};
+var RescanInterval2 = 1;
+var SafeHistoryTicks = 8;
+var GZones = [];
+var GVisitors = /* @__PURE__ */ new Map();
+var GNextScanTime = 0;
+var GLastScanReport = "";
+function TickSpawnZones(Now) {
+  if (Now >= GNextScanTime) {
+    GNextScanTime = Now + RescanInterval2;
+    ScanSpawnZones();
+  }
+  if (GZones.length === 0) {
+    return;
+  }
+  ForEachLivePawn((Pawn, Slot) => {
+    const Visitor = GetVisitor(Slot);
+    const EnemyZone = FindEnemyZone(Pawn, Slot);
+    if (EnemyZone) {
+      PushOut(Pawn, Slot, Visitor, EnemyZone);
+      return;
+    }
+    Visitor.History.push(Pawn.GetAbsOrigin());
+    if (Visitor.History.length > SafeHistoryTicks) {
+      Visitor.History.shift();
+    }
+  });
+}
+function ResetSpawnZones() {
+  for (const Zone of GZones) {
+    Zone.Touching.clear();
+  }
+  GVisitors.clear();
+  GNextScanTime = 0;
+}
+function ForgetSpawnZonePlayer(Slot) {
+  for (const Zone of GZones) {
+    Zone.Touching.delete(Slot);
+  }
+  GVisitors.delete(Slot);
+}
+function ScanSpawnZones() {
+  AddZones(SpawnZoneSettings.TerroristZoneName, 2 /* Terrorist */);
+  AddZones(SpawnZoneSettings.CounterTerroristZoneName, 3 /* CounterTerrorist */);
+  const TerroristZones = CountZones(2 /* Terrorist */);
+  const CounterTerroristZones = CountZones(3 /* CounterTerrorist */);
+  const Report = TerroristZones + CounterTerroristZones > 0 ? `spawn zones: ${TerroristZones} for Ts ("${SpawnZoneSettings.TerroristZoneName}"), ${CounterTerroristZones} for CTs ("${SpawnZoneSettings.CounterTerroristZoneName}")` : "";
+  if (Report !== "" && Report !== GLastScanReport) {
+    Console5.Log(`${LogPrefix} ${Report}`);
+  }
+  GLastScanReport = Report;
+}
+function AddZones(Name, Team) {
+  for (const Ent of Instance9.FindEntitiesByName(`${Name}*`)) {
+    const bKnown = GZones.some((Zone2) => {
+      return Zone2.Entity === Ent;
+    });
+    if (bKnown || !Ent.IsValid()) {
+      continue;
+    }
+    const Zone = { Entity: Ent, Team, Touching: /* @__PURE__ */ new Set() };
+    GZones.push(Zone);
+    Instance9.ConnectOutput(Ent, "OnStartTouch", (InputData) => {
+      const Slot = GetToucherSlot(InputData.activator);
+      if (Slot !== INDEX_NONE) {
+        Zone.Touching.add(Slot);
+      }
+    });
+    Instance9.ConnectOutput(Ent, "OnEndTouch", (InputData) => {
+      Zone.Touching.delete(GetToucherSlot(InputData.activator));
+    });
+  }
+}
+function CountZones(Team) {
+  return GZones.filter((Zone) => {
+    return Zone.Team === Team && Zone.Entity.IsValid();
+  }).length;
+}
+function GetToucherSlot(Activator) {
+  return IsPlayerPawn(Activator) ? GetPlayerSlot(Activator) : INDEX_NONE;
+}
+function FindEnemyZone(Pawn, Slot) {
+  const Team = Pawn.GetTeamNumber();
+  return GZones.find((Zone) => {
+    return Zone.Team !== Team && Zone.Touching.has(Slot) && Zone.Entity.IsValid();
+  });
+}
+function GetVisitor(Slot) {
+  let Visitor = GVisitors.get(Slot);
+  if (!Visitor) {
+    Visitor = { History: [] };
+    GVisitors.set(Slot, Visitor);
+  }
+  return Visitor;
+}
+function PushOut(Pawn, Slot, Visitor, Zone) {
+  Zone.Touching.delete(Slot);
+  const SafeSpot = Visitor.History[0];
+  if (SafeSpot) {
+    Pawn.Teleport({ position: SafeSpot, velocity: ZeroVector });
+    return;
+  }
+  const Offset = VectorMath.Subtract(Pawn.GetAbsOrigin(), Zone.Entity.GetAbsOrigin());
+  const Away = VectorMath.GetSafeNormal({ x: Offset.x, y: Offset.y, z: 0 });
+  Pawn.Teleport({ velocity: VectorMath.Scale(Away, SpawnZoneSettings.PushOutSpeed) });
 }
 
 // src/bm_gamemode.ts
@@ -2261,7 +2375,7 @@ var GameMode = class {
 };
 
 // src/bm_bots.ts
-import { Instance as Instance9 } from "cs_script/point_script";
+import { Instance as Instance10 } from "cs_script/point_script";
 var BotMarkerModes = /* @__PURE__ */ new Map(
   [
     ["bot_still", 0 /* Still */],
@@ -2303,7 +2417,7 @@ function ResetBotMode(Slot) {
   if (Assignment) {
     Assignment.bPlaced = false;
   }
-  GBotReadyAt.set(Slot, Instance9.GetGameTime() + BotSpawnSettleTime);
+  GBotReadyAt.set(Slot, Instance10.GetGameTime() + BotSpawnSettleTime);
 }
 function ForgetBot(Slot) {
   GBotAssignments.delete(Slot);
@@ -2316,7 +2430,7 @@ function FindFreeBotMarkers() {
   }
   const FreeMarkers = /* @__PURE__ */ new Map();
   for (const [MarkerName, Mode] of BotMarkerModes) {
-    for (const Marker of Instance9.FindEntitiesByName(MarkerName)) {
+    for (const Marker of Instance10.FindEntitiesByName(MarkerName)) {
       if (Marker.IsValid() && !Claimed.has(Marker)) {
         FreeMarkers.set(Marker, Mode);
       }
@@ -2393,7 +2507,7 @@ var FreeForAllMode = class extends GameMode {
 };
 
 // src/bm_payload.ts
-import { Instance as Instance10, CSDamageFlags as CSDamageFlags2 } from "cs_script/point_script";
+import { Instance as Instance11, Console as Console6, GameRules as GameRules2, CSRoundEndReason } from "cs_script/point_script";
 var PayloadSettings = {
   CartName: "payload_cart",
   PathPrefix: "payload_path_",
@@ -2408,15 +2522,14 @@ var PayloadSettings = {
   RoundTime: 300,
   CheckpointBonusTime: 120,
   PusherHealPerSecond: 10,
-  TurnBlendDistance: 48
+  TurnBlendDistance: 48,
+  BuyTime: 3
 };
 var AttackingTeam = 2 /* Terrorist */;
 var DefendingTeam = 3 /* CounterTerrorist */;
 var PathPointClasses = ["info_target", "path_track"];
 var CartClasses = ["prop_dynamic", "prop_dynamic_override"];
-var RescanInterval2 = 1;
-var WinEliminationDelay = 0.2;
-var WinEliminationTimeout = 3;
+var RescanInterval3 = 1;
 var TrackDebugColor = { r: 240, g: 200, b: 60 };
 var CheckpointDebugColor = { r: 120, g: 230, b: 120 };
 var CartDebugColor = { r: 220, g: 60, b: 50 };
@@ -2429,12 +2542,9 @@ var GLastAttendedTime = 0;
 var GbRoundTimerSet = false;
 var GbRoundOver = false;
 var GbDelivered = false;
-var GNextScanTime = 0;
+var GNextScanTime2 = 0;
 var GStatus = void 0;
-var GPendingWinner = void 0;
-var GWinStartedAt = 0;
-var GbWinFellBack = false;
-var GLastScanReport = "";
+var GLastScanReport2 = "";
 var GHealAccumulators = /* @__PURE__ */ new Map();
 var PayloadMode = class extends GameMode {
   DisplayName = "Payload";
@@ -2449,8 +2559,10 @@ var PayloadMode = class extends GameMode {
     const Minutes = PayloadSettings.RoundTime / 60;
     return [
       "mp_ignore_round_win_conditions 1",
+      "mp_warmup_pausetimer 0",
       "mp_respawn_on_death_t 1",
       "mp_respawn_on_death_ct 1",
+      `mp_buytime ${PayloadSettings.BuyTime}`,
       `mp_roundtime ${Minutes}`,
       `mp_roundtime_defuse ${Minutes}`,
       `mp_roundtime_hostage ${Minutes}`,
@@ -2461,7 +2573,7 @@ var PayloadMode = class extends GameMode {
     PlaceCart(true);
   }
   OnDeactivated() {
-    for (const Controller of Instance10.GetAllPlayerControllers()) {
+    for (const Controller of Instance11.GetAllPlayerControllers()) {
       ShowPayload(Controller.GetPlayerSlot(), void 0);
     }
   }
@@ -2473,14 +2585,12 @@ var PayloadMode = class extends GameMode {
     GbRoundTimerSet = false;
     GbRoundOver = false;
     GbDelivered = false;
-    GPendingWinner = void 0;
     GHealAccumulators.clear();
     GStatus = void 0;
     PlaceCart(true);
   }
   OnRoundEnd() {
     GbRoundOver = true;
-    GPendingWinner = void 0;
   }
   Tick(Now, DeltaTime) {
     TickPayload(Now, DeltaTime);
@@ -2493,8 +2603,8 @@ function IsPayloadReady() {
   return GTrack !== void 0 && GCart !== void 0 && GCart.Entity.IsValid();
 }
 function TickPayload(Now, DeltaTime) {
-  if (!IsPayloadReady() && Now >= GNextScanTime) {
-    GNextScanTime = Now + RescanInterval2;
+  if (!IsPayloadReady() && Now >= GNextScanTime2) {
+    GNextScanTime2 = Now + RescanInterval3;
     ScanPayload();
     PlaceCart(true);
   }
@@ -2505,17 +2615,14 @@ function TickPayload(Now, DeltaTime) {
   if (bDebug) {
     DrawTrack(Track);
   }
-  if (GPendingWinner !== void 0) {
-    TickPendingWin(GPendingWinner, Now);
-  }
-  if (GbRoundOver || Instance10.IsWarmupPeriod() || Instance10.IsFreezePeriod()) {
+  if (GbRoundOver || GameRules2.IsWarmupPeriod() || GameRules2.IsFreezePeriod()) {
     GStatus = MakeStatus(Track, 0, false, false, false, Now);
     return;
   }
   if (!GbRoundTimerSet) {
     GbRoundTimerSet = true;
     GLastAttendedTime = Now;
-    Instance10.SetRoundRemainingTime(PayloadSettings.RoundTime);
+    GameRules2.SetRoundRemainingTime(PayloadSettings.RoundTime);
   }
   const Crowd = FindCartCrowd(GetTrackPosition(Track, GDistance));
   const Pushers = Math.min(Crowd.Attackers.length, PayloadSettings.MaxPushers);
@@ -2533,12 +2640,12 @@ function TickPayload(Now, DeltaTime) {
   }
   ReachCheckpoints(Track, Now);
   PlaceCart(false);
-  const bTimeUp = Instance10.GetRoundRemainingTime() <= 0;
+  const bTimeUp = GameRules2.GetRoundRemainingTime() <= 0;
   if (GDistance >= Track.Length) {
     GbDelivered = true;
-    EndRound(AttackingTeam, Now);
+    EndRound(AttackingTeam);
   } else if (bTimeUp && Crowd.Attackers.length === 0) {
-    EndRound(DefendingTeam, Now);
+    EndRound(DefendingTeam);
   }
   GStatus = MakeStatus(Track, Pushers, bBlocked && !GbRoundOver, bRollingBack, bTimeUp && !GbRoundOver, Now);
 }
@@ -2596,42 +2703,18 @@ function ReachCheckpoints(Track, Now) {
     }
     GCheckpointsReached++;
     GSavedDistance = CheckpointDistance;
-    Instance10.SetRoundRemainingTime(Math.max(0, Instance10.GetRoundRemainingTime()) + PayloadSettings.CheckpointBonusTime);
-    Instance10.Msg(`${LogPrefix} payload: checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached, +${PayloadSettings.CheckpointBonusTime}s`);
+    GameRules2.SetRoundRemainingTime(Math.max(0, GameRules2.GetRoundRemainingTime()) + PayloadSettings.CheckpointBonusTime);
+    Console6.Log(`${LogPrefix} payload: checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached, +${PayloadSettings.CheckpointBonusTime}s`);
   }
 }
-function EndRound(Winner, Now) {
+function EndRound(Winner) {
   if (GbRoundOver) {
     return;
   }
   GbRoundOver = true;
-  GPendingWinner = Winner;
-  GWinStartedAt = Now;
-  GbWinFellBack = false;
-  const Loser = GetOtherTeam(Winner);
-  Instance10.ServerCommand("mp_ignore_round_win_conditions 0");
-  Instance10.ServerCommand(`mp_respawn_on_death_${Loser === 2 /* Terrorist */ ? "t" : "ct"} 0`);
-  Instance10.Msg(`${LogPrefix} payload: ${Winner === AttackingTeam ? "Ts delivered the cart" : "time's up, CTs held"}`);
-}
-function TickPendingWin(Winner, Now) {
-  const Elapsed = Now - GWinStartedAt;
-  if (Elapsed < WinEliminationDelay) {
-    return;
-  }
-  const Loser = GetOtherTeam(Winner);
-  ForEachLivePawn((Pawn) => {
-    if (Pawn.GetTeamNumber() === Loser) {
-      Pawn.TakeDamage({ damage: Pawn.GetHealth() + 1e3, damageFlags: CSDamageFlags2.FORCE_DEATH | CSDamageFlags2.IGNORE_ARMOR });
-    }
-  });
-  if (Elapsed > WinEliminationTimeout && !GbWinFellBack) {
-    GbWinFellBack = true;
-    Instance10.SetRoundRemainingTime(0);
-    Instance10.Msg(`${LogPrefix} payload: the round didn't end on its own (is the losing side empty?), so the clock was run out`);
-  }
-}
-function GetOtherTeam(Team) {
-  return Team === 2 /* Terrorist */ ? 3 /* CounterTerrorist */ : 2 /* Terrorist */;
+  GameRules2.AddTeamScore(Winner, 1);
+  GameRules2.TerminateRound(Winner === 2 /* Terrorist */ ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
+  Console6.Log(`${LogPrefix} payload: ${Winner === AttackingTeam ? "Ts delivered the cart" : "time's up, CTs held"}`);
 }
 function MakeStatus(Track, Pushers, bBlocked, bRollingBack, bOvertime, Now) {
   const Status = {
@@ -2661,20 +2744,20 @@ function ScanPayload() {
     GCart = void 0;
   }
   const Report = IsPayloadReady() && GTrack ? `payload on: ${GTrack.Points.length} track points, ${Math.round(GTrack.Length)}u long, ${GTrack.Checkpoints.length} checkpoints. Ts push, CTs defend, no friendly fire.` : CartEntity || Points.length > 0 ? `payload off: found ${CartEntity ? "a cart" : "no cart"} ("${PayloadSettings.CartName}") and ${Points.length} track points ("${PayloadSettings.PathPrefix}1" ...). It needs a cart and at least 2 points.` : "";
-  if (Report !== "" && Report !== GLastScanReport) {
-    Instance10.Msg(`${LogPrefix} ${Report}`);
+  if (Report !== "" && Report !== GLastScanReport2) {
+    Console6.Log(`${LogPrefix} ${Report}`);
   }
-  GLastScanReport = Report;
+  GLastScanReport2 = Report;
 }
 function FindCartEntity() {
-  const Named = Instance10.FindEntitiesByName(PayloadSettings.CartName).find((Ent) => {
+  const Named = Instance11.FindEntitiesByName(PayloadSettings.CartName).find((Ent) => {
     return Ent.IsValid();
   });
   if (Named) {
     return Named;
   }
   for (const ClassName of CartClasses) {
-    for (const Ent of Instance10.FindEntitiesByClass(ClassName)) {
+    for (const Ent of Instance11.FindEntitiesByClass(ClassName)) {
       if (Ent.IsValid() && Ent.GetEntityName().includes(PayloadSettings.CartName)) {
         return Ent;
       }
@@ -2683,9 +2766,9 @@ function FindCartEntity() {
   return void 0;
 }
 function FindPathPoints() {
-  const Candidates = new Set(Instance10.FindEntitiesByName(`${PayloadSettings.PathPrefix}*`));
+  const Candidates = new Set(Instance11.FindEntitiesByName(`${PayloadSettings.PathPrefix}*`));
   for (const ClassName of PathPointClasses) {
-    for (const Ent of Instance10.FindEntitiesByClass(ClassName)) {
+    for (const Ent of Instance11.FindEntitiesByClass(ClassName)) {
       Candidates.add(Ent);
     }
   }
@@ -2804,33 +2887,23 @@ function DrawTrack(Track) {
     const From = Track.Points[Index - 1];
     const To = Track.Points[Index];
     if (From && To) {
-      Instance10.DebugLine({ start: From, end: To, duration: TickInterval * 2, color: TrackDebugColor });
+      Instance11.DebugLine({ start: From, end: To, duration: TickInterval * 2, color: TrackDebugColor });
     }
   }
   for (const CheckpointDistance of Track.Checkpoints) {
-    Instance10.DebugSphere({ center: GetTrackPosition(Track, CheckpointDistance), radius: 16, duration: TickInterval * 2, color: CheckpointDebugColor });
+    Instance11.DebugSphere({ center: GetTrackPosition(Track, CheckpointDistance), radius: 16, duration: TickInterval * 2, color: CheckpointDebugColor });
   }
-  Instance10.DebugSphere({ center: GetTrackPosition(Track, GDistance), radius: PayloadSettings.PushRadius, duration: TickInterval * 2, color: CartDebugColor });
+  Instance11.DebugSphere({ center: GetTrackPosition(Track, GDistance), radius: PayloadSettings.PushRadius, duration: TickInterval * 2, color: CartDebugColor });
 }
 
 // src/bm_main.ts
 var AirshotMinHeight = 64;
-var ClassChatCommands = /* @__PURE__ */ new Map(
-  [
-    ["!demo", "demo" /* Demoman */],
-    ["!medic", "medic" /* Medic */],
-    ["!solider", "soldier" /* Solider */],
-    ["!railer", "railer" /* Railer */],
-    ["!beamer", "beamer" /* Beamer */],
-    ["!none", "none" /* None */]
-  ]
-);
 var FreeForAll = new FreeForAllMode();
 var GameModes = [new PayloadMode(), FreeForAll];
 var GActiveMode = FreeForAll;
 function Tick() {
-  const Now = Instance11.GetGameTime();
-  Instance11.SetNextThink(Now + TickInterval);
+  const Now = Instance12.GetGameTime();
+  Instance12.SetNextThink(Now + TickInterval);
   const DeltaTime = Math.min(0.1, Math.max(0, Now - GLastThinkTime)) || TickInterval;
   GLastThinkTime = Now;
   try {
@@ -2857,50 +2930,54 @@ function Tick() {
     }
     GActiveMode.Tick(Now, DeltaTime);
     TickHealthKits(Now);
+    TickSpawnZones(Now);
     TickClassMenuKey();
     TickPlayerHud();
     TickNoBuying();
     TickBotClasses();
   } catch (Exception) {
-    Instance11.Msg(`${LogPrefix} error: ${String(Exception)}`);
+    Console7.Log(`${LogPrefix} error: ${String(Exception)}`);
   }
 }
 function BeginPlay() {
   SelectGameMode();
-  Instance11.OnPlayerChat(HandlePlayerChat);
-  Instance11.OnPlayerReset(HandlePlayerReset);
-  Instance11.OnPlayerKill(HandlePlayerKill);
-  Instance11.OnPlayerDisconnect(HandlePlayerDisconnect);
-  Instance11.OnRoundStart(HandleRoundStart);
-  Instance11.OnRoundEnd(HandleRoundEnd);
-  Instance11.OnGunFire(HandleGunFire);
-  Instance11.OnWeaponPickup(HandleWeaponPickup);
-  Instance11.OnWeaponDrop(HandleWeaponDrop);
-  Instance11.OnPlayerDamage(HandlePlayerDamage);
-  Instance11.OnModifyPlayerDamage(HandleModifyPlayerDamage);
-  Instance11.OnCustomHudClicked(HandleCustomHudClicked);
-  Instance11.SetThink(Tick);
-  Instance11.SetNextThink(Instance11.GetGameTime());
-  Instance11.Msg(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
+  Instance12.OnPlayerChat(HandlePlayerChat);
+  Instance12.OnPlayerReset(HandlePlayerReset);
+  Instance12.OnPlayerKill(HandlePlayerKill);
+  Instance12.OnPlayerDisconnect(HandlePlayerDisconnect);
+  Instance12.OnRoundStart(HandleRoundStart);
+  Instance12.OnRoundEnd(HandleRoundEnd);
+  Instance12.OnGunFire(HandleGunFire);
+  Instance12.OnWeaponPickup(HandleWeaponPickup);
+  Instance12.OnWeaponDrop(HandleWeaponDrop);
+  Instance12.OnPlayerDamage(HandlePlayerDamage);
+  Instance12.OnModifyPlayerDamage(HandleModifyPlayerDamage);
+  Instance12.OnCustomHudClicked(HandleCustomHudClicked);
+  Instance12.SetThink(Tick);
+  Instance12.SetNextThink(Instance12.GetGameTime());
+  Console7.Log(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
 }
 BeginPlay();
 function HandlePlayerChat(Event) {
   const Player = Event.player;
-  if (!Player) {
+  const Text = Event.text.trim().toLowerCase();
+  if (!Player || !Text.startsWith(ChatCommandPrefix)) {
     return;
   }
-  const Command = Event.text.trim().toLowerCase();
-  if (bDebug && Command === "!hudtest") {
-    ShowDamageNumber(Player.GetPlayerSlot(), 123);
-    return;
-  }
-  if (Command === "!class") {
+  const Command = Text.substring(ChatCommandPrefix.length);
+  const PlayerClass2 = Object.values(EPlayerClass).find((Candidate) => {
+    return Candidate === Command;
+  });
+  if (Command === "class") {
     OpenClassMenu(Player.GetPlayerSlot());
-    return;
-  }
-  const PlayerClass2 = ClassChatCommands.get(Command);
-  if (PlayerClass2 !== void 0) {
+  } else if (Command === "start") {
+    EndWarmupNow(Player);
+  } else if (Command === "hudtest" && bDebug) {
+    ShowDamageNumber(Player.GetPlayerSlot(), 123);
+  } else if (PlayerClass2 !== void 0) {
     RequestPlayerClass(Player, PlayerClass2);
+  } else {
+    Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} typed an unknown command: ${ChatCommandPrefix}${Command}`);
   }
 }
 function HandlePlayerReset(Event) {
@@ -2910,6 +2987,7 @@ function HandlePlayerReset(Event) {
     return;
   }
   ClearPlayer(Slot);
+  ForgetSpawnZonePlayer(Slot);
   GActiveMode.OnPlayerSpawn(Pawn, Slot);
   AssignRandomBotClass(Pawn, Slot);
   const bHadClass = GClassBySlot.has(Slot);
@@ -2934,10 +3012,12 @@ function HandlePlayerKill(Event) {
   const Slot = GetPlayerSlot(Event.player);
   if (Slot !== INDEX_NONE) {
     ClearPlayer(Slot);
+    ForgetSpawnZonePlayer(Slot);
   }
 }
 function HandlePlayerDisconnect(Event) {
   ClearPlayer(Event.playerSlot);
+  ForgetSpawnZonePlayer(Event.playerSlot);
   for (const Mode of GameModes) {
     Mode.OnPlayerLeave(Event.playerSlot);
   }
@@ -2952,10 +3032,11 @@ function HandleRoundStart() {
   }
   ClearDecals();
   ResetHealthKits();
+  ResetSpawnZones();
   SelectGameMode();
   GActiveMode.OnRoundStart();
   ApplyMatchSettings();
-  Instance11.Msg(`${LogPrefix} match settings applied (${GActiveMode.DisplayName})`);
+  Console7.Log(`${LogPrefix} match settings applied (${GActiveMode.DisplayName})`);
 }
 function HandleRoundEnd() {
   GActiveMode.OnRoundEnd();
@@ -2970,9 +3051,9 @@ function HandleGunFire(Event) {
   }
   const Definition = ClassDefinitions[PlayerClass2];
   if (IsWeapon(Weapon, Definition.Settings.Primary) && !Definition.Settings.PrimaryLauncher) {
-    Definition.OnPrimaryFire(Pawn, Slot, Instance11.GetGameTime());
+    Definition.OnPrimaryFire(Pawn, Slot, Instance12.GetGameTime());
   } else if (IsWeapon(Weapon, Definition.Settings.Secondary) && !Definition.Settings.SecondaryLauncher) {
-    Definition.OnSecondaryFire(Pawn, Slot, Instance11.GetGameTime());
+    Definition.OnSecondaryFire(Pawn, Slot, Instance12.GetGameTime());
   }
 }
 function HandleWeaponPickup(Event) {
@@ -3009,7 +3090,7 @@ function HandleCustomHudClicked(Event) {
   }
 }
 function HandleModifyPlayerDamage(Event) {
-  if ((Event.damageFlags & CSDamageFlags3.FORCE_DEATH) !== 0) {
+  if ((Event.damageFlags & CSDamageFlags2.FORCE_DEATH) !== 0) {
     return;
   }
   for (const Definition of Object.values(ClassDefinitions)) {
@@ -3039,7 +3120,7 @@ function SelectGameMode() {
     GActiveMode.OnDeactivated();
     GActiveMode = Mode;
     Mode.OnActivated();
-    Instance11.Msg(`${LogPrefix} game mode: ${Mode.DisplayName}`);
+    Console7.Log(`${LogPrefix} game mode: ${Mode.DisplayName}`);
   }
   SetFriendlyFire(Mode.IsFriendlyFire());
 }
@@ -3053,12 +3134,20 @@ function ApplyMatchSettings() {
   }
   Commands.push(...GActiveMode.GetMatchCommands());
   for (const Command of Commands) {
-    Instance11.ServerCommand(Command);
+    Console7.ServerCommand(Command);
   }
 }
+function EndWarmupNow(Player) {
+  if (!GameRules3.IsWarmupPeriod()) {
+    Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} typed ${ChatCommandPrefix}start, but warmup is already over`);
+    return;
+  }
+  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} ended warmup`);
+  GameRules3.EndWarmup();
+}
 function TickMatch(Now) {
-  if (bDebug && Instance11.IsWarmupPeriod()) {
-    Instance11.ServerCommand("mp_warmup_end");
+  if (bDebug && GameRules3.IsWarmupPeriod()) {
+    Console7.ServerCommand("mp_warmup_end");
   }
 }
 function RequestPlayerClass(Player, PlayerClass2) {
@@ -3077,7 +3166,7 @@ function RequestPlayerClass(Player, PlayerClass2) {
     GPendingClassBySlot.set(Slot, PlayerClass2);
   }
   ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
-  Instance11.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass2} on respawn`);
+  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass2} on respawn`);
 }
 function ApplyPendingClass(Slot) {
   const NextClass = GPendingClassBySlot.get(Slot);
@@ -3109,7 +3198,7 @@ function SetPlayerClass(Player, PlayerClass2) {
   }
   ShowClassIndicator(Slot, PlayerClass2, Pawn?.GetTeamNumber() === 2);
   const ClassLabel = PlayerClass2 === "none" /* None */ ? "normal" : PlayerClass2;
-  Instance11.Msg(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
+  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
 }
 function AssignRandomBotClass(Pawn, Slot) {
   const Controller = Pawn.GetPlayerController();
@@ -3118,7 +3207,7 @@ function AssignRandomBotClass(Pawn, Slot) {
   }
   const PlayerClass2 = PickRandomClass();
   GClassBySlot.set(Slot, PlayerClass2);
-  Instance11.Msg(`${LogPrefix} ${Controller.GetPlayerName()} (bot) -> ${PlayerClass2}`);
+  Console7.Log(`${LogPrefix} ${Controller.GetPlayerName()} (bot) -> ${PlayerClass2}`);
   return true;
 }
 function TickBotClasses() {

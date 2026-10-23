@@ -1,4 +1,4 @@
-import { Instance } from "cs_script/point_script";
+import { Instance, Console } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, BaseModelEntity } from "cs_script/point_script";
 import { bDebug, LogPrefix, TickInterval, ForEachLivePawn } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";
@@ -41,7 +41,7 @@ export const HealthKitSettings: FHealthKitSettings =
 };
 
 const HiddenScale: number = 0.001;
-const PickupBelowTolerance: number = 64
+const PickupBelowTolerance: number = 32
 const FxLifetime: number = 3;
 const RescanInterval: number = 1;
 const KitClassNames: readonly string[] = ["prop_dynamic", "prop_dynamic_override"];
@@ -179,7 +179,7 @@ function TakeKit(Kit: FHealthKit, Taker: CSPlayerPawn, Now: number): void
 	if (bDebug)
 	{
 		const Name: string = Taker.GetPlayerController()?.GetPlayerName() ?? "someone";
-		Instance.Msg(`${LogPrefix} ${Name} took a health kit: ${OldHealth} -> ${NewHealth}`);
+		Console.Log(`${LogPrefix} ${Name} took a health kit: ${OldHealth} -> ${NewHealth}`);
 	}
 }
 
