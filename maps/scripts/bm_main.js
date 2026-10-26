@@ -567,7 +567,7 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff) {
       SpawnBloodSplatter(Origin, Victim);
     }
     const PushDirection = VectorMath.GetSafeNormal(Push);
-    Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
+    Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged (explosive) ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
   });
 }
 function GetDistanceDamageScale(Distance, Falloff) {
@@ -691,9 +691,7 @@ function ApplyBulletFalloff(Event, Falloff) {
   const CsRangeScale = Math.pow(Weapon.GetData().GetRangeModifier(), BulletTravel / 500);
   const RangeScale = GetRangeDamageScale(Attacker, Event.player, Falloff);
   const Damage = Math.max(1, Math.round(Event.damage / CsRangeScale * RangeScale));
-  if (bDebug) {
-    Console.Log(`${LogPrefix} bullet falloff: ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)} (${Math.round(Event.damage)} -> ${Damage})`);
-  }
+  Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged (Bullet) ${Event.player.GetPlayerController()?.GetPlayerName()} : ${Damage}d : ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)}`);
   return { damage: Damage };
 }
 
@@ -1787,7 +1785,7 @@ function FindDamageHud() {
   if (!GbWarnedNoDamageHud) {
     GbWarnedNoDamageHud = true;
     const Problem = Hud ? "exists but isn't a custom_hud_layout" : "wasn't found";
-    Console2.Log(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+    Console2.Log(`${LogPrefix} cannot find hud "${DamageHudName}" bc of ${Problem}`);
   }
   return void 0;
 }
@@ -1799,7 +1797,8 @@ function IsCustomHudLayout(Ent) {
 import { Instance as Instance7, Console as Console3, CSInputs as CSInputs3 } from "cs_script/point_script";
 var ClassUiName = "class_hud";
 var MenuPanelId = "ClassMenu";
-var BottomBarId = "BottomBar";
+var HudCardsId = "HudCards";
+var CentreBarId = "CentreBar";
 var IndicatorPanelId = "ClassIndicator";
 var ClassNameLabelId = "ClassName";
 var PickButtonPrefix = "Pick_";
@@ -1907,9 +1906,9 @@ function ShowClassIndicator(Slot, PlayerClass2, IsT) {
   }
   const DisplayName = PlayerClass2 === "none" /* None */ ? NoClassName : ClassDefinitions[PlayerClass2].Settings.DisplayName;
   Ui.SetDialogVariableStringForPlayer(Slot, ClassNameLabelId, "classname", DisplayName);
-  Ui.SetHasClassForPlayer(Slot, BottomBarId, "Shown", true);
-  Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Team_t", IsT);
-  Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Team_ct", !IsT);
+  Ui.SetHasClassForPlayer(Slot, HudCardsId, "Team_t", IsT);
+  Ui.SetHasClassForPlayer(Slot, HudCardsId, "Team_ct", !IsT);
+  Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Shown", true);
   if (GOpenMenus.has(Slot)) {
     Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", true);
     Ui.SetInputCaptureEnabled(Slot, true);
@@ -1918,7 +1917,7 @@ function ShowClassIndicator(Slot, PlayerClass2, IsT) {
 function ShowAmmo(Slot, Ammo) {
   ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeFraction > 0 ? Ammo.ChargeFraction : void 0);
   ShowBar(Slot, ReloadBarId, Ammo && Ammo.bReloading ? Ammo.ReloadFraction : void 0);
-  const Key = Ammo ? `${Ammo.Clip}|${Ammo.bReloading}` : "";
+  const Key = Ammo ? `${Ammo.Clip}|${Ammo.MaxClip}|${Ammo.bReloading}` : "";
   if ((GShownAmmo.get(Slot) ?? "") === Key) {
     return;
   }
@@ -2064,7 +2063,7 @@ function ShowHealth(Slot, Pawn) {
   }
   GShownHealth.set(Slot, Key);
   if (!Pawn) {
-    Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Shown", false);
+    Ui.SetHasClassForPlayer(Slot, CentreBarId, "Shown", false);
     return;
   }
   const Fraction = Health / MaxHealth;
@@ -2073,7 +2072,7 @@ function ShowHealth(Slot, Pawn) {
   Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Overhealed", Health > MaxHealth);
   Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Hurt", Fraction <= HurtHealthFraction && Fraction > CriticalHealthFraction);
   Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Critical", Fraction <= CriticalHealthFraction);
-  Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Shown", true);
+  Ui.SetHasClassForPlayer(Slot, CentreBarId, "Shown", true);
 }
 function ResetClassUi(Slot) {
   GOpenMenus.delete(Slot);
@@ -2098,7 +2097,7 @@ function FindClassUi() {
   if (!GbWarnedNoClassUi) {
     GbWarnedNoClassUi = true;
     const Problem = Ui ? "exists but isn't a custom_hud_layout" : "wasn't found";
-    Console3.Log(`${LogPrefix} class menu: an entity named "${ClassUiName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+    Console3.Log(`${LogPrefix} problem finding "${ClassUiName}" ${Problem}. check custom_hud_layout entity`);
   }
   return void 0;
 }
@@ -2211,7 +2210,7 @@ function TakeKit(Kit, Taker, Now) {
   SpawnKitFx(HealthKitSettings.PickupFxTemplate, Kit);
   if (bDebug) {
     const Name = Taker.GetPlayerController()?.GetPlayerName() ?? "someone";
-    Console4.Log(`${LogPrefix} ${Name} took a health kit: ${OldHealth} -> ${NewHealth}`);
+    Console4.Log(`${LogPrefix} ${Name} picked up a healthkit ${OldHealth} -> ${NewHealth}`);
   }
 }
 function RespawnKit(Kit) {
@@ -2704,7 +2703,7 @@ function ReachCheckpoints(Track, Now) {
     GCheckpointsReached++;
     GSavedDistance = CheckpointDistance;
     GameRules2.SetRoundRemainingTime(Math.max(0, GameRules2.GetRoundRemainingTime()) + PayloadSettings.CheckpointBonusTime);
-    Console6.Log(`${LogPrefix} payload: checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached, +${PayloadSettings.CheckpointBonusTime}s`);
+    Console6.Log(`${LogPrefix} payload checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached. adding ${PayloadSettings.CheckpointBonusTime} seconds to match timer`);
   }
 }
 function EndRound(Winner) {
@@ -2714,7 +2713,7 @@ function EndRound(Winner) {
   GbRoundOver = true;
   GameRules2.AddTeamScore(Winner, 1);
   GameRules2.TerminateRound(Winner === 2 /* Terrorist */ ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
-  Console6.Log(`${LogPrefix} payload: ${Winner === AttackingTeam ? "Ts delivered the cart" : "time's up, CTs held"}`);
+  Console6.Log(`${LogPrefix} payload round finished. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}`);
 }
 function MakeStatus(Track, Pushers, bBlocked, bRollingBack, bOvertime, Now) {
   const Status = {
@@ -2743,7 +2742,7 @@ function ScanPayload() {
     GTrack = void 0;
     GCart = void 0;
   }
-  const Report = IsPayloadReady() && GTrack ? `payload on: ${GTrack.Points.length} track points, ${Math.round(GTrack.Length)}u long, ${GTrack.Checkpoints.length} checkpoints. Ts push, CTs defend, no friendly fire.` : CartEntity || Points.length > 0 ? `payload off: found ${CartEntity ? "a cart" : "no cart"} ("${PayloadSettings.CartName}") and ${Points.length} track points ("${PayloadSettings.PathPrefix}1" ...). It needs a cart and at least 2 points.` : "";
+  const Report = IsPayloadReady() && GTrack ? `payload on: ${GTrack.Points.length} track points, ${Math.round(GTrack.Length)}u long, ${GTrack.Checkpoints.length} checkpoints` : CartEntity || Points.length > 0 ? `payload off: found ${CartEntity ? "a cart" : "no cart"} ("${PayloadSettings.CartName}") and ${Points.length} track points ("${PayloadSettings.PathPrefix}1" ...). It needs a cart and at least 2 points.` : "";
   if (Report !== "" && Report !== GLastScanReport2) {
     Console6.Log(`${LogPrefix} ${Report}`);
   }
@@ -2955,7 +2954,7 @@ function BeginPlay() {
   Instance12.OnCustomHudClicked(HandleCustomHudClicked);
   Instance12.SetThink(Tick);
   Instance12.SetNextThink(Instance12.GetGameTime());
-  Console7.Log(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
+  Console7.Log(`${LogPrefix} loaded${bDebug ? " DEBUG mode!" : ""}`);
 }
 BeginPlay();
 function HandlePlayerChat(Event) {
@@ -2977,7 +2976,7 @@ function HandlePlayerChat(Event) {
   } else if (PlayerClass2 !== void 0) {
     RequestPlayerClass(Player, PlayerClass2);
   } else {
-    Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} typed an unknown command: ${ChatCommandPrefix}${Command}`);
+    Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} typed unknown command "${ChatCommandPrefix}${Command}"`);
   }
 }
 function HandlePlayerReset(Event) {
@@ -3036,7 +3035,7 @@ function HandleRoundStart() {
   SelectGameMode();
   GActiveMode.OnRoundStart();
   ApplyMatchSettings();
-  Console7.Log(`${LogPrefix} match settings applied (${GActiveMode.DisplayName})`);
+  Console7.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
 }
 function HandleRoundEnd() {
   GActiveMode.OnRoundEnd();
@@ -3120,7 +3119,7 @@ function SelectGameMode() {
     GActiveMode.OnDeactivated();
     GActiveMode = Mode;
     Mode.OnActivated();
-    Console7.Log(`${LogPrefix} game mode: ${Mode.DisplayName}`);
+    Console7.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
   }
   SetFriendlyFire(Mode.IsFriendlyFire());
 }
@@ -3166,7 +3165,7 @@ function RequestPlayerClass(Player, PlayerClass2) {
     GPendingClassBySlot.set(Slot, PlayerClass2);
   }
   ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
-  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass2} on respawn`);
+  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass2}`);
 }
 function ApplyPendingClass(Slot) {
   const NextClass = GPendingClassBySlot.get(Slot);
@@ -3198,7 +3197,7 @@ function SetPlayerClass(Player, PlayerClass2) {
   }
   ShowClassIndicator(Slot, PlayerClass2, Pawn?.GetTeamNumber() === 2);
   const ClassLabel = PlayerClass2 === "none" /* None */ ? "normal" : PlayerClass2;
-  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
+  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} set class to ${ClassLabel}`);
 }
 function AssignRandomBotClass(Pawn, Slot) {
   const Controller = Pawn.GetPlayerController();
@@ -3207,7 +3206,6 @@ function AssignRandomBotClass(Pawn, Slot) {
   }
   const PlayerClass2 = PickRandomClass();
   GClassBySlot.set(Slot, PlayerClass2);
-  Console7.Log(`${LogPrefix} ${Controller.GetPlayerName()} (bot) -> ${PlayerClass2}`);
   return true;
 }
 function TickBotClasses() {

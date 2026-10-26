@@ -350,7 +350,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		}
 
 		const PushDirection: FVector = VectorMath.GetSafeNormal(Push);
-		Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
+		Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged (explosive) ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
 	});
 }
 
@@ -517,9 +517,7 @@ export function ApplyBulletFalloff(Event: FModifyDamageEvent, Falloff: FDamageFa
 	const RangeScale: number = GetRangeDamageScale(Attacker, Event.player, Falloff);
 	const Damage: number = Math.max(1, Math.round((Event.damage / CsRangeScale) * RangeScale));
 
-	if (bDebug)
-	{
-		Console.Log(`${LogPrefix} bullet falloff: ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)} (${Math.round(Event.damage)} -> ${Damage})`);
-	}
+	Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged (Bullet) ${Event.player.GetPlayerController()?.GetPlayerName()} : ${Damage}d : ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)}`);
+
 	return { damage: Damage };
 }

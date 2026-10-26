@@ -322,11 +322,10 @@ function ReachCheckpoints(Track: FPayloadTrack, Now: number): void
 		GCheckpointsReached++;
 		GSavedDistance = CheckpointDistance;
 		GameRules.SetRoundRemainingTime(Math.max(0, GameRules.GetRoundRemainingTime()) + PayloadSettings.CheckpointBonusTime);
-		Console.Log(`${LogPrefix} payload: checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached, +${PayloadSettings.CheckpointBonusTime}s`);
+		Console.Log(`${LogPrefix} payload checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached. adding ${PayloadSettings.CheckpointBonusTime} seconds to match timer`);
 	}
 }
 
-// The winner scores a point, then the round ends the base game's way, win banner and all
 function EndRound(Winner: ETeam): void
 {
 	if (GbRoundOver)
@@ -336,7 +335,7 @@ function EndRound(Winner: ETeam): void
 	GbRoundOver = true;
 	GameRules.AddTeamScore(Winner, 1);
 	GameRules.TerminateRound(Winner === ETeam.Terrorist ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
-	Console.Log(`${LogPrefix} payload: ${Winner === AttackingTeam ? "Ts delivered the cart" : "time's up, CTs held"}`);
+	Console.Log(`${LogPrefix} payload round finished. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}`);
 }
 
 function MakeStatus(Track: FPayloadTrack, Pushers: number, bBlocked: boolean, bRollingBack: boolean, bOvertime: boolean, Now: number): FPayloadStatus
@@ -380,7 +379,7 @@ function ScanPayload(): void
 	}
 
 	const Report: string = IsPayloadReady() && GTrack
-		? `payload on: ${GTrack.Points.length} track points, ${Math.round(GTrack.Length)}u long, ${GTrack.Checkpoints.length} checkpoints. Ts push, CTs defend, no friendly fire.`
+		? `payload on: ${GTrack.Points.length} track points, ${Math.round(GTrack.Length)}u long, ${GTrack.Checkpoints.length} checkpoints`
 		: CartEntity || Points.length > 0
 			? `payload off: found ${CartEntity ? "a cart" : "no cart"} ("${PayloadSettings.CartName}") and ${Points.length} track points ("${PayloadSettings.PathPrefix}1" ...). It needs a cart and at least 2 points.`
 			: "";

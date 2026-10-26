@@ -39,6 +39,24 @@
 	transition-property: opacity;
 	transition-duration: 0.25s;
 	transform: rotateZ( -6deg );
+	animation-name: AirshotPulse;
+	animation-duration: 0.5s;
+	animation-iteration-count: infinite;
+	animation-direction: alternate;
+	animation-timing-function: linear;
+}
+
+@keyframes 'AirshotPulse'
+{
+	0%
+	{
+		transform: scale3d( 1, 1, 1 ) rotateZ( -6deg );
+	}
+
+	100%
+	{
+		transform: scale3d( 1.1, 1.1, 1 ) rotateZ( -6deg );
+	}
 }
  
 .AirshotText.Shown

@@ -14,7 +14,8 @@ export type FClassMenuChoice = EPlayerClass | "close" | undefined;
 
 const ClassUiName: string = "class_hud";
 const MenuPanelId: string = "ClassMenu";
-const BottomBarId: string = "BottomBar";
+const HudCardsId: string = "HudCards";
+const CentreBarId: string = "CentreBar";
 const IndicatorPanelId: string = "ClassIndicator";
 const ClassNameLabelId: string = "ClassName";
 const PickButtonPrefix: string = "Pick_";
@@ -158,10 +159,9 @@ export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass, IsT:
 
 	const DisplayName: string = PlayerClass === EPlayerClass.None ? NoClassName : ClassDefinitions[PlayerClass].Settings.DisplayName;
 	Ui.SetDialogVariableStringForPlayer(Slot, ClassNameLabelId, "classname", DisplayName);
-	Ui.SetHasClassForPlayer(Slot, BottomBarId, "Shown", true);
-
-	Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Team_t", IsT);
-	Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Team_ct", !IsT);
+	Ui.SetHasClassForPlayer(Slot, HudCardsId, "Team_t", IsT);
+	Ui.SetHasClassForPlayer(Slot, HudCardsId, "Team_ct", !IsT);
+	Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Shown", true);
 
 	if (GOpenMenus.has(Slot))
 	{
@@ -175,7 +175,7 @@ export function ShowAmmo(Slot: number, Ammo: FLauncherAmmo | undefined): void
 	ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeFraction > 0 ? Ammo.ChargeFraction : undefined);
 	ShowBar(Slot, ReloadBarId, Ammo && Ammo.bReloading ? Ammo.ReloadFraction : undefined);
 
-	const Key: string = Ammo ? `${Ammo.Clip}|${Ammo.bReloading}` : "";
+	const Key: string = Ammo ? `${Ammo.Clip}|${Ammo.MaxClip}|${Ammo.bReloading}` : "";
 	if ((GShownAmmo.get(Slot) ?? "") === Key)
 	{
 		return;
@@ -236,7 +236,7 @@ function ShowBar(Slot: number, BarId: string, Fraction: number | undefined): voi
 	}
 }
 
-// A class's counter (e.g. stickies out) in the bottom bar, left of the ammo. undefined hides it.
+// A class's counter (e.g. stickies out), at the right end of the ammo side of the bar. undefined hides it.
 export function ShowCounter(Slot: number, Counter: FHudCounter | undefined): void
 {
 	const Key: string = Counter ? `${Counter.Label}|${Counter.Count}|${Counter.Max}` : "";
@@ -372,7 +372,7 @@ export function ShowHealth(Slot: number, Pawn: CSPlayerPawn | undefined): void
 
 	if (!Pawn)
 	{
-		Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Shown", false);
+		Ui.SetHasClassForPlayer(Slot, CentreBarId, "Shown", false);
 		return;
 	}
 	const Fraction: number = Health / MaxHealth;
@@ -381,7 +381,7 @@ export function ShowHealth(Slot: number, Pawn: CSPlayerPawn | undefined): void
 	Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Overhealed", Health > MaxHealth);
 	Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Hurt", Fraction <= HurtHealthFraction && Fraction > CriticalHealthFraction);
 	Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Critical", Fraction <= CriticalHealthFraction);
-	Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Shown", true);
+	Ui.SetHasClassForPlayer(Slot, CentreBarId, "Shown", true);
 }
 
 export function ResetClassUi(Slot: number): void
@@ -413,7 +413,7 @@ function FindClassUi(): CustomHudLayout | undefined
 	{
 		GbWarnedNoClassUi = true;
 		const Problem: string = Ui ? "exists but isn't a custom_hud_layout" : "wasn't found";
-		Console.Log(`${LogPrefix} class menu: an entity named "${ClassUiName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+		Console.Log(`${LogPrefix} problem finding "${ClassUiName}" ${Problem}. check custom_hud_layout entity`);
 	}
 	return undefined;
 }

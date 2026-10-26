@@ -115,7 +115,7 @@ function FindDamageHud(): CustomHudLayout | undefined
 	{
 		GbWarnedNoDamageHud = true;
 		const Problem: string = Hud ? "exists but isn't a custom_hud_layout" : "wasn't found";
-		Console.Log(`${LogPrefix} damage numbers: an entity named "${DamageHudName}" ${Problem}. Check the custom_hud_layout in Hammer, then do a full map build.`);
+		Console.Log(`${LogPrefix} cannot find hud "${DamageHudName}" bc of ${Problem}`);
 	}
 	return undefined;
 }

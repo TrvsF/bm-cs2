@@ -110,7 +110,7 @@ function BeginPlay(): void
 
 	Instance.SetThink(Tick);
 	Instance.SetNextThink(Instance.GetGameTime());
-	Console.Log(`${LogPrefix} loaded${bDebug ? " (DEBUG on)" : ""}`);
+	Console.Log(`${LogPrefix} loaded${bDebug ? " DEBUG mode!" : ""}`);
 }
 
 BeginPlay(); // !
@@ -150,7 +150,7 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 	}
 	else
 	{
-		Console.Log(`${LogPrefix} ${Player.GetPlayerName()} typed an unknown command: ${ChatCommandPrefix}${Command}`);
+		Console.Log(`${LogPrefix} ${Player.GetPlayerName()} typed unknown command "${ChatCommandPrefix}${Command}"`);
 	}
 }
 
@@ -229,7 +229,7 @@ function HandleRoundStart(): void
 	SelectGameMode();
 	GActiveMode.OnRoundStart();
 	ApplyMatchSettings();
-	Console.Log(`${LogPrefix} match settings applied (${GActiveMode.DisplayName})`);
+	Console.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
 }
 
 function HandleRoundEnd(): void
@@ -310,7 +310,6 @@ function HandleCustomHudClicked(Event: FCustomHudClickedEvent): void
 
 function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResult
 {
-	// Forced deaths skip every damage rule, uber included
 	if ((Event.damageFlags & CSDamageFlags.FORCE_DEATH) !== 0)
 	{
 		return;
@@ -356,7 +355,6 @@ let GLastThinkTime: number = 0;
 
 // Match //////////////////////////////////////////////////////////////////////////////////////////
 
-// Plays the first mode in GameModes the map is set up for, and takes its friendly fire rule
 function SelectGameMode(): void
 {
 	const Mode: GameMode = GameModes.find((Candidate: GameMode): boolean =>
@@ -369,7 +367,7 @@ function SelectGameMode(): void
 		GActiveMode.OnDeactivated();
 		GActiveMode = Mode;
 		Mode.OnActivated();
-		Console.Log(`${LogPrefix} game mode: ${Mode.DisplayName}`);
+		Console.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
 	}
 	SetFriendlyFire(Mode.IsFriendlyFire());
 }
@@ -438,7 +436,7 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 		GPendingClassBySlot.set(Slot, PlayerClass);
 	}
 	ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
-	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} -> ${PlayerClass} on respawn`);
+	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass}`);
 }
 
 function ApplyPendingClass(Slot: number): void
@@ -486,7 +484,7 @@ function SetPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): 
 	ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === 2);
 
 	const ClassLabel: string = PlayerClass === EPlayerClass.None ? "normal" : PlayerClass;
-	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} -> ${ClassLabel}`);
+	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} set class to ${ClassLabel}`);
 }
 
 function AssignRandomBotClass(Pawn: CSPlayerPawn, Slot: number): boolean
@@ -498,7 +496,6 @@ function AssignRandomBotClass(Pawn: CSPlayerPawn, Slot: number): boolean
 	}
 	const PlayerClass: EPlayableClass = PickRandomClass();
 	GClassBySlot.set(Slot, PlayerClass);
-	Console.Log(`${LogPrefix} ${Controller.GetPlayerName()} (bot) -> ${PlayerClass}`);
 	return true;
 }
 

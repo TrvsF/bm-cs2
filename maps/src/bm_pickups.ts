@@ -179,7 +179,7 @@ function TakeKit(Kit: FHealthKit, Taker: CSPlayerPawn, Now: number): void
 	if (bDebug)
 	{
 		const Name: string = Taker.GetPlayerController()?.GetPlayerName() ?? "someone";
-		Console.Log(`${LogPrefix} ${Name} took a health kit: ${OldHealth} -> ${NewHealth}`);
+		Console.Log(`${LogPrefix} ${Name} picked up a healthkit ${OldHealth} -> ${NewHealth}`);
 	}
 }
 
