@@ -23,7 +23,7 @@ import { GetHeightAboveGround } from "./bm_combat";
 import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ResetClassUi } from "./bm_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
-import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer } from "./bm_spawnzones";
+import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone } from "./bm_spawnzones";
 import { GameMode } from "./bm_gamemode";
 import { FreeForAllMode } from "./bm_freeforall";
 import { PayloadMode } from "./bm_payload";
@@ -80,6 +80,7 @@ function Tick(): void
 		GActiveMode.Tick(Now, DeltaTime);
 		TickHealthKits(Now);
 		TickSpawnZones(Now);
+		TickSpawnClassSwaps();
 
 		TickClassMenuKey();
 		TickPlayerHud();
@@ -164,7 +165,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 	}
 
 	ClearPlayer(Slot);
-	ForgetSpawnZonePlayer(Slot);
+	ForgetSpawnZoneHistory(Slot);
 	GActiveMode.OnPlayerSpawn(Pawn, Slot);
 	AssignRandomBotClass(Pawn, Slot);
 	const bHadClass: boolean = GClassBySlot.has(Slot);
@@ -419,8 +420,9 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 	const CurrentClass: EPlayerClass = GClassBySlot.get(Slot) ?? EPlayerClass.None;
 	const Pawn: CSPlayerPawn | undefined = Player.GetPlayerPawn();
 	const bAlive: boolean = Pawn !== undefined && Pawn.IsValid() && Pawn.IsAlive();
+	const bInSpawn: boolean = bAlive && Pawn !== undefined && IsInFriendlySpawnZone(Pawn, Slot);
 
-	if (!bAlive || CurrentClass === EPlayerClass.None)
+	if (!bAlive || CurrentClass === EPlayerClass.None || (bInSpawn && PlayerClass !== CurrentClass))
 	{
 		GPendingClassBySlot.delete(Slot);
 		SetPlayerClass(Player, PlayerClass);
@@ -437,6 +439,22 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 	}
 	ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
 	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass}`);
+}
+
+// Anyone in their own team's spawn zone with a different class requested is swapped to it there and then
+function TickSpawnClassSwaps(): void
+{
+	ForEachLivePawn((Pawn: CSPlayerPawn, Slot: number): void =>
+	{
+		const NextClass: EPlayerClass | undefined = GPendingClassBySlot.get(Slot);
+		const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
+		if (NextClass === undefined || !Controller || !IsInFriendlySpawnZone(Pawn, Slot))
+		{
+			return;
+		}
+		GPendingClassBySlot.delete(Slot);
+		SetPlayerClass(Controller, NextClass);
+	});
 }
 
 function ApplyPendingClass(Slot: number): void

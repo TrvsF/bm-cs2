@@ -28,6 +28,9 @@ const AmmoSpareLabelId: string = "AmmoSpare";
 const HealthPanelId: string = "HealthPanel";
 const HealthValueLabelId: string = "HealthValue";
 const HealthMaxLabelId: string = "HealthMax";
+const HealthCrossFillId: string = "HealthCrossFill";
+const HealthCrossFillPrefix: string = "Fill_";
+const HealthCrossSteps: number = 20;
 const CounterPanelId: string = "CounterPanel";
 const CounterLabelId: string = "CounterLabel";
 const CounterValueId: string = "CounterValue";
@@ -53,6 +56,7 @@ const GOpenMenus: Set<number> = new Set<number>();
 const GOfferedMenus: Set<number> = new Set<number>();
 const GShownAmmo: Map<number, string> = new Map<number, string>();
 const GShownHealth: Map<number, string> = new Map<number, string>();
+const GShownCrossSteps: Map<number, number> = new Map<number, number>();
 const GShownBars: Map<number, Map<string, number>> = new Map<number, Map<string, number>>();
 const GShownCounter: Map<number, string> = new Map<number, string>();
 const GSentPayload: Map<number, Map<string, string>> = new Map<number, Map<string, string>>();
@@ -381,7 +385,24 @@ export function ShowHealth(Slot: number, Pawn: CSPlayerPawn | undefined): void
 	Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Overhealed", Health > MaxHealth);
 	Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Hurt", Fraction <= HurtHealthFraction && Fraction > CriticalHealthFraction);
 	Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Critical", Fraction <= CriticalHealthFraction);
+	ShowCrossFill(Ui, Slot, Math.ceil(Math.min(1, Math.max(0, Fraction)) * HealthCrossSteps));
 	Ui.SetHasClassForPlayer(Slot, CentreBarId, "Shown", true);
+}
+
+// The HUD can't be given a height, so the cross's fill level is a Fill_<Step> class that CSS turns into a height
+function ShowCrossFill(Ui: CustomHudLayout, Slot: number, Step: number): void
+{
+	const LastStep: number | undefined = GShownCrossSteps.get(Slot);
+	if (LastStep === Step)
+	{
+		return;
+	}
+	if (LastStep !== undefined)
+	{
+		Ui.SetHasClassForPlayer(Slot, HealthCrossFillId, `${HealthCrossFillPrefix}${LastStep}`, false);
+	}
+	Ui.SetHasClassForPlayer(Slot, HealthCrossFillId, `${HealthCrossFillPrefix}${Step}`, true);
+	GShownCrossSteps.set(Slot, Step);
 }
 
 export function ResetClassUi(Slot: number): void
@@ -390,6 +411,7 @@ export function ResetClassUi(Slot: number): void
 	GOfferedMenus.delete(Slot);
 	GShownAmmo.delete(Slot);
 	GShownHealth.delete(Slot);
+	GShownCrossSteps.delete(Slot);
 	GShownBars.delete(Slot);
 	GShownCounter.delete(Slot);
 	GSentPayload.delete(Slot);

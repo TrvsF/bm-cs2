@@ -893,7 +893,7 @@ var BeamerShotgunFalloff = [
 ];
 var SoldierSettings = {
   DisplayName: "Soldier",
-  Primary: "weapon_awp",
+  Primary: "weapon_m4a1",
   Secondary: "",
   Melee: "weapon_knife",
   Health: 150,
@@ -1811,6 +1811,9 @@ var AmmoSpareLabelId = "AmmoSpare";
 var HealthPanelId = "HealthPanel";
 var HealthValueLabelId = "HealthValue";
 var HealthMaxLabelId = "HealthMax";
+var HealthCrossFillId = "HealthCrossFill";
+var HealthCrossFillPrefix = "Fill_";
+var HealthCrossSteps = 20;
 var CounterPanelId = "CounterPanel";
 var CounterLabelId = "CounterLabel";
 var CounterValueId = "CounterValue";
@@ -1834,6 +1837,7 @@ var GOpenMenus = /* @__PURE__ */ new Set();
 var GOfferedMenus = /* @__PURE__ */ new Set();
 var GShownAmmo = /* @__PURE__ */ new Map();
 var GShownHealth = /* @__PURE__ */ new Map();
+var GShownCrossSteps = /* @__PURE__ */ new Map();
 var GShownBars = /* @__PURE__ */ new Map();
 var GShownCounter = /* @__PURE__ */ new Map();
 var GSentPayload = /* @__PURE__ */ new Map();
@@ -2072,13 +2076,26 @@ function ShowHealth(Slot, Pawn) {
   Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Overhealed", Health > MaxHealth);
   Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Hurt", Fraction <= HurtHealthFraction && Fraction > CriticalHealthFraction);
   Ui.SetHasClassForPlayer(Slot, HealthPanelId, "Critical", Fraction <= CriticalHealthFraction);
+  ShowCrossFill(Ui, Slot, Math.ceil(Math.min(1, Math.max(0, Fraction)) * HealthCrossSteps));
   Ui.SetHasClassForPlayer(Slot, CentreBarId, "Shown", true);
+}
+function ShowCrossFill(Ui, Slot, Step) {
+  const LastStep = GShownCrossSteps.get(Slot);
+  if (LastStep === Step) {
+    return;
+  }
+  if (LastStep !== void 0) {
+    Ui.SetHasClassForPlayer(Slot, HealthCrossFillId, `${HealthCrossFillPrefix}${LastStep}`, false);
+  }
+  Ui.SetHasClassForPlayer(Slot, HealthCrossFillId, `${HealthCrossFillPrefix}${Step}`, true);
+  GShownCrossSteps.set(Slot, Step);
 }
 function ResetClassUi(Slot) {
   GOpenMenus.delete(Slot);
   GOfferedMenus.delete(Slot);
   GShownAmmo.delete(Slot);
   GShownHealth.delete(Slot);
+  GShownCrossSteps.delete(Slot);
   GShownBars.delete(Slot);
   GShownCounter.delete(Slot);
   GSentPayload.delete(Slot);
@@ -2267,9 +2284,6 @@ function TickSpawnZones(Now) {
   });
 }
 function ResetSpawnZones() {
-  for (const Zone of GZones) {
-    Zone.Touching.clear();
-  }
   GVisitors.clear();
   GNextScanTime = 0;
 }
@@ -2278,6 +2292,15 @@ function ForgetSpawnZonePlayer(Slot) {
     Zone.Touching.delete(Slot);
   }
   GVisitors.delete(Slot);
+}
+function ForgetSpawnZoneHistory(Slot) {
+  GVisitors.delete(Slot);
+}
+function IsInFriendlySpawnZone(Pawn, Slot) {
+  const Team = Pawn.GetTeamNumber();
+  return GZones.some((Zone) => {
+    return Zone.Team === Team && Zone.Touching.has(Slot) && Zone.Entity.IsValid();
+  });
 }
 function ScanSpawnZones() {
   AddZones(SpawnZoneSettings.TerroristZoneName, 2 /* Terrorist */);
@@ -2930,6 +2953,7 @@ function Tick() {
     GActiveMode.Tick(Now, DeltaTime);
     TickHealthKits(Now);
     TickSpawnZones(Now);
+    TickSpawnClassSwaps();
     TickClassMenuKey();
     TickPlayerHud();
     TickNoBuying();
@@ -2986,7 +3010,7 @@ function HandlePlayerReset(Event) {
     return;
   }
   ClearPlayer(Slot);
-  ForgetSpawnZonePlayer(Slot);
+  ForgetSpawnZoneHistory(Slot);
   GActiveMode.OnPlayerSpawn(Pawn, Slot);
   AssignRandomBotClass(Pawn, Slot);
   const bHadClass = GClassBySlot.has(Slot);
@@ -3154,7 +3178,8 @@ function RequestPlayerClass(Player, PlayerClass2) {
   const CurrentClass = GClassBySlot.get(Slot) ?? "none" /* None */;
   const Pawn = Player.GetPlayerPawn();
   const bAlive = Pawn !== void 0 && Pawn.IsValid() && Pawn.IsAlive();
-  if (!bAlive || CurrentClass === "none" /* None */) {
+  const bInSpawn = bAlive && Pawn !== void 0 && IsInFriendlySpawnZone(Pawn, Slot);
+  if (!bAlive || CurrentClass === "none" /* None */ || bInSpawn && PlayerClass2 !== CurrentClass) {
     GPendingClassBySlot.delete(Slot);
     SetPlayerClass(Player, PlayerClass2);
     return;
@@ -3166,6 +3191,17 @@ function RequestPlayerClass(Player, PlayerClass2) {
   }
   ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
   Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass2}`);
+}
+function TickSpawnClassSwaps() {
+  ForEachLivePawn((Pawn, Slot) => {
+    const NextClass = GPendingClassBySlot.get(Slot);
+    const Controller = Pawn.GetPlayerController();
+    if (NextClass === void 0 || !Controller || !IsInFriendlySpawnZone(Pawn, Slot)) {
+      return;
+    }
+    GPendingClassBySlot.delete(Slot);
+    SetPlayerClass(Controller, NextClass);
+  });
 }
 function ApplyPendingClass(Slot) {
   const NextClass = GPendingClassBySlot.get(Slot);

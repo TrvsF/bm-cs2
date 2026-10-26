@@ -12,7 +12,6 @@ export interface FSpawnZoneSettings
 	readonly PushOutSpeed: number;
 }
 
-// A trigger brush that only its own team may stand in
 interface FSpawnZone
 {
 	readonly Entity: Entity;
@@ -20,7 +19,6 @@ interface FSpawnZone
 	readonly Touching: Set<number>;
 }
 
-// Recent spots a player stood on outside the enemy's spawn, oldest first, to put them back on
 interface FZoneVisitor
 {
 	readonly History: FVector[];
@@ -76,15 +74,10 @@ export function TickSpawnZones(Now: number): void
 
 export function ResetSpawnZones(): void
 {
-	for (const Zone of GZones)
-	{
-		Zone.Touching.clear();
-	}
 	GVisitors.clear();
 	GNextScanTime = 0;
 }
 
-// Called when a player dies, respawns or leaves, since a trigger doesn't always see them go
 export function ForgetSpawnZonePlayer(Slot: number): void
 {
 	for (const Zone of GZones)
@@ -92,6 +85,20 @@ export function ForgetSpawnZonePlayer(Slot: number): void
 		Zone.Touching.delete(Slot);
 	}
 	GVisitors.delete(Slot);
+}
+
+export function ForgetSpawnZoneHistory(Slot: number): void
+{
+	GVisitors.delete(Slot);
+}
+
+export function IsInFriendlySpawnZone(Pawn: CSPlayerPawn, Slot: number): boolean
+{
+	const Team: number = Pawn.GetTeamNumber();
+	return GZones.some((Zone: FSpawnZone): boolean =>
+	{
+		return Zone.Team === Team && Zone.Touching.has(Slot) && Zone.Entity.IsValid();
+	});
 }
 
 function ScanSpawnZones(): void
@@ -175,8 +182,6 @@ function GetVisitor(Slot: number): FZoneVisitor
 	return Visitor;
 }
 
-// Puts them back where they stood a few ticks before stepping in, stopped dead, so the zone's edge acts like a wall.
-// They're taken off the zone's list straight away; walking in again touches it again.
 function PushOut(Pawn: CSPlayerPawn, Slot: number, Visitor: FZoneVisitor, Zone: FSpawnZone): void
 {
 	Zone.Touching.delete(Slot);

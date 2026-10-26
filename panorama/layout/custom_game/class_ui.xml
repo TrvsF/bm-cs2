@@ -45,8 +45,18 @@
 				<Panel id="HealthPanel" class="BarSection HealthPanel" hittest="false">
 					<Panel class="HealthRow" hittest="false">
 						<Panel class="HealthCross" hittest="false">
-							<Panel class="CrossBar CrossHorizontal" hittest="false" />
-							<Panel class="CrossBar CrossVertical" hittest="false" />
+							<Panel class="CrossShape CrossEmpty" hittest="false">
+								<Panel class="CrossBar CrossVertical" hittest="false" />
+								<Panel class="CrossBar CrossArm CrossArmLeft" hittest="false" />
+								<Panel class="CrossBar CrossArm CrossArmRight" hittest="false" />
+							</Panel>
+							<Panel id="HealthCrossFill" class="CrossFill" hittest="false">
+								<Panel class="CrossShape" hittest="false">
+									<Panel class="CrossBar CrossVertical" hittest="false" />
+									<Panel class="CrossBar CrossArm CrossArmLeft" hittest="false" />
+									<Panel class="CrossBar CrossArm CrossArmRight" hittest="false" />
+								</Panel>
+							</Panel>
 						</Panel>
 						<Label id="HealthValue" class="HealthValue" text="{s:health}" hittest="false" />
 						<Label id="HealthMax" class="HealthMax" text="/ {s:maxhealth}" hittest="false" />
@@ -81,11 +91,11 @@
 			<Panel class="ClassButtons">
 				<Button id="Pick_soldier" class="ClassButton SoldierButton">
 					<Label class="ClassButtonName" text="Soldier" hittest="false" />
-					<Label class="ClassButtonInfo" text="It's not that type of RPG" hittest="false" />
+					<Label class="ClassButtonInfo" text="RPG &amp; Knife. Use the knife mid-air for massive damage!" hittest="false" />
 				</Button>
 				<Button id="Pick_demo" class="ClassButton DemoButton">
-					<Label class="ClassButtonName" text="Demoman" hittest="false" />
-					<Label class="ClassButtonInfo" text="Stickies &amp; Pipes" hittest="false" />
+					<Label class="ClassButtonName" text="Exploder" hittest="false" />
+					<Label class="ClassButtonInfo" text="Stickies &amp; Pipes. Right-click to detonate the footballs!" hittest="false" />
 				</Button>
 				<!-- <Button id="Pick_medic" class="ClassButton MedicButton">
 					<Label class="ClassButtonName" text="Medic" hittest="false" />
@@ -93,11 +103,11 @@
 				</Button> -->
 				<Button id="Pick_railer" class="ClassButton RailerButton">
 					<Label class="ClassButtonName" text="Railer" hittest="false" />
-					<Label class="ClassButtonInfo" text="Chargin ur Lazor" hittest="false" />
+					<Label class="ClassButtonInfo" text="Pea Shooter &amp; Beam Cannon. Try jumping with the beam!" hittest="false" />
 				</Button>
 				<Button id="Pick_beamer" class="ClassButton BeamerButton">
 					<Label class="ClassButtonName" text="Beamer" hittest="false" />
-					<Label class="ClassButtonInfo" text="Beam &amp; Boomstick" hittest="false" />
+					<Label class="ClassButtonInfo" text="Minigun &amp; Shotguns. You're so big owo!" hittest="false" />
 				</Button>
 			</Panel>
 			

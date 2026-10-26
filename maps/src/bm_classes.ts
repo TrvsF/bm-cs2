@@ -195,7 +195,7 @@ const BeamerShotgunFalloff: FDamageCurve =
 export const SoldierSettings: FSoliderSettings =
 {
 	DisplayName: "Soldier",
-	Primary: "weapon_awp",
+	Primary: "weapon_m4a1",
 	Secondary: "",
 	Melee: "weapon_knife",
 	Health: 150,
