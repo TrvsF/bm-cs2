@@ -1,10 +1,11 @@
 import { Instance, Console, CSInputs } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CustomHudLayout } from "cs_script/point_script";
 import { LogPrefix, ForEachLivePawn } from "./bm_core";
-import { EPlayerClass, ClassDefinitions } from "./bm_classes";
+import { EPlayerClass } from "./bm_classes";
 import type { FHudCounter } from "./bm_classes";
+import { ClassDefinitions } from "./classes/bm_classlist";
 import type { FLauncherAmmo } from "./bm_launcher";
-import type { FPayloadStatus } from "./bm_payload";
+import type { FPayloadStatus } from "./gamemodes/bm_payload";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 

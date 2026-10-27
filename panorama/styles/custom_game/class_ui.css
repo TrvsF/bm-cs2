@@ -111,6 +111,8 @@
 	vertical-align: bottom;
 }
 
+/* The bright cross sits in a bottom-anchored box that clips it, and the script sizes the box with a Fill_<0 - 20>
+   class (5% steps), so the cross fills up from the bottom with the player's health */
 .CrossFill
 {
 	width: 100%;
@@ -369,7 +371,7 @@
 	horizontal-align: center;
 	vertical-align: center;
 	flow-children: down;
-	width: 760px;
+	width: 900px;
 	padding: 18px;
 	border-radius: 4px;
 	background-color: #0b0f14ee;
@@ -458,6 +460,11 @@
 .BoxerButton .ClassButtonName
 {
 	color: #6fdc8c;
+}
+
+.ShockerButton .ClassButtonName
+{
+	color: #c48cff;
 }
 
 .ClassButtonInfo

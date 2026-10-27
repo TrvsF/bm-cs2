@@ -15,18 +15,20 @@ import type
 	FModifyDamageEvent,
 	FModifyDamageResult,
 } from "./bm_core";
-import { EPlayerClass, ClassDefinitions, GiveLoadout, GiveNoClassLoadout, IsWeaponAllowed, RestoreDefaultBody, PickRandomClass } from "./bm_classes";
+import { EPlayerClass, GiveNoClassLoadout, RestoreDefaultBody, PickRandomClass } from "./bm_classes";
 import type { EPlayableClass } from "./bm_classes";
+import { ClassDefinitions, GiveLoadout, IsWeaponAllowed } from "./classes/bm_classlist";
 import { ClearDecals } from "./bm_effects";
 import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
 import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ResetClassUi } from "./bm_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo } from "./bm_launcher";
+import type { FLauncherShot } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
 import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone } from "./bm_spawnzones";
 import { GameMode } from "./bm_gamemode";
-import { FreeForAllMode } from "./bm_freeforall";
-import { PayloadMode } from "./bm_payload";
+import { FreeForAllMode } from "./gamemodes/bm_freeforall";
+import { PayloadMode } from "./gamemodes/bm_payload";
 import type { FClassMenuChoice } from "./bm_ui";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,14 +63,10 @@ function Tick(): void
 			if (PlayerClass !== undefined)
 			{
 				const Definition = ClassDefinitions[PlayerClass];
-				const FiredWeapon: string | undefined = TickLauncher(Pawn, Slot, Now);
-				if (FiredWeapon === Definition.Settings.Primary)
+				const Shot: FLauncherShot | undefined = TickLauncher(Pawn, Slot, Now);
+				if (Shot)
 				{
-					Definition.OnPrimaryFire(Pawn, Slot, Now);
-				}
-				else if (FiredWeapon === Definition.Settings.Secondary)
-				{
-					Definition.OnSecondaryFire(Pawn, Slot, Now);
+					Definition.OnLauncherFired(Pawn, Slot, Now, Shot);
 				}
 				Definition.TickPlayer(Pawn, Slot, Now, DeltaTime);
 			}

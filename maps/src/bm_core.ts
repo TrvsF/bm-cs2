@@ -142,6 +142,18 @@ export abstract class VectorMath
 		return VectorMath.Subtract(V, VectorMath.Scale(PlaneNormal, VectorMath.Dot(V, PlaneNormal)));
 	}
 
+	public static ClosestPointOnSegment(Point: FVector, Start: FVector, End: FVector): FVector
+	{
+		const Segment: FVector = VectorMath.Subtract(End, Start);
+		const LengthSquared: number = VectorMath.Dot(Segment, Segment);
+		if (LengthSquared <= 0)
+		{
+			return Start;
+		}
+		const Alpha: number = Math.min(1, Math.max(0, VectorMath.Dot(VectorMath.Subtract(Point, Start), Segment) / LengthSquared));
+		return VectorMath.Add(Start, VectorMath.Scale(Segment, Alpha));
+	}
+
 	public static GetForwardVector(Rotation: FRotator): FVector
 	{
 		const Pitch: number = (Rotation.pitch * Math.PI) / 180;
@@ -263,6 +275,27 @@ export function IsPointTemplate(Ent: Entity | undefined): Ent is PointTemplate
 export function GetChestPosition(Pawn: CSPlayerPawn): FVector
 {
 	return VectorMath.Add(Pawn.GetAbsOrigin(), ChestOffset);
+}
+
+export function IsTeammate(A: Entity, B: Entity): boolean
+{
+	return !IsFriendlyFire() && A.GetTeamNumber() === B.GetTeamNumber();
+}
+
+export function GetPawnName(Pawn: CSPlayerPawn): string
+{
+	return Pawn.GetPlayerController()?.GetPlayerName() ?? "someone";
+}
+
+export function GetOrCreate<TKey, TValue>(Values: Map<TKey, TValue>, Key: TKey, Create: () => TValue): TValue
+{
+	let Value: TValue | undefined = Values.get(Key);
+	if (Value === undefined)
+	{
+		Value = Create();
+		Values.set(Key, Value);
+	}
+	return Value;
 }
 
 export function GetTeamColor(Ent: Entity): FColor

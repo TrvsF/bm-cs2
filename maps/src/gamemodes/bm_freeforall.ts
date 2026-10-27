@@ -1,7 +1,7 @@
 import type { CSPlayerPawn } from "cs_script/point_script";
-import { bDebug } from "./bm_core";
-import { GameMode } from "./bm_gamemode";
-import { TickBots, ResetBotMode, ForgetBot } from "./bm_bots";
+import { bDebug } from "../bm_core";
+import { GameMode } from "../bm_gamemode";
+import { TickBots, ResetBotMode, ForgetBot } from "../bm_bots";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,9 +1,9 @@
 import { Instance, Console, GameRules, CSRoundEndReason } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn } from "cs_script/point_script";
-import { bDebug, LogPrefix, TickInterval, ETeam, VectorMath, RotationMath, GetPlayerSlot, ForEachLivePawn } from "./bm_core";
-import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
-import { GameMode } from "./bm_gamemode";
-import { ShowPayload } from "./bm_ui";
+import { bDebug, LogPrefix, TickInterval, ETeam, VectorMath, RotationMath, GetPlayerSlot, ForEachLivePawn } from "../bm_core";
+import type { FVector, FRotator, FRotationMatrix, FColor } from "../bm_core";
+import { GameMode } from "../bm_gamemode";
+import { ShowPayload } from "../bm_ui";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 

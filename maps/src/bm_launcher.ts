@@ -12,8 +12,19 @@ export interface FLauncherSettings
 	readonly ReloadFirstTime: number;
 	readonly ReloadEachTime: number;
 	readonly ChargeTime: number;
+	// Seconds after the weapon is pulled out before it can fire or reload
+	readonly DeployTime: number;
 	readonly FireFxTemplate: string;
 	readonly ReloadFxTemplate: string;
+	// Set to give the weapon a second fire mode on ATTACK2, drawing from the same clip
+	readonly AltFireInterval?: number;
+	readonly AltFireFxTemplate?: string;
+}
+
+export interface FLauncherShot
+{
+	readonly WeaponName: string;
+	readonly bAltFire: boolean;
 }
 
 export interface FLauncherAmmo
@@ -35,6 +46,7 @@ interface FLauncherState
 	NextReloadTime: number | undefined;
 	ReloadStartTime: number;
 	ChargeStartTime: number | undefined;
+	DrawnAt: number | undefined;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -62,6 +74,7 @@ export function EquipLauncher(Pawn: CSPlayerPawn, Slot: number, WeaponName: stri
 		NextReloadTime: undefined,
 		ReloadStartTime: 0,
 		ChargeStartTime: undefined,
+		DrawnAt: undefined,
 	});
 	GLaunchers.set(Slot, Launchers);
 	EmptyRealGun(Pawn, WeaponName);
@@ -72,7 +85,7 @@ export function ClearLauncher(Slot: number): void
 	GLaunchers.delete(Slot);
 }
 
-export function TickLauncher(Pawn: CSPlayerPawn, Slot: number, Now: number): string | undefined
+export function TickLauncher(Pawn: CSPlayerPawn, Slot: number, Now: number): FLauncherShot | undefined
 {
 	const Launchers: FLauncherState[] | undefined = GLaunchers.get(Slot);
 	if (!Launchers)
@@ -81,7 +94,7 @@ export function TickLauncher(Pawn: CSPlayerPawn, Slot: number, Now: number): str
 	}
 
 	const Active: CSWeaponBase | undefined = Pawn.GetActiveWeapon();
-	let FiredWeapon: string | undefined = undefined;
+	let Shot: FLauncherShot | undefined = undefined;
 	for (const State of Launchers)
 	{
 		const Weapon: CSWeaponBase | undefined = EmptyRealGun(Pawn, State.WeaponName);
@@ -89,14 +102,17 @@ export function TickLauncher(Pawn: CSPlayerPawn, Slot: number, Now: number): str
 		{
 			State.NextReloadTime = undefined;
 			State.ChargeStartTime = undefined;
+			State.DrawnAt = undefined;
 			continue;
 		}
-		if (TickHeldLauncher(Pawn, State, Now))
+		State.DrawnAt ??= Now;
+		if (Now - State.DrawnAt < State.Settings.DeployTime)
 		{
-			FiredWeapon = State.WeaponName;
+			continue;
 		}
+		Shot = TickHeldLauncher(Pawn, State, Now) ?? Shot;
 	}
-	return FiredWeapon;
+	return Shot;
 }
 
 export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo | undefined
@@ -125,18 +141,21 @@ export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo
 	return undefined;
 }
 
-function TickHeldLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): boolean
+// ATTACK wins if both are held. The alt mode has no charge-up.
+function TickHeldLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): FLauncherShot | undefined
 {
-	const bFireHeld: boolean = Pawn.IsInputPressed(CSInputs.ATTACK) && !Pawn.IsBuyMenuOpen() && !GameRules.IsFreezePeriod();
-	if (bFireHeld && State.Clip > 0)
+	const bCanFire: boolean = !Pawn.IsBuyMenuOpen() && !GameRules.IsFreezePeriod();
+	const bMainHeld: boolean = bCanFire && Pawn.IsInputPressed(CSInputs.ATTACK);
+	const bAltFire: boolean = bCanFire && !bMainHeld && State.Settings.AltFireInterval !== undefined && Pawn.IsInputPressed(CSInputs.ATTACK2);
+	if ((bMainHeld || bAltFire) && State.Clip > 0)
 	{
 		State.NextReloadTime = undefined;
 		if (Now < State.NextFireTime)
 		{
 			State.ChargeStartTime = undefined;
-			return false;
+			return undefined;
 		}
-		if (State.Settings.ChargeTime > 0)
+		if (bMainHeld && State.Settings.ChargeTime > 0)
 		{
 			if (State.ChargeStartTime === undefined)
 			{
@@ -144,21 +163,22 @@ function TickHeldLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number
 			}
 			if (Now - State.ChargeStartTime < State.Settings.ChargeTime)
 			{
-				return false;
+				return undefined;
 			}
 		}
 		State.ChargeStartTime = undefined;
 		State.Clip--;
 
+		const Interval: number = bAltFire ? State.Settings.AltFireInterval ?? State.Settings.FireInterval : State.Settings.FireInterval;
 		const bHeldThrough: boolean = Now - State.NextFireTime < TickInterval * 1.5;
-		State.NextFireTime = (bHeldThrough ? State.NextFireTime : Now) + State.Settings.FireInterval;
-		SpawnFireFx(Pawn, State.Settings);
-		return true;
+		State.NextFireTime = (bHeldThrough ? State.NextFireTime : Now) + Interval;
+		SpawnFireFx(Pawn, bAltFire ? State.Settings.AltFireFxTemplate ?? State.Settings.FireFxTemplate : State.Settings.FireFxTemplate);
+		return { WeaponName: State.WeaponName, bAltFire: bAltFire };
 	}
 
 	State.ChargeStartTime = undefined;
 	TickReload(Pawn, State, Now);
-	return false;
+	return undefined;
 }
 
 function GetChargeFraction(State: FLauncherState): number
@@ -241,11 +261,11 @@ function EmptyRealGun(Pawn: CSPlayerPawn, WeaponName: string): CSWeaponBase | un
 	return Weapon;
 }
 
-function SpawnFireFx(Pawn: CSPlayerPawn, Settings: FLauncherSettings): void
+function SpawnFireFx(Pawn: CSPlayerPawn, TemplateName: string): void
 {
-	if (Settings.FireFxTemplate !== "")
+	if (TemplateName !== "")
 	{
-		SpawnTemporaryTemplate(Settings.FireFxTemplate, Pawn.GetEyePosition(), FireFxLifetime);
+		SpawnTemporaryTemplate(TemplateName, Pawn.GetEyePosition(), FireFxLifetime);
 	}
 }
 

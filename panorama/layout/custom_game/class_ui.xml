@@ -113,6 +113,10 @@
 					<Label class="ClassButtonName" text="Boxer" hittest="false" />
 					<Label class="ClassButtonInfo" text="Cubes &amp; Crap. The cubes feast on all!" hittest="false" />
 				</Button>
+				<Button id="Pick_shocker" class="ClassButton ShockerButton">
+					<Label class="ClassButtonName" text="Shocker" hittest="false" />
+					<Label class="ClassButtonInfo" text="Ball &amp; Beam." hittest="false" />
+				</Button>
 			</Panel>
 			
 			<Panel class="MenuFooter">

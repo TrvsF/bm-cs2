@@ -1,14 +1,23 @@
 import { Instance, Console, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult } from "cs_script/point_script";
-import { bDebug, IsFriendlyFire, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, GetChestPosition, SpawnTemplateEntities, ForEachLivePawn } from "./bm_core";
+import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult, BaseTraceConfig } from "cs_script/point_script";
+import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, SpawnTemplateEntities, ForEachLivePawn, bDebug } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
+export enum EProjectileShape
+{
+	Sphere = "sphere",
+	Box = "box",
+}
+
 export interface FProjectile
 {
 	Owner: CSPlayerPawn;
+	readonly Start: FVector;
+	readonly Radius: number;
+	readonly Shape: EProjectileShape;
 	Position: FVector;
 	Velocity: FVector;
 	GravityScale: number;
@@ -30,7 +39,6 @@ export interface FBouncingProjectile extends FProjectile
 
 export interface FPiercingProjectile extends FProjectile
 {
-	readonly Radius: number;
 	readonly HitPlayers: Set<CSPlayerPawn>;
 }
 
@@ -80,7 +88,6 @@ export interface FHitscanResult
 const Gravity: number = 800;
 const ExplosionTemplateName: string = "boom_template";
 const ExplosionFxLifetime: number = 5;
-const ProjectileLaunchOffset: FVector = { x: 0, y: 0, z: -8 };
 const ExplosionOffset: FVector = { x: 0, y: 0, z: 6 };
 const GroundedKnockbackLift: FVector = { x: 0, y: 0, z: 0.6 };
 const StandingKnockbackHeight: number = 82;
@@ -94,22 +101,26 @@ const SurfaceGap: number = 2;
 const MinGroundNormalZ: number = 0.7;
 const GroundProbeDistance: number = 8;
 const MinFacingSpeed: number = 1;
+const MissingProjectileRadius: number = 3;
 
 // Projectile //////////////////////////////////////////////////////////////////////////////////////
 
-export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: number, GravityScale: number, TemplateName: string): FProjectile
+export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: number, GravityScale: number, TemplateName: string | undefined, Radius: number = 0, Shape: EProjectileShape = EProjectileShape.Sphere): FProjectile
 {
 	const Direction: FVector = VectorMath.GetForwardVector(Owner.GetEyeAngles());
-	const Start: FVector = VectorMath.Add(Owner.GetEyePosition(), ProjectileLaunchOffset);
+	const Start: FVector = Owner.GetEyePosition();
 	const Velocity: FVector = VectorMath.Add(VectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed });
 	const Projectile: FProjectile =
 	{
 		Owner: Owner,
+		Start: Start,
+		Radius: Radius,
+		Shape: Shape,
 		Position: Start,
 		Velocity: Velocity,
 		GravityScale: GravityScale,
 		SpawnedAt: Instance.GetGameTime(),
-		Models: SpawnProjectileModels(TemplateName, Start),
+		Models: TemplateName !== undefined ? SpawnProjectileModels(TemplateName, Start) : [],
 	};
 	PlaceProjectileModels(Projectile, true);
 	return Projectile;
@@ -122,6 +133,43 @@ export function MoveProjectile(Projectile: FProjectile, DeltaTime: number, bHitP
 	const Hit: TraceResult | undefined = SweepProjectile(Projectile, DeltaTime, bHitPlayers);
 	PlaceProjectileModels(Projectile, false);
 	return Hit;
+}
+
+export function StepImpactProjectile(Projectile: FProjectile, Now: number, DeltaTime: number, Lifetime: number, OnImpact: (Hit: TraceResult) => void): boolean
+{
+	if (IsProjectileExpired(Projectile, Now, Lifetime))
+	{
+		DestroyProjectile(Projectile);
+		return false;
+	}
+	const Hit: TraceResult | undefined = MoveProjectile(Projectile, DeltaTime, true);
+	if (Hit)
+	{
+		DestroyProjectile(Projectile);
+		OnImpact(Hit);
+		return false;
+	}
+	
+	DrawMissingProjectile(Projectile);
+
+	return true;
+}
+
+export function IsProjectileExpired(Projectile: FProjectile, Now: number, Lifetime: number): boolean
+{
+	return !Projectile.Owner.IsValid() || Now - Projectile.SpawnedAt > Lifetime;
+}
+
+export function DrawMissingProjectile(Projectile: FProjectile, Color: FColor = GetTeamColor(Projectile.Owner)): void
+{
+	const Radius: number = Projectile.Radius > 0 ? Projectile.Radius : MissingProjectileRadius;
+	if (Projectile.Shape === EProjectileShape.Box)
+	{
+		const Extent: FVector = GetBoxExtent(Radius);
+		Instance.DebugBox({ mins: VectorMath.Subtract(Projectile.Position, Extent), maxs: VectorMath.Add(Projectile.Position, Extent), duration: TickInterval * 2, color: Color });
+		return;
+	}
+	Instance.DebugSphere({ center: Projectile.Position, radius: Radius, duration: TickInterval * 2, color: Color });
 }
 
 export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): CSPlayerPawn | undefined
@@ -144,8 +192,6 @@ export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTim
 	return undefined;
 }
 
-// For a projectile that passes through players and only stops on the world. Each living player it touches is reported
-// the first time only, so nobody is hit by the same projectile twice.
 export function MovePiercingProjectile(Projectile: FPiercingProjectile, DeltaTime: number): FPiercingStep
 {
 	const Velocity: FVector = Projectile.Velocity;
@@ -157,7 +203,7 @@ export function MovePiercingProjectile(Projectile: FPiercingProjectile, DeltaTim
 
 	for (let TraceCount: number = 0; TraceCount < MaxHitscanTraces; TraceCount++)
 	{
-		const Trace: TraceResult = Instance.TraceSphere({ start: Projectile.Position, end: End, radius: Projectile.Radius, ignoreEntity: Ignored });
+		const Trace: TraceResult = TraceProjectile(Projectile, End, Ignored, true);
 		if (!Trace.didHit)
 		{
 			break;
@@ -250,13 +296,7 @@ function FollowGround(Projectile: FBouncingProjectile): void
 function SweepProjectile(Projectile: FProjectile, DeltaTime: number, bHitPlayers: boolean): TraceResult | undefined
 {
 	const NextPosition: FVector = VectorMath.Add(Projectile.Position, VectorMath.Scale(Projectile.Velocity, DeltaTime));
-	const Trace: TraceResult = Instance.TraceLine(
-	{
-		start: Projectile.Position,
-		end: NextPosition,
-		ignoreEntity: GetIgnoredEntities(Projectile),
-		ignorePlayers: !bHitPlayers,
-	});
+	const Trace: TraceResult = TraceProjectile(Projectile, NextPosition, GetIgnoredEntities(Projectile), bHitPlayers);
 
 	if (Trace.didHit)
 	{
@@ -267,6 +307,27 @@ function SweepProjectile(Projectile: FProjectile, DeltaTime: number, bHitPlayers
 		Projectile.Position = NextPosition;
 	}
 	return Trace.didHit ? Trace : undefined;
+}
+
+// A line for a point, otherwise its whole shape at its size, from where it is now to End
+function TraceProjectile(Projectile: FProjectile, End: FVector, Ignored: Entity[], bHitPlayers: boolean): TraceResult
+{
+	const Trace: BaseTraceConfig = { start: Projectile.Position, end: End, ignoreEntity: Ignored, ignorePlayers: !bHitPlayers };
+	if (Projectile.Radius <= 0)
+	{
+		return Instance.TraceLine(Trace);
+	}
+	if (Projectile.Shape === EProjectileShape.Box)
+	{
+		const Extent: FVector = GetBoxExtent(Projectile.Radius);
+		return Instance.TraceBox({ ...Trace, mins: VectorMath.Scale(Extent, -1), maxs: Extent });
+	}
+	return Instance.TraceSphere({ ...Trace, radius: Projectile.Radius });
+}
+
+function GetBoxExtent(HalfSize: number): FVector
+{
+	return { x: HalfSize, y: HalfSize, z: HalfSize };
 }
 
 function GetIgnoredEntities(Projectile: FProjectile): Entity[]
@@ -294,6 +355,14 @@ export function DestroyProjectile(Projectile: FProjectile): void
 	Projectile.Models = [];
 }
 
+export function DestroyProjectiles(Projectiles: readonly FProjectile[]): void
+{
+	for (const Projectile of Projectiles)
+	{
+		DestroyProjectile(Projectile);
+	}
+}
+
 export function TintProjectile(Projectile: FProjectile, Color: FColor): void
 {
 	for (const Model of Projectile.Models)
@@ -317,7 +386,6 @@ function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjec
 
 function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): void
 {
-	// Something that has stopped moving keeps facing the way it was
 	const bTurn: boolean = VectorMath.Size(Projectile.Velocity) >= MinFacingSpeed;
 	const Flight: FRotationMatrix = RotationMath.FromRotator(VectorMath.GetRotation(Projectile.Velocity));
 	for (const Model of Projectile.Models)
@@ -342,11 +410,12 @@ function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): voi
 	}
 }
 
-export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined): void
+export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined, FxTemplate: string = ExplosionTemplateName): void
 {
 	const Origin: FVector = VectorMath.Add(Position, ExplosionOffset);
 
-	if (!SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime))
+	const Fx: Entity[] | undefined = SpawnTemporaryTemplate(FxTemplate, Origin, ExplosionFxLifetime) ?? SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime);
+	if (!Fx)
 	{
 		Instance.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
 	}
@@ -373,7 +442,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		}
 
 		const bIsSelf: boolean = Victim === Attacker;
-		if (!bIsSelf && !IsFriendlyFire() && Victim.GetTeamNumber() === Attacker.GetTeamNumber())
+		if (!bIsSelf && IsTeammate(Victim, Attacker))
 		{
 			return;
 		}
@@ -399,7 +468,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		}
 
 		const PushDirection: FVector = VectorMath.GetSafeNormal(Push);
-		Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged (explosive) ${Victim.GetPlayerController()?.GetPlayerName()} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
+		Console.Log(`${LogPrefix} ${GetPawnName(Attacker)} Damaged (explosive) ${GetPawnName(Victim)} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
 	});
 }
 
@@ -474,7 +543,7 @@ export function TraceHitscan(Shooter: CSPlayerPawn, Start: FVector, End: FVector
 			break;
 		}
 		Ignored.push(Victim);
-		if (!Victim.IsAlive() || (!IsFriendlyFire() && Victim.GetTeamNumber() === Shooter.GetTeamNumber()))
+		if (!Victim.IsAlive() || IsTeammate(Victim, Shooter))
 		{
 			continue;
 		}
@@ -566,7 +635,7 @@ export function ApplyBulletFalloff(Event: FModifyDamageEvent, Falloff: FDamageFa
 	const RangeScale: number = GetRangeDamageScale(Attacker, Event.player, Falloff);
 	const Damage: number = Math.max(1, Math.round((Event.damage / CsRangeScale) * RangeScale));
 
-	Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged (Bullet) ${Event.player.GetPlayerController()?.GetPlayerName()} : ${Damage}d : ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)}`);
+	Console.Log(`${LogPrefix} ${GetPawnName(Attacker)} Damaged (Bullet) ${GetPawnName(Event.player)} : ${Damage}d : ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)}`);
 
 	return { damage: Damage };
 }
