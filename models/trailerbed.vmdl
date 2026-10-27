@@ -6,19 +6,6 @@
 		children = 
 		[
 			{
-				_class = "MaterialGroupList"
-				children = 
-				[
-					{
-						_class = "DefaultMaterialGroup"
-						remaps = [  ]
-						use_global_default = true
-						global_default_material = "dev/helper/reflectivity_90b.vmat"
-					},
-				]
-				disabled = true
-			},
-			{
 				_class = "RenderMeshList"
 				children = 
 				[
@@ -53,6 +40,29 @@
 						}
 					},
 				]
+			},
+			{
+				_class = "PhysicsShapeList"
+				children = 
+				[
+					{
+						_class = "PhysicsMeshFromRender"
+						parent_bone = ""
+						surface_prop = "default"
+						collision_prop = "default"
+						tool_material = ""
+						renderMeshList = [  ]
+						simplification_params = 
+						{
+							qemError = 0.0
+							maxMeshVertices = 0
+							small_element_threshold = 0.0
+							thin_element_threshold = 0.0
+						}
+					},
+				]
+				leave_body_collision_unmodified = false
+				body_order = "bone_depth"
 			},
 		]
 		model_archetype = ""

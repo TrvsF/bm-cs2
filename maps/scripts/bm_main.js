@@ -1026,7 +1026,7 @@ var RailerSettings = {
   Health: 100,
   SizeScale: 0.8,
   PrimaryLauncher: {
-    FireInterval: 0.08,
+    FireInterval: 0.06,
     ClipSize: 20,
     ReloadFirstTime: 1.6,
     ReloadEachTime: 0,
@@ -1044,7 +1044,7 @@ var RailerSettings = {
     ReloadFxTemplate: "rail_reload_template"
   },
   PPsh: {
-    Damage: 7,
+    Damage: 8,
     HeadshotMultiplier: 1,
     Range: 4096,
     Spread: 2,

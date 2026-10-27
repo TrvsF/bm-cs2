@@ -362,7 +362,7 @@ export const RailerSettings: FRailerSettings =
 	SizeScale: 0.8,
 	PrimaryLauncher:
 	{
-		FireInterval: 0.08,
+		FireInterval: 0.06,
 		ClipSize: 20,
 		ReloadFirstTime: 1.6,
 		ReloadEachTime: 0,
@@ -383,7 +383,7 @@ export const RailerSettings: FRailerSettings =
 
 	PPsh:
 	{
-		Damage: 7,
+		Damage: 8,
 		HeadshotMultiplier: 1,
 		Range: 4096,
 		Spread: 2,
