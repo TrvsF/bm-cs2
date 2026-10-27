@@ -94,13 +94,13 @@
 					<Label class="ClassButtonInfo" text="RPG &amp; Knife. Use the knife mid-air for massive damage!" hittest="false" />
 				</Button>
 				<Button id="Pick_demo" class="ClassButton DemoButton">
-					<Label class="ClassButtonName" text="Exploder" hittest="false" />
+					<Label class="ClassButtonName" text="Demoman" hittest="false" />
 					<Label class="ClassButtonInfo" text="Stickies &amp; Pipes. Right-click to detonate the footballs!" hittest="false" />
 				</Button>
-				<!-- <Button id="Pick_medic" class="ClassButton MedicButton">
+				<Button id="Pick_medic" class="ClassButton MedicButton">
 					<Label class="ClassButtonName" text="Medic" hittest="false" />
 					<Label class="ClassButtonInfo" text="Medic!" hittest="false" />
-				</Button> -->
+				</Button>
 				<Button id="Pick_railer" class="ClassButton RailerButton">
 					<Label class="ClassButtonName" text="Railer" hittest="false" />
 					<Label class="ClassButtonInfo" text="Pea Shooter &amp; Beam Cannon. Try jumping with the beam!" hittest="false" />
@@ -108,6 +108,10 @@
 				<Button id="Pick_beamer" class="ClassButton BeamerButton">
 					<Label class="ClassButtonName" text="Beamer" hittest="false" />
 					<Label class="ClassButtonInfo" text="Minigun &amp; Shotguns. You're so big owo!" hittest="false" />
+				</Button>
+				<Button id="Pick_boxer" class="ClassButton BoxerButton">
+					<Label class="ClassButtonName" text="Boxer" hittest="false" />
+					<Label class="ClassButtonInfo" text="Cubes &amp; Crap. The cubes feast on all!" hittest="false" />
 				</Button>
 			</Panel>
 			

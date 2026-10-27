@@ -312,7 +312,8 @@ export function SpawnTemplateEntities(TemplateName: string, Position: FVector, R
 	{
 		return [];
 	}
-	return Template.ForceSpawn(Position, Rotation) ?? [];
+	const Spawned: Entity[] | undefined = Rotation ? Template.ForceSpawn(Position, Rotation) : Template.ForceSpawn(Position);
+	return Spawned ?? [];
 }
 
 export function IsModelEntity(Ent: Entity): Ent is BaseModelEntity

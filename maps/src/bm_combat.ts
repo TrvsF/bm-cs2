@@ -28,6 +28,18 @@ export interface FBouncingProjectile extends FProjectile
 	GroundNormal: FVector | undefined;
 }
 
+export interface FPiercingProjectile extends FProjectile
+{
+	readonly Radius: number;
+	readonly HitPlayers: Set<CSPlayerPawn>;
+}
+
+export interface FPiercingStep
+{
+	readonly NewHits: FHitscanHit[];
+	readonly WorldHit: TraceResult | undefined;
+}
+
 export interface FBounceSettings
 {
 	readonly Restitution: number;
@@ -130,6 +142,43 @@ export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTim
 	}
 	BounceProjectile(Projectile, Hit.normal, Bounce);
 	return undefined;
+}
+
+// For a projectile that passes through players and only stops on the world. Each living player it touches is reported
+// the first time only, so nobody is hit by the same projectile twice.
+export function MovePiercingProjectile(Projectile: FPiercingProjectile, DeltaTime: number): FPiercingStep
+{
+	const Velocity: FVector = Projectile.Velocity;
+	Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
+	const End: FVector = VectorMath.Add(Projectile.Position, VectorMath.Scale(Projectile.Velocity, DeltaTime));
+	const Ignored: Entity[] = [...GetIgnoredEntities(Projectile), ...Projectile.HitPlayers];
+	const NewHits: FHitscanHit[] = [];
+	let WorldHit: TraceResult | undefined = undefined;
+
+	for (let TraceCount: number = 0; TraceCount < MaxHitscanTraces; TraceCount++)
+	{
+		const Trace: TraceResult = Instance.TraceSphere({ start: Projectile.Position, end: End, radius: Projectile.Radius, ignoreEntity: Ignored });
+		if (!Trace.didHit)
+		{
+			break;
+		}
+		const Victim: Entity | undefined = Trace.hitEntity;
+		if (!IsPlayerPawn(Victim))
+		{
+			WorldHit = Trace;
+			break;
+		}
+		Ignored.push(Victim);
+		if (Victim.IsAlive())
+		{
+			Projectile.HitPlayers.add(Victim);
+			NewHits.push({ Victim: Victim, Trace: Trace });
+		}
+	}
+
+	Projectile.Position = WorldHit ? VectorMath.Add(WorldHit.end, VectorMath.Scale(WorldHit.normal, SurfaceGap)) : End;
+	PlaceProjectileModels(Projectile, false);
+	return { NewHits: NewHits, WorldHit: WorldHit };
 }
 
 function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): CSPlayerPawn | undefined

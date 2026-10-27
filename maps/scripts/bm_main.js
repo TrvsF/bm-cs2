@@ -1,5 +1,5 @@
 // src/bm_main.ts
-import { Instance as Instance12, Console as Console7, GameRules as GameRules3, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2, CSGearSlot as CSGearSlot2 } from "cs_script/point_script";
+import { Instance as Instance12, Console as Console8, GameRules as GameRules3, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2, CSGearSlot as CSGearSlot2 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance } from "cs_script/point_script";
@@ -166,7 +166,8 @@ function SpawnTemplateEntities(TemplateName, Position, Rotation) {
   if (!IsPointTemplate(Template)) {
     return [];
   }
-  return Template.ForceSpawn(Position, Rotation) ?? [];
+  const Spawned = Rotation ? Template.ForceSpawn(Position, Rotation) : Template.ForceSpawn(Position);
+  return Spawned ?? [];
 }
 function IsModelEntity(Ent) {
   return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
@@ -185,7 +186,7 @@ function ForEachLivePawn(Visitor) {
 }
 
 // src/bm_classes.ts
-import { Instance as Instance5, CSInputs as CSInputs2, CSGearSlot, CSDamageTypes as CSDamageTypes2, CSDamageFlags, CSWeaponType as CSWeaponType2, CSHitGroup } from "cs_script/point_script";
+import { Instance as Instance5, Console as Console2, CSInputs as CSInputs2, CSGearSlot, CSDamageTypes as CSDamageTypes2, CSDamageFlags, CSWeaponType as CSWeaponType2, CSHitGroup } from "cs_script/point_script";
 
 // src/bm_combat.ts
 import { Instance as Instance3, Console, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
@@ -405,6 +406,33 @@ function MoveBouncingProjectile(Projectile, DeltaTime, bHitPlayers, Bounce) {
   }
   BounceProjectile(Projectile, Hit.normal, Bounce);
   return void 0;
+}
+function MovePiercingProjectile(Projectile, DeltaTime) {
+  const Velocity = Projectile.Velocity;
+  Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
+  const End = VectorMath.Add(Projectile.Position, VectorMath.Scale(Projectile.Velocity, DeltaTime));
+  const Ignored = [...GetIgnoredEntities(Projectile), ...Projectile.HitPlayers];
+  const NewHits = [];
+  let WorldHit = void 0;
+  for (let TraceCount = 0; TraceCount < MaxHitscanTraces; TraceCount++) {
+    const Trace = Instance3.TraceSphere({ start: Projectile.Position, end: End, radius: Projectile.Radius, ignoreEntity: Ignored });
+    if (!Trace.didHit) {
+      break;
+    }
+    const Victim = Trace.hitEntity;
+    if (!IsPlayerPawn(Victim)) {
+      WorldHit = Trace;
+      break;
+    }
+    Ignored.push(Victim);
+    if (Victim.IsAlive()) {
+      Projectile.HitPlayers.add(Victim);
+      NewHits.push({ Victim, Trace });
+    }
+  }
+  Projectile.Position = WorldHit ? VectorMath.Add(WorldHit.end, VectorMath.Scale(WorldHit.normal, SurfaceGap)) : End;
+  PlaceProjectileModels(Projectile, false);
+  return { NewHits, WorldHit };
 }
 function RollProjectile(Projectile, Ground, DeltaTime, bHitPlayers, Bounce) {
   const Pull = { x: 0, y: 0, z: -Gravity * Projectile.GravityScale * DeltaTime };
@@ -677,23 +705,6 @@ function GetHeightAboveGround(Pawn, MaxDistance) {
   }
   return Trace.startedInSolid ? 0 : Math.max(0, Start.z - Trace.end.z - GroundTraceLift.z);
 }
-function ApplyBulletFalloff(Event, Falloff) {
-  const Attacker = Event.attacker;
-  const Weapon = Event.weapon;
-  const bIsBullet = (Event.damageTypes & (CSDamageTypes.BULLET | CSDamageTypes.BUCKSHOT)) !== 0;
-  if (!Falloff || !Weapon || !bIsBullet || !IsPlayerPawn(Attacker) || Attacker === Event.player) {
-    return;
-  }
-  if (Weapon.GetData().GetType() === CSWeaponType.KNIFE) {
-    return;
-  }
-  const BulletTravel = VectorMath.Size(VectorMath.Subtract(GetChestPosition(Event.player), Attacker.GetEyePosition()));
-  const CsRangeScale = Math.pow(Weapon.GetData().GetRangeModifier(), BulletTravel / 500);
-  const RangeScale = GetRangeDamageScale(Attacker, Event.player, Falloff);
-  const Damage = Math.max(1, Math.round(Event.damage / CsRangeScale * RangeScale));
-  Console.Log(`${LogPrefix} ${Attacker.GetPlayerController()?.GetPlayerName()} Damaged (Bullet) ${Event.player.GetPlayerController()?.GetPlayerName()} : ${Damage}d : ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)}`);
-  return { damage: Damage };
-}
 
 // src/bm_launcher.ts
 import { Instance as Instance4, GameRules, CSInputs } from "cs_script/point_script";
@@ -866,9 +877,9 @@ var EPlayerClass = /* @__PURE__ */ ((EPlayerClass2) => {
   EPlayerClass2["Medic"] = "medic";
   EPlayerClass2["Railer"] = "railer";
   EPlayerClass2["Beamer"] = "beamer";
+  EPlayerClass2["Boxer"] = "boxer";
   return EPlayerClass2;
 })(EPlayerClass || {});
-var TF2HitscanFalloff = { RampUp: 1.5, FallOff: 0.5, OptimalDistance: 512 };
 var TF2RocketFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
 var TF2StickyFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDistance: 512 };
 var RailerShotFalloff = [
@@ -886,6 +897,16 @@ var BeamerBeamFalloff = [
   { Distance: 512, Scale: 0.5 },
   { Distance: 1200, Scale: 0.2 }
 ];
+var CrossbowRampUp = [
+  { Distance: 0, Scale: 0.5 },
+  { Distance: 256, Scale: 0.5 },
+  { Distance: 2048, Scale: 1 }
+];
+var BoxerCubeFalloff = [
+  { Distance: 0, Scale: 1 },
+  { Distance: 512, Scale: 1 },
+  { Distance: 2048, Scale: 0.5 }
+];
 var BeamerShotgunFalloff = [
   { Distance: 0, Scale: 1 },
   { Distance: 256, Scale: 1 },
@@ -893,7 +914,7 @@ var BeamerShotgunFalloff = [
 ];
 var SoldierSettings = {
   DisplayName: "Soldier",
-  Primary: "weapon_m4a1",
+  Primary: "weapon_sg556",
   Secondary: "",
   Melee: "weapon_knife",
   Health: 150,
@@ -916,7 +937,7 @@ var SoldierSettings = {
   RocketFalloff: TF2RocketFalloff
 };
 var DemoSettings = {
-  DisplayName: "Demoman",
+  DisplayName: "Exploder",
   Primary: "weapon_sawedoff",
   Secondary: "weapon_deagle",
   Melee: "",
@@ -972,9 +993,23 @@ var MedicSettings = {
   Melee: "weapon_knife",
   Health: 150,
   SizeScale: 0.9,
-  PrimaryLauncher: void 0,
+  PrimaryLauncher: {
+    FireInterval: 0.2,
+    ClipSize: 1,
+    ReloadFirstTime: 1.6,
+    ReloadEachTime: 0,
+    ChargeTime: 0,
+    FireFxTemplate: "crossbow_fire_template",
+    ReloadFxTemplate: "crossbow_reload_template"
+  },
   SecondaryLauncher: void 0,
-  BulletFalloff: TF2HitscanFalloff,
+  BoltSpeed: 2400,
+  BoltGravityScale: 0.2,
+  BoltDamage: 75,
+  BoltHeal: 150,
+  BoltRampUp: CrossbowRampUp,
+  BoltLifetime: 5,
+  BoltStickTime: 3,
   Range: 450,
   BreakRange: 540,
   HealPerSec: 24,
@@ -1107,12 +1142,66 @@ var BeamerSettings = {
     ImpactLifetime: 0
   }
 };
+var BoxerSettings = {
+  DisplayName: "Boxer",
+  Primary: "weapon_m249",
+  Secondary: "weapon_deagle",
+  Melee: "",
+  Health: 150,
+  SizeScale: 1.25,
+  PrimaryLauncher: {
+    FireInterval: 0.8,
+    ClipSize: 1,
+    ReloadFirstTime: 1,
+    ReloadEachTime: 0.8,
+    ChargeTime: 0,
+    FireFxTemplate: "cube_fire_template",
+    ReloadFxTemplate: "cube_reload_template"
+  },
+  SecondaryLauncher: {
+    FireInterval: 0.625,
+    ClipSize: 4,
+    ReloadFirstTime: 0.7,
+    ReloadEachTime: 0.5,
+    ChargeTime: 0,
+    FireFxTemplate: "boxer_shot_fire_template",
+    ReloadFxTemplate: "boxer_shot_reload_template"
+  },
+  CubeSpeed: 1400,
+  CubeGravityScale: 0,
+  CubeRadius: 12,
+  CubeDamage: 100,
+  CubeFalloff: BoxerCubeFalloff,
+  CubeKnockback: 300,
+  CubeLifetime: 5,
+  Shotgun: {
+    Damage: 10,
+    HeadshotMultiplier: 1,
+    Range: 2048,
+    Spread: 6,
+    Pellets: 8,
+    bPierces: false,
+    Falloff: BeamerShotgunFalloff,
+    Knockback: 300,
+    SelfKnockback: 150,
+    bBloodSplatter: false,
+    bHeldBeam: false,
+    BeamTemplate: "boxer_shot_tracer_template",
+    BeamEndName: "boxer_shot_tracer_end",
+    BeamLifetime: 0.06,
+    ImpactTemplate: "",
+    ImpactLifetime: 0
+  }
+};
 var PlayableClasses = Object.values(EPlayerClass).filter((PlayerClass2) => {
   return PlayerClass2 !== "none" /* None */;
 });
 var StickyTemplateName = "sticky_template";
 var RocketTemplateName = "rocket_template";
 var PipeTemplateName = "pipe_template";
+var BoltTemplateName = "crossbow_bolt_template";
+var CubeTemplateName = "cube_template";
+var MedicKnifeDamage = 20;
 var MaxBeamHits = 8;
 var DefaultHealth = 100;
 var DefaultSizeScale = 1;
@@ -1383,6 +1472,7 @@ var MedicClass = class extends PlayerClass {
   UberedThisTick = /* @__PURE__ */ new Set();
   UberedPawns = /* @__PURE__ */ new Set();
   GlowingPawns = /* @__PURE__ */ new Set();
+  Bolts = [];
   HudLine = 0;
   constructor() {
     super(MedicSettings);
@@ -1393,10 +1483,17 @@ var MedicClass = class extends PlayerClass {
       Pawn.SwitchToWeapon(Knife);
     }
   }
+  OnPrimaryFire(Pawn, Slot, Now) {
+    const Projectile = LaunchProjectile(Pawn, this.Settings.BoltSpeed, 0, this.Settings.BoltGravityScale, BoltTemplateName);
+    this.Bolts.push({ ...Projectile, Start: Projectile.Position, StuckUntil: void 0 });
+  }
   TickWorld(Now, DeltaTime) {
     this.HealedThisTick = /* @__PURE__ */ new Set();
     this.UberedThisTick = /* @__PURE__ */ new Set();
     this.HudLine = 0;
+    this.Bolts = this.Bolts.filter((Bolt) => {
+      return this.StepBolt(Bolt, Now, DeltaTime);
+    });
   }
   TickPlayer(Pawn, Slot, Now, DeltaTime) {
     const State = this.GetPlayerState(Slot);
@@ -1470,6 +1567,10 @@ var MedicClass = class extends PlayerClass {
   }
   OnRoundStart() {
     this.PlayerStates.clear();
+    for (const Bolt of this.Bolts) {
+      DestroyProjectile(Bolt);
+    }
+    this.Bolts = [];
   }
   ClearPlayer(Slot) {
     this.PlayerStates.delete(Slot);
@@ -1477,15 +1578,61 @@ var MedicClass = class extends PlayerClass {
   }
   ModifyOutgoingDamage(Event) {
     if (Event.weapon && Event.weapon.GetData().GetType() === CSWeaponType2.KNIFE) {
-      return { abort: true };
+      return { damage: MedicKnifeDamage };
     }
-    return ApplyBulletFalloff(Event, this.Settings.BulletFalloff);
+    return super.ModifyOutgoingDamage(Event);
+  }
+  GetHudCounter(Slot) {
+    const State = this.PlayerStates.get(Slot);
+    return { Label: "\xDCber", Count: State ? Math.floor(State.UberCharge) : 0, Max: 100 };
   }
   ModifyAnyDamage(Event) {
     if (this.UberedPawns.has(Event.player)) {
       return { abort: true };
     }
     return;
+  }
+  StepBolt(Bolt, Now, DeltaTime) {
+    if (Bolt.StuckUntil !== void 0 || !Bolt.Owner.IsValid() || Now - Bolt.SpawnedAt > this.Settings.BoltLifetime) {
+      if (Bolt.StuckUntil !== void 0 && Now < Bolt.StuckUntil) {
+        return true;
+      }
+      DestroyProjectile(Bolt);
+      return false;
+    }
+    const Hit = MoveProjectile(Bolt, DeltaTime, true);
+    if (Hit && IsPlayerPawn(Hit.hitEntity)) {
+      DestroyProjectile(Bolt);
+      this.BoltHitPlayer(Bolt, Hit.hitEntity);
+      return false;
+    }
+    if (Hit) {
+      Bolt.StuckUntil = Now + this.Settings.BoltStickTime;
+      return Bolt.Models.length > 0;
+    }
+    if (Bolt.Models.length === 0) {
+      Instance5.DebugSphere({ center: Bolt.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Bolt.Owner) });
+    }
+    return true;
+  }
+  BoltHitPlayer(Bolt, Victim) {
+    const Medic = Bolt.Owner;
+    const Distance = VectorMath.Size(VectorMath.Subtract(Bolt.Position, Bolt.Start));
+    const RangeScale = EvaluateDamageCurve(this.Settings.BoltRampUp, Distance);
+    const MedicName = Medic.GetPlayerController()?.GetPlayerName();
+    const VictimName = Victim.GetPlayerController()?.GetPlayerName();
+    if (!IsFriendlyFire() && Victim.GetTeamNumber() === Medic.GetTeamNumber()) {
+      const Health = Victim.GetHealth();
+      const Healed = Math.min(Victim.GetMaxHealth(), Health + Math.round(this.Settings.BoltHeal * RangeScale));
+      if (Healed > Health) {
+        Victim.SetHealth(Healed);
+      }
+      Console2.Log(`${LogPrefix} ${MedicName} Healed (bolt) ${VictimName} : +${Math.max(0, Healed - Health)}h : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
+      return;
+    }
+    const Damage = this.Settings.BoltDamage * RangeScale;
+    DealShockDamage(Medic, Victim, Damage, Medic.FindWeapon(this.Settings.Primary));
+    Console2.Log(`${LogPrefix} ${MedicName} Damaged (bolt) ${VictimName} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
   }
   GetPlayerState(Slot) {
     let State = this.PlayerStates.get(Slot);
@@ -1666,12 +1813,70 @@ var BeamerClass = class extends PlayerClass {
     }
   }
 };
+var BoxerClass = class extends PlayerClass {
+  Cubes = [];
+  constructor() {
+    super(BoxerSettings);
+  }
+  OnPrimaryFire(Pawn, Slot, Now) {
+    const Projectile = LaunchProjectile(Pawn, this.Settings.CubeSpeed, 0, this.Settings.CubeGravityScale, CubeTemplateName);
+    this.Cubes.push({ ...Projectile, Radius: this.Settings.CubeRadius, HitPlayers: /* @__PURE__ */ new Set(), Start: Projectile.Position });
+  }
+  OnSecondaryFire(Pawn, Slot, Now) {
+    FireBeamWeapon(Pawn, this.Settings.Shotgun, Pawn.FindWeapon(this.Settings.Secondary));
+  }
+  TickWorld(Now, DeltaTime) {
+    this.Cubes = this.Cubes.filter((Cube) => {
+      return this.StepCube(Cube, Now, DeltaTime);
+    });
+  }
+  OnRoundStart() {
+    for (const Cube of this.Cubes) {
+      DestroyProjectile(Cube);
+    }
+    this.Cubes = [];
+  }
+  StepCube(Cube, Now, DeltaTime) {
+    if (!Cube.Owner.IsValid() || Now - Cube.SpawnedAt > this.Settings.CubeLifetime) {
+      DestroyProjectile(Cube);
+      return false;
+    }
+    const Step = MovePiercingProjectile(Cube, DeltaTime);
+    for (const Hit of Step.NewHits) {
+      this.CubeHitPlayer(Cube, Hit);
+    }
+    if (Step.WorldHit) {
+      DestroyProjectile(Cube);
+      return false;
+    }
+    if (Cube.Models.length === 0) {
+      Instance5.DebugSphere({ center: Cube.Position, radius: Cube.Radius, duration: TickInterval * 2, color: GetTeamColor(Cube.Owner) });
+    }
+    return true;
+  }
+  CubeHitPlayer(Cube, Hit) {
+    const Boxer = Cube.Owner;
+    const Victim = Hit.Victim;
+    if (!IsFriendlyFire() && Victim.GetTeamNumber() === Boxer.GetTeamNumber()) {
+      return;
+    }
+    const Distance = VectorMath.Size(VectorMath.Subtract(Hit.Trace.end, Cube.Start));
+    const RangeScale = EvaluateDamageCurve(this.Settings.CubeFalloff, Distance);
+    const Damage = this.Settings.CubeDamage * RangeScale;
+    ApplyKnockback(Victim, Cube.Velocity, Damage, this.Settings.CubeKnockback, false);
+    if (DealShockDamage(Boxer, Victim, Damage, Boxer.FindWeapon(this.Settings.Primary)) > 0) {
+      SpawnBloodSplatter(Hit.Trace.end, Victim);
+    }
+    Console2.Log(`${LogPrefix} ${Boxer.GetPlayerController()?.GetPlayerName()} Damaged (cube) ${Victim.GetPlayerController()?.GetPlayerName()} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
+  }
+};
 var ClassDefinitions = {
   ["demo" /* Demoman */]: new DemomanClass(),
   ["soldier" /* Solider */]: new SoldierClass(),
   ["medic" /* Medic */]: new MedicClass(),
   ["railer" /* Railer */]: new RailerClass(),
-  ["beamer" /* Beamer */]: new BeamerClass()
+  ["beamer" /* Beamer */]: new BeamerClass(),
+  ["boxer" /* Boxer */]: new BoxerClass()
 };
 function GiveLoadout(Pawn, PlayerClass2) {
   ClassDefinitions[PlayerClass2].ApplyLoadout(Pawn);
@@ -1711,7 +1916,7 @@ function IsWeaponAllowed(PlayerClass2, Weapon) {
 }
 
 // src/bm_hud.ts
-import { Instance as Instance6, Console as Console2 } from "cs_script/point_script";
+import { Instance as Instance6, Console as Console3 } from "cs_script/point_script";
 var DamageHudName = "damage_hud";
 var DamageLabelId = "DamageNumber";
 var DamageBatchWindow = 0.6;
@@ -1785,7 +1990,7 @@ function FindDamageHud() {
   if (!GbWarnedNoDamageHud) {
     GbWarnedNoDamageHud = true;
     const Problem = Hud ? "exists but isn't a custom_hud_layout" : "wasn't found";
-    Console2.Log(`${LogPrefix} cannot find hud "${DamageHudName}" bc of ${Problem}`);
+    Console3.Log(`${LogPrefix} cannot find hud "${DamageHudName}" bc of ${Problem}`);
   }
   return void 0;
 }
@@ -1794,7 +1999,7 @@ function IsCustomHudLayout(Ent) {
 }
 
 // src/bm_ui.ts
-import { Instance as Instance7, Console as Console3, CSInputs as CSInputs3 } from "cs_script/point_script";
+import { Instance as Instance7, Console as Console4, CSInputs as CSInputs3 } from "cs_script/point_script";
 var ClassUiName = "class_hud";
 var MenuPanelId = "ClassMenu";
 var HudCardsId = "HudCards";
@@ -2114,7 +2319,7 @@ function FindClassUi() {
   if (!GbWarnedNoClassUi) {
     GbWarnedNoClassUi = true;
     const Problem = Ui ? "exists but isn't a custom_hud_layout" : "wasn't found";
-    Console3.Log(`${LogPrefix} problem finding "${ClassUiName}" ${Problem}. check custom_hud_layout entity`);
+    Console4.Log(`${LogPrefix} problem finding "${ClassUiName}" ${Problem}. check custom_hud_layout entity`);
   }
   return void 0;
 }
@@ -2123,7 +2328,7 @@ function IsCustomHudLayout2(Ent) {
 }
 
 // src/bm_pickups.ts
-import { Instance as Instance8, Console as Console4 } from "cs_script/point_script";
+import { Instance as Instance8, Console as Console5 } from "cs_script/point_script";
 var HealthKitSettings = {
   Name: "healthkit",
   HealFraction: 0.5,
@@ -2227,7 +2432,7 @@ function TakeKit(Kit, Taker, Now) {
   SpawnKitFx(HealthKitSettings.PickupFxTemplate, Kit);
   if (bDebug) {
     const Name = Taker.GetPlayerController()?.GetPlayerName() ?? "someone";
-    Console4.Log(`${LogPrefix} ${Name} picked up a healthkit ${OldHealth} -> ${NewHealth}`);
+    Console5.Log(`${LogPrefix} ${Name} picked up a healthkit ${OldHealth} -> ${NewHealth}`);
   }
 }
 function RespawnKit(Kit) {
@@ -2250,7 +2455,7 @@ function IsModelEntity2(Ent) {
 }
 
 // src/bm_spawnzones.ts
-import { Instance as Instance9, Console as Console5 } from "cs_script/point_script";
+import { Instance as Instance9, Console as Console6 } from "cs_script/point_script";
 var SpawnZoneSettings = {
   TerroristZoneName: "spawnzone_t",
   CounterTerroristZoneName: "spawnzone_ct",
@@ -2309,7 +2514,7 @@ function ScanSpawnZones() {
   const CounterTerroristZones = CountZones(3 /* CounterTerrorist */);
   const Report = TerroristZones + CounterTerroristZones > 0 ? `spawn zones: ${TerroristZones} for Ts ("${SpawnZoneSettings.TerroristZoneName}"), ${CounterTerroristZones} for CTs ("${SpawnZoneSettings.CounterTerroristZoneName}")` : "";
   if (Report !== "" && Report !== GLastScanReport) {
-    Console5.Log(`${LogPrefix} ${Report}`);
+    Console6.Log(`${LogPrefix} ${Report}`);
   }
   GLastScanReport = Report;
 }
@@ -2529,7 +2734,7 @@ var FreeForAllMode = class extends GameMode {
 };
 
 // src/bm_payload.ts
-import { Instance as Instance11, Console as Console6, GameRules as GameRules2, CSRoundEndReason } from "cs_script/point_script";
+import { Instance as Instance11, Console as Console7, GameRules as GameRules2, CSRoundEndReason } from "cs_script/point_script";
 var PayloadSettings = {
   CartName: "payload_cart",
   PathPrefix: "payload_path_",
@@ -2726,7 +2931,7 @@ function ReachCheckpoints(Track, Now) {
     GCheckpointsReached++;
     GSavedDistance = CheckpointDistance;
     GameRules2.SetRoundRemainingTime(Math.max(0, GameRules2.GetRoundRemainingTime()) + PayloadSettings.CheckpointBonusTime);
-    Console6.Log(`${LogPrefix} payload checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached. adding ${PayloadSettings.CheckpointBonusTime} seconds to match timer`);
+    Console7.Log(`${LogPrefix} payload checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached. adding ${PayloadSettings.CheckpointBonusTime} seconds to match timer`);
   }
 }
 function EndRound(Winner) {
@@ -2736,7 +2941,7 @@ function EndRound(Winner) {
   GbRoundOver = true;
   GameRules2.AddTeamScore(Winner, 1);
   GameRules2.TerminateRound(Winner === 2 /* Terrorist */ ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
-  Console6.Log(`${LogPrefix} payload round finished. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}`);
+  Console7.Log(`${LogPrefix} payload round finished. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}`);
 }
 function MakeStatus(Track, Pushers, bBlocked, bRollingBack, bOvertime, Now) {
   const Status = {
@@ -2767,7 +2972,7 @@ function ScanPayload() {
   }
   const Report = IsPayloadReady() && GTrack ? `payload on: ${GTrack.Points.length} track points, ${Math.round(GTrack.Length)}u long, ${GTrack.Checkpoints.length} checkpoints` : CartEntity || Points.length > 0 ? `payload off: found ${CartEntity ? "a cart" : "no cart"} ("${PayloadSettings.CartName}") and ${Points.length} track points ("${PayloadSettings.PathPrefix}1" ...). It needs a cart and at least 2 points.` : "";
   if (Report !== "" && Report !== GLastScanReport2) {
-    Console6.Log(`${LogPrefix} ${Report}`);
+    Console7.Log(`${LogPrefix} ${Report}`);
   }
   GLastScanReport2 = Report;
 }
@@ -2959,7 +3164,7 @@ function Tick() {
     TickNoBuying();
     TickBotClasses();
   } catch (Exception) {
-    Console7.Log(`${LogPrefix} error: ${String(Exception)}`);
+    Console8.Log(`${LogPrefix} error: ${String(Exception)}`);
   }
 }
 function BeginPlay() {
@@ -2978,7 +3183,7 @@ function BeginPlay() {
   Instance12.OnCustomHudClicked(HandleCustomHudClicked);
   Instance12.SetThink(Tick);
   Instance12.SetNextThink(Instance12.GetGameTime());
-  Console7.Log(`${LogPrefix} loaded${bDebug ? " DEBUG mode!" : ""}`);
+  Console8.Log(`${LogPrefix} loaded${bDebug ? " DEBUG mode!" : ""}`);
 }
 BeginPlay();
 function HandlePlayerChat(Event) {
@@ -3000,7 +3205,7 @@ function HandlePlayerChat(Event) {
   } else if (PlayerClass2 !== void 0) {
     RequestPlayerClass(Player, PlayerClass2);
   } else {
-    Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} typed unknown command "${ChatCommandPrefix}${Command}"`);
+    Console8.Log(`${LogPrefix} ${Player.GetPlayerName()} typed unknown command "${ChatCommandPrefix}${Command}"`);
   }
 }
 function HandlePlayerReset(Event) {
@@ -3059,7 +3264,7 @@ function HandleRoundStart() {
   SelectGameMode();
   GActiveMode.OnRoundStart();
   ApplyMatchSettings();
-  Console7.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
+  Console8.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
 }
 function HandleRoundEnd() {
   GActiveMode.OnRoundEnd();
@@ -3143,7 +3348,7 @@ function SelectGameMode() {
     GActiveMode.OnDeactivated();
     GActiveMode = Mode;
     Mode.OnActivated();
-    Console7.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
+    Console8.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
   }
   SetFriendlyFire(Mode.IsFriendlyFire());
 }
@@ -3157,20 +3362,20 @@ function ApplyMatchSettings() {
   }
   Commands.push(...GActiveMode.GetMatchCommands());
   for (const Command of Commands) {
-    Console7.ServerCommand(Command);
+    Console8.ServerCommand(Command);
   }
 }
 function EndWarmupNow(Player) {
   if (!GameRules3.IsWarmupPeriod()) {
-    Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} typed ${ChatCommandPrefix}start, but warmup is already over`);
+    Console8.Log(`${LogPrefix} ${Player.GetPlayerName()} typed ${ChatCommandPrefix}start, but warmup is already over`);
     return;
   }
-  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} ended warmup`);
+  Console8.Log(`${LogPrefix} ${Player.GetPlayerName()} ended warmup`);
   GameRules3.EndWarmup();
 }
 function TickMatch(Now) {
   if (bDebug && GameRules3.IsWarmupPeriod()) {
-    Console7.ServerCommand("mp_warmup_end");
+    Console8.ServerCommand("mp_warmup_end");
   }
 }
 function RequestPlayerClass(Player, PlayerClass2) {
@@ -3190,7 +3395,7 @@ function RequestPlayerClass(Player, PlayerClass2) {
     GPendingClassBySlot.set(Slot, PlayerClass2);
   }
   ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
-  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass2}`);
+  Console8.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass2}`);
 }
 function TickSpawnClassSwaps() {
   ForEachLivePawn((Pawn, Slot) => {
@@ -3233,7 +3438,7 @@ function SetPlayerClass(Player, PlayerClass2) {
   }
   ShowClassIndicator(Slot, PlayerClass2, Pawn?.GetTeamNumber() === 2);
   const ClassLabel = PlayerClass2 === "none" /* None */ ? "normal" : PlayerClass2;
-  Console7.Log(`${LogPrefix} ${Player.GetPlayerName()} set class to ${ClassLabel}`);
+  Console8.Log(`${LogPrefix} ${Player.GetPlayerName()} set class to ${ClassLabel}`);
 }
 function AssignRandomBotClass(Pawn, Slot) {
   const Controller = Pawn.GetPlayerController();

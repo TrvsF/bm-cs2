@@ -1,9 +1,9 @@
-import { Instance, CSInputs, CSGearSlot, CSDamageTypes, CSDamageFlags, CSWeaponType, CSHitGroup } from "cs_script/point_script";
+import { Instance, Console, CSInputs, CSGearSlot, CSDamageTypes, CSDamageFlags, CSWeaponType, CSHitGroup } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
-import { bDebug, TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, ForEachLivePawn } from "./bm_core";
+import { bDebug, TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPlayerSlot, IsPlayerPawn, IsWeapon, IsFriendlyFire, ForEachLivePawn } from "./bm_core";
 import type { FVector, FRotator, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
-import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DestroyProjectile, TintProjectile, Explode, ApplyBulletFalloff, EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
-import type { FProjectile, FBouncingProjectile, FBounceSettings, FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
+import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, MovePiercingProjectile, DestroyProjectile, TintProjectile, Explode, EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
+import type { FProjectile, FBouncingProjectile, FPiercingProjectile, FPiercingStep, FBounceSettings, FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
 import { SpawnBloodSplatter, SpawnBeam, SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import type { FHeldBeam } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
@@ -19,6 +19,7 @@ export enum EPlayerClass
 	Medic = "medic",
 	Railer = "railer",
 	Beamer = "beamer",
+	Boxer = "boxer",
 }
 
 export type EPlayableClass = Exclude<EPlayerClass, EPlayerClass.None>;
@@ -40,11 +41,6 @@ export interface FHudCounter
 	readonly Label: string;
 	readonly Count: number;
 	readonly Max: number;
-}
-
-export interface FHitscanSettings
-{
-	readonly BulletFalloff: FDamageFalloff | undefined;
 }
 
 export interface FSoliderSettings extends FClassSettings
@@ -80,8 +76,15 @@ export interface FDemoSettings extends FClassSettings
 	readonly StickyFalloffTime: number;
 }
 
-export interface FMedicSettings extends FClassSettings, FHitscanSettings
+export interface FMedicSettings extends FClassSettings
 {
+	readonly BoltSpeed: number;
+	readonly BoltGravityScale: number;
+	readonly BoltDamage: number;
+	readonly BoltHeal: number;
+	readonly BoltRampUp: FDamageCurve;
+	readonly BoltLifetime: number;
+	readonly BoltStickTime: number;
 	readonly Range: number;
 	readonly BreakRange: number;
 	readonly HealPerSec: number;
@@ -123,12 +126,35 @@ export interface FBeamerSettings extends FClassSettings
 	readonly Shotgun: FBeamWeaponSettings;
 }
 
+export interface FBoxerSettings extends FClassSettings
+{
+	readonly CubeSpeed: number;
+	readonly CubeGravityScale: number;
+	readonly CubeRadius: number;
+	readonly CubeDamage: number;
+	readonly CubeFalloff: FDamageCurve;
+	readonly CubeKnockback: number;
+	readonly CubeLifetime: number;
+	readonly Shotgun: FBeamWeaponSettings;
+}
+
 export interface FRocket extends FProjectile
 {
 }
 
 export interface FPipe extends FBouncingProjectile
 {
+}
+
+export interface FBolt extends FProjectile
+{
+	readonly Start: FVector;
+	StuckUntil: number | undefined;
+}
+
+export interface FCube extends FPiercingProjectile
+{
+	readonly Start: FVector;
 }
 
 export interface FStickyBomb extends FProjectile
@@ -160,7 +186,6 @@ interface FMedicPlayerState
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
-const TF2HitscanFalloff: FDamageFalloff = { RampUp: 1.5, FallOff: 0.5, OptimalDistance: 512 };
 const TF2RocketFalloff: FDamageFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
 const TF2StickyFalloff: FDamageFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDistance: 512 };
 
@@ -185,6 +210,20 @@ const BeamerBeamFalloff: FDamageCurve =
 	{ Distance: 1200, Scale: 0.2 },
 ];
 
+const CrossbowRampUp: FDamageCurve =
+[
+	{ Distance: 0, Scale: 0.5 },
+	{ Distance: 256, Scale: 0.5 },
+	{ Distance: 2048, Scale: 1.0 },
+];
+
+const BoxerCubeFalloff: FDamageCurve =
+[
+	{ Distance: 0, Scale: 1.0 },
+	{ Distance: 512, Scale: 1.0 },
+	{ Distance: 2048, Scale: 0.5 },
+];
+
 const BeamerShotgunFalloff: FDamageCurve =
 [
 	{ Distance: 0, Scale: 1.0 },
@@ -195,7 +234,7 @@ const BeamerShotgunFalloff: FDamageCurve =
 export const SoldierSettings: FSoliderSettings =
 {
 	DisplayName: "Soldier",
-	Primary: "weapon_m4a1",
+	Primary: "weapon_sg556",
 	Secondary: "",
 	Melee: "weapon_knife",
 	Health: 150,
@@ -222,7 +261,7 @@ export const SoldierSettings: FSoliderSettings =
 
 export const DemoSettings: FDemoSettings =
 {
-	DisplayName: "Demoman",
+	DisplayName: "Exploder",
 	Primary: "weapon_sawedoff",
 	Secondary: "weapon_deagle",
 	Melee: "",
@@ -284,9 +323,25 @@ export const MedicSettings: FMedicSettings =
 	Melee: "weapon_knife",
 	Health: 150,
 	SizeScale: 0.9,
-	PrimaryLauncher: undefined,
+	PrimaryLauncher:
+	{
+		FireInterval: 0.2,
+		ClipSize: 1,
+		ReloadFirstTime: 1.6,
+		ReloadEachTime: 0,
+		ChargeTime: 0,
+		FireFxTemplate: "crossbow_fire_template",
+		ReloadFxTemplate: "crossbow_reload_template",
+	},
 	SecondaryLauncher: undefined,
-	BulletFalloff: TF2HitscanFalloff,
+
+	BoltSpeed: 2400,
+	BoltGravityScale: 0.2,
+	BoltDamage: 75,
+	BoltHeal: 150,
+	BoltRampUp: CrossbowRampUp,
+	BoltLifetime: 5,
+	BoltStickTime: 3,
 
 	Range: 450,
 	BreakRange: 540,
@@ -437,6 +492,64 @@ export const BeamerSettings: FBeamerSettings =
 	},
 };
 
+export const BoxerSettings: FBoxerSettings =
+{
+	DisplayName: "Boxer",
+	Primary: "weapon_m249",
+	Secondary: "weapon_deagle",
+	Melee: "",
+	Health: 150,
+	SizeScale: 1.25,
+	PrimaryLauncher:
+	{
+		FireInterval: 0.8,
+		ClipSize: 1,
+		ReloadFirstTime: 1.0,
+		ReloadEachTime: 0.8,
+		ChargeTime: 0,
+		FireFxTemplate: "cube_fire_template",
+		ReloadFxTemplate: "cube_reload_template",
+	},
+	SecondaryLauncher:
+	{
+		FireInterval: 0.625,
+		ClipSize: 4,
+		ReloadFirstTime: 0.7,
+		ReloadEachTime: 0.5,
+		ChargeTime: 0,
+		FireFxTemplate: "boxer_shot_fire_template",
+		ReloadFxTemplate: "boxer_shot_reload_template",
+	},
+
+	CubeSpeed: 1400,
+	CubeGravityScale: 0,
+	CubeRadius: 12,
+	CubeDamage: 100,
+	CubeFalloff: BoxerCubeFalloff,
+	CubeKnockback: 300,
+	CubeLifetime: 5,
+
+	Shotgun:
+	{
+		Damage: 10,
+		HeadshotMultiplier: 1,
+		Range: 2048,
+		Spread: 6,
+		Pellets: 8,
+		bPierces: false,
+		Falloff: BeamerShotgunFalloff,
+		Knockback: 300,
+		SelfKnockback: 150,
+		bBloodSplatter: false,
+		bHeldBeam: false,
+		BeamTemplate: "boxer_shot_tracer_template",
+		BeamEndName: "boxer_shot_tracer_end",
+		BeamLifetime: 0.06,
+		ImpactTemplate: "",
+		ImpactLifetime: 0,
+	},
+};
+
 const PlayableClasses: readonly EPlayableClass[] = Object.values(EPlayerClass).filter((PlayerClass: EPlayerClass): PlayerClass is EPlayableClass =>
 {
 	return PlayerClass !== EPlayerClass.None;
@@ -445,6 +558,9 @@ const PlayableClasses: readonly EPlayableClass[] = Object.values(EPlayerClass).f
 const StickyTemplateName: string = "sticky_template";
 const RocketTemplateName: string = "rocket_template";
 const PipeTemplateName: string = "pipe_template";
+const BoltTemplateName: string = "crossbow_bolt_template";
+const CubeTemplateName: string = "cube_template";
+const MedicKnifeDamage: number = 20;
 const MaxBeamHits: number = 8;
 const DefaultHealth: number = 100;
 const DefaultSizeScale: number = 1.0;
@@ -851,6 +967,7 @@ class MedicClass extends PlayerClass<FMedicSettings>
 	private UberedThisTick: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 	private UberedPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 	private GlowingPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
+	private Bolts: FBolt[] = [];
 	private HudLine: number = 0;
 
 	constructor()
@@ -867,11 +984,21 @@ class MedicClass extends PlayerClass<FMedicSettings>
 		}
 	}
 
+	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	{
+		const Projectile: FProjectile = LaunchProjectile(Pawn, this.Settings.BoltSpeed, 0, this.Settings.BoltGravityScale, BoltTemplateName);
+		this.Bolts.push({ ...Projectile, Start: Projectile.Position, StuckUntil: undefined });
+	}
+
 	public override TickWorld(Now: number, DeltaTime: number): void
 	{
 		this.HealedThisTick = new Set<CSPlayerPawn>();
 		this.UberedThisTick = new Set<CSPlayerPawn>();
 		this.HudLine = 0;
+		this.Bolts = this.Bolts.filter((Bolt: FBolt): boolean =>
+		{
+			return this.StepBolt(Bolt, Now, DeltaTime);
+		});
 	}
 
 	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
@@ -965,6 +1092,11 @@ class MedicClass extends PlayerClass<FMedicSettings>
 	public override OnRoundStart(): void
 	{
 		this.PlayerStates.clear();
+		for (const Bolt of this.Bolts)
+		{
+			DestroyProjectile(Bolt);
+		}
+		this.Bolts = [];
 	}
 
 	public override ClearPlayer(Slot: number): void
@@ -977,9 +1109,15 @@ class MedicClass extends PlayerClass<FMedicSettings>
 	{
 		if (Event.weapon && Event.weapon.GetData().GetType() === CSWeaponType.KNIFE)
 		{
-			return { abort: true };
+			return { damage: MedicKnifeDamage };
 		}
-		return ApplyBulletFalloff(Event, this.Settings.BulletFalloff);
+		return super.ModifyOutgoingDamage(Event);
+	}
+
+	public override GetHudCounter(Slot: number): FHudCounter | undefined
+	{
+		const State: FMedicPlayerState | undefined = this.PlayerStates.get(Slot);
+		return { Label: "Über", Count: State ? Math.floor(State.UberCharge) : 0, Max: 100 };
 	}
 
 	public override ModifyAnyDamage(Event: FModifyDamageEvent): FModifyDamageResult
@@ -989,6 +1127,63 @@ class MedicClass extends PlayerClass<FMedicSettings>
 			return { abort: true };
 		}
 		return;
+	}
+
+	private StepBolt(Bolt: FBolt, Now: number, DeltaTime: number): boolean
+	{
+		if (Bolt.StuckUntil !== undefined || !Bolt.Owner.IsValid() || Now - Bolt.SpawnedAt > this.Settings.BoltLifetime)
+		{
+			if (Bolt.StuckUntil !== undefined && Now < Bolt.StuckUntil)
+			{
+				return true;
+			}
+			DestroyProjectile(Bolt);
+			return false;
+		}
+
+		const Hit: TraceResult | undefined = MoveProjectile(Bolt, DeltaTime, true);
+		if (Hit && IsPlayerPawn(Hit.hitEntity))
+		{
+			DestroyProjectile(Bolt);
+			this.BoltHitPlayer(Bolt, Hit.hitEntity);
+			return false;
+		}
+		if (Hit)
+		{
+			Bolt.StuckUntil = Now + this.Settings.BoltStickTime;
+			return Bolt.Models.length > 0;
+		}
+
+		if (Bolt.Models.length === 0)
+		{
+			Instance.DebugSphere({ center: Bolt.Position, radius: 3, duration: TickInterval * 2, color: GetTeamColor(Bolt.Owner) });
+		}
+		return true;
+	}
+
+	private BoltHitPlayer(Bolt: FBolt, Victim: CSPlayerPawn): void
+	{
+		const Medic: CSPlayerPawn = Bolt.Owner;
+		const Distance: number = VectorMath.Size(VectorMath.Subtract(Bolt.Position, Bolt.Start));
+		const RangeScale: number = EvaluateDamageCurve(this.Settings.BoltRampUp, Distance);
+		const MedicName: string | undefined = Medic.GetPlayerController()?.GetPlayerName();
+		const VictimName: string | undefined = Victim.GetPlayerController()?.GetPlayerName();
+
+		if (!IsFriendlyFire() && Victim.GetTeamNumber() === Medic.GetTeamNumber())
+		{
+			const Health: number = Victim.GetHealth();
+			const Healed: number = Math.min(Victim.GetMaxHealth(), Health + Math.round(this.Settings.BoltHeal * RangeScale));
+			if (Healed > Health)
+			{
+				Victim.SetHealth(Healed);
+			}
+			Console.Log(`${LogPrefix} ${MedicName} Healed (bolt) ${VictimName} : +${Math.max(0, Healed - Health)}h : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
+			return;
+		}
+
+		const Damage: number = this.Settings.BoltDamage * RangeScale;
+		DealShockDamage(Medic, Victim, Damage, Medic.FindWeapon(this.Settings.Primary));
+		Console.Log(`${LogPrefix} ${MedicName} Damaged (bolt) ${VictimName} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
 	}
 
 	private GetPlayerState(Slot: number): FMedicPlayerState
@@ -1250,6 +1445,92 @@ class BeamerClass extends PlayerClass<FBeamerSettings>
 	}
 }
 
+// Boxer ///////////////////////////////////////////////////////////////////////////////////////////
+
+class BoxerClass extends PlayerClass<FBoxerSettings>
+{
+	private Cubes: FCube[] = [];
+
+	constructor()
+	{
+		super(BoxerSettings);
+	}
+
+	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	{
+		const Projectile: FProjectile = LaunchProjectile(Pawn, this.Settings.CubeSpeed, 0, this.Settings.CubeGravityScale, CubeTemplateName);
+		this.Cubes.push({ ...Projectile, Radius: this.Settings.CubeRadius, HitPlayers: new Set<CSPlayerPawn>(), Start: Projectile.Position });
+	}
+
+	public override OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	{
+		FireBeamWeapon(Pawn, this.Settings.Shotgun, Pawn.FindWeapon(this.Settings.Secondary));
+	}
+
+	public override TickWorld(Now: number, DeltaTime: number): void
+	{
+		this.Cubes = this.Cubes.filter((Cube: FCube): boolean =>
+		{
+			return this.StepCube(Cube, Now, DeltaTime);
+		});
+	}
+
+	public override OnRoundStart(): void
+	{
+		for (const Cube of this.Cubes)
+		{
+			DestroyProjectile(Cube);
+		}
+		this.Cubes = [];
+	}
+
+	private StepCube(Cube: FCube, Now: number, DeltaTime: number): boolean
+	{
+		if (!Cube.Owner.IsValid() || Now - Cube.SpawnedAt > this.Settings.CubeLifetime)
+		{
+			DestroyProjectile(Cube);
+			return false;
+		}
+
+		const Step: FPiercingStep = MovePiercingProjectile(Cube, DeltaTime);
+		for (const Hit of Step.NewHits)
+		{
+			this.CubeHitPlayer(Cube, Hit);
+		}
+		if (Step.WorldHit)
+		{
+			DestroyProjectile(Cube);
+			return false;
+		}
+
+		if (Cube.Models.length === 0)
+		{
+			Instance.DebugSphere({ center: Cube.Position, radius: Cube.Radius, duration: TickInterval * 2, color: GetTeamColor(Cube.Owner) });
+		}
+		return true;
+	}
+
+	private CubeHitPlayer(Cube: FCube, Hit: FHitscanHit): void
+	{
+		const Boxer: CSPlayerPawn = Cube.Owner;
+		const Victim: CSPlayerPawn = Hit.Victim;
+		if (!IsFriendlyFire() && Victim.GetTeamNumber() === Boxer.GetTeamNumber())
+		{
+			return;
+		}
+
+		const Distance: number = VectorMath.Size(VectorMath.Subtract(Hit.Trace.end, Cube.Start));
+		const RangeScale: number = EvaluateDamageCurve(this.Settings.CubeFalloff, Distance);
+		const Damage: number = this.Settings.CubeDamage * RangeScale;
+		ApplyKnockback(Victim, Cube.Velocity, Damage, this.Settings.CubeKnockback, false);
+		if (DealShockDamage(Boxer, Victim, Damage, Boxer.FindWeapon(this.Settings.Primary)) > 0)
+		{
+			SpawnBloodSplatter(Hit.Trace.end, Victim);
+		}
+		Console.Log(`${LogPrefix} ${Boxer.GetPlayerController()?.GetPlayerName()} Damaged (cube) ${Victim.GetPlayerController()?.GetPlayerName()} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
+	}
+}
+
 // Common //////////////////////////////////////////////////////////////////////////////////////////
 
 export const ClassDefinitions: Readonly<Record<EPlayableClass, PlayerClass<FClassSettings>>> =
@@ -1259,6 +1540,7 @@ export const ClassDefinitions: Readonly<Record<EPlayableClass, PlayerClass<FClas
 	[EPlayerClass.Medic]: new MedicClass(),
 	[EPlayerClass.Railer]: new RailerClass(),
 	[EPlayerClass.Beamer]: new BeamerClass(),
+	[EPlayerClass.Boxer]: new BoxerClass(),
 };
 
 export function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void

@@ -5,9 +5,6 @@
 	z-index: 99998;
 }
 
-/* The class card covers CS2's money in the bottom-left corner, and the centre bar covers its health, team badge and
-   ammo, anchored the same way they are so it all lines up at any aspect ratio (with spare for hud_scaling 0.9 - 1.1).
-   HudCards gets Team_t / Team_ct from the script. */
 .HudCards
 {
 	width: 100%;
@@ -114,8 +111,6 @@
 	vertical-align: bottom;
 }
 
-/* The bright cross sits in a bottom-anchored box that clips it, and the script sizes the box with a Fill_<0 - 20>
-   class (5% steps), so the cross fills up from the bottom with the player's health */
 .CrossFill
 {
 	width: 100%;
@@ -273,7 +268,7 @@
 	vertical-align: center;
 	margin-left: 14px;
 	font-family: Stratum2 Medium Condensed;
-	font-size: 52px;
+	font-size: 62px;
 	color: #f2f4f7;
 	text-shadow: 0px 2px 4px 1.0 #00000080;
 }
@@ -282,9 +277,9 @@
 {
 	vertical-align: bottom;
 	margin-left: 6px;
-	margin-bottom: 22px;
+	margin-bottom: 24px;
 	font-family: Stratum2 Medium Condensed;
-	font-size: 22px;
+	font-size: 27px;
 	color: #ffffff90;
 }
 
@@ -352,9 +347,9 @@
 {
 	vertical-align: bottom;
 	margin-left: 8px;
-	margin-bottom: 17px;
+	margin-bottom: 19px;
 	font-family: Stratum2 Medium Condensed;
-	font-size: 28px;
+	font-size: 33px;
 	color: #ffffffa0;
 }
 
@@ -374,7 +369,7 @@
 	horizontal-align: center;
 	vertical-align: center;
 	flow-children: down;
-	width: 620px;
+	width: 760px;
 	padding: 18px;
 	border-radius: 4px;
 	background-color: #0b0f14ee;
@@ -458,6 +453,11 @@
 .RailerButton .ClassButtonName
 {
 	color: #7fd4ff;
+}
+
+.BoxerButton .ClassButtonName
+{
+	color: #6fdc8c;
 }
 
 .ClassButtonInfo
