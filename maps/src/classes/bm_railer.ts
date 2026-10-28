@@ -1,14 +1,14 @@
 import type { CSPlayerPawn } from "cs_script/point_script";
 import type { FDamageCurve } from "../bm_combat";
 import { PlayerClass, FireHitscanWeapon } from "../bm_classes";
-import type { FClassSettings, FBeamWeaponSettings } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
 export interface FRailerSettings extends FClassSettings
 {
-	readonly PPsh: FBeamWeaponSettings;
-	readonly Railgun: FBeamWeaponSettings;
+	readonly PPsh: FHitscanWeaponSettings;
+	readonly Railgun: FHitscanWeaponSettings;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,6 +30,7 @@ const RailerBeamFalloff: FDamageCurve =
 export const RailerSettings: FRailerSettings =
 {
 	DisplayName: "Railer",
+	PickFxTemplate: "railer_pick_template",
 	Primary: "weapon_famas",
 	Secondary: "weapon_revolver",
 	Melee: "",

@@ -1,6 +1,6 @@
-import { Instance, Console, CSInputs, CSGearSlot, CSWeaponType } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPawnName, GetOrCreate, IsPlayerPawn, IsTeammate, ForEachLivePawn } from "../bm_core";
+import { Instance, Console, CSInputs } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSPlayerController, TraceResult } from "cs_script/point_script";
+import { TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPawnName, GetOrCreate, IsPlayerPawn, IsTeammate, IsKnife, ForEachLivePawn } from "../bm_core";
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve } from "../bm_combat";
 import type { FProjectile, FDamageCurve } from "../bm_combat";
@@ -52,11 +52,13 @@ const CrossbowRampUp: FDamageCurve =
 export const MedicSettings: FMedicSettings =
 {
 	DisplayName: "Medic",
+	PickFxTemplate: "medic_pick_template",
 	Primary: "weapon_nova",
 	Secondary: "",
 	Melee: "weapon_knife",
 	Health: 150,
 	SizeScale: 0.9,
+	bStartWithMelee: true,
 	PrimaryLauncher:
 	{
 		FireInterval: 0.2,
@@ -109,15 +111,6 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 		super(MedicSettings);
 	}
 
-	protected override OnLoadoutApplied(Pawn: CSPlayerPawn): void
-	{
-		const Knife: CSWeaponBase | undefined = Pawn.FindWeaponBySlot(CSGearSlot.KNIFE);
-		if (Knife)
-		{
-			Pawn.SwitchToWeapon(Knife);
-		}
-	}
-
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
 		const Projectile: FProjectile = LaunchProjectile(Pawn, this.Settings.BoltSpeed, 0, this.Settings.BoltGravityScale, BoltTemplateName);
@@ -138,8 +131,7 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
 	{
 		const State: FMedicPlayerState = this.GetPlayerState(Slot);
-		const ActiveWeapon: CSWeaponBase | undefined = Pawn.GetActiveWeapon();
-		const bHoldingMedigun: boolean = !!ActiveWeapon && ActiveWeapon.GetData().GetType() === CSWeaponType.KNIFE;
+		const bHoldingMedigun: boolean = IsKnife(Pawn.GetActiveWeapon());
 		const bFiring: boolean = bHoldingMedigun && Pawn.IsInputPressed(CSInputs.ATTACK);
 
 		let Target: CSPlayerPawn | undefined = bFiring ? State.HealTarget : undefined;
@@ -238,7 +230,7 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 
 	public override ModifyOutgoingDamage(Event: FModifyDamageEvent): FModifyDamageResult
 	{
-		if (Event.weapon && Event.weapon.GetData().GetType() === CSWeaponType.KNIFE)
+		if (IsKnife(Event.weapon))
 		{
 			return { damage: MedicKnifeDamage };
 		}

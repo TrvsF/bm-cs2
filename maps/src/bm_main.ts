@@ -420,7 +420,12 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 	const bAlive: boolean = Pawn !== undefined && Pawn.IsValid() && Pawn.IsAlive();
 	const bInSpawn: boolean = bAlive && Pawn !== undefined && IsInFriendlySpawnZone(Pawn, Slot);
 
-	if (!bAlive || CurrentClass === EPlayerClass.None || (bInSpawn && PlayerClass !== CurrentClass))
+	if (PlayerClass !== EPlayerClass.None && Pawn && Pawn.IsValid())
+	{
+		ClassDefinitions[PlayerClass].PlayPickFx(Pawn);
+	}
+
+	if (!bAlive || CurrentClass === EPlayerClass.None || ((bInSpawn || bDebug) && PlayerClass !== CurrentClass))
 	{
 		GPendingClassBySlot.delete(Slot);
 		SetPlayerClass(Player, PlayerClass);

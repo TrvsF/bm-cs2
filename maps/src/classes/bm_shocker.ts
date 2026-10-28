@@ -5,13 +5,13 @@ import type { FVector } from "../bm_core";
 import { LaunchProjectile, StepImpactProjectile, DestroyProjectile, DestroyProjectiles, Explode } from "../bm_combat";
 import type { FProjectile } from "../bm_combat";
 import { PlayerClass, FireHitscanWeapon } from "../bm_classes";
-import type { FClassSettings, FBeamWeaponSettings } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
 export interface FShockerSettings extends FClassSettings
 {
-	readonly ShockBeam: FBeamWeaponSettings;
+	readonly ShockBeam: FHitscanWeaponSettings;
 	readonly BallSpeed: number;
 	readonly BallSize: number;
 	readonly BallDamage: number;
@@ -34,6 +34,7 @@ export interface FShockBall extends FProjectile
 export const ShockerSettings: FShockerSettings =
 {
 	DisplayName: "Shocker",
+	PickFxTemplate: "shocker_pick_template",
 	Primary: "weapon_m4a1",
 	Secondary: "weapon_p250",
 	Melee: "weapon_knife",

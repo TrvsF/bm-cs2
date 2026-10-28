@@ -56,6 +56,7 @@ const TF2StickyFalloff: FDamageFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDis
 export const DemoSettings: FDemoSettings =
 {
 	DisplayName: "Exploder",
+	PickFxTemplate: "demo_pick_template",
 	Primary: "weapon_sawedoff",
 	Secondary: "weapon_deagle",
 	Melee: "",

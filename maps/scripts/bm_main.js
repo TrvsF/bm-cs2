@@ -1,9 +1,9 @@
 // src/bm_main.ts
-import { Instance as Instance13, Console as Console10, GameRules as GameRules3, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2, CSGearSlot as CSGearSlot4 } from "cs_script/point_script";
+import { Instance as Instance13, Console as Console10, GameRules as GameRules3, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2, CSGearSlot as CSGearSlot3 } from "cs_script/point_script";
 
 // src/bm_core.ts
-import { Instance } from "cs_script/point_script";
-var bDebug = false;
+import { Instance, CSWeaponType } from "cs_script/point_script";
+var bDebug = true;
 var TickInterval = 1 / 64;
 var INDEX_NONE = -1;
 var LogPrefix = "[BM]";
@@ -184,6 +184,10 @@ function IsWeapon(Weapon, Name) {
   const Data = Weapon.GetData();
   return Data !== void 0 && Data.GetName() === Name;
 }
+function IsKnife(Weapon) {
+  const Data = Weapon?.GetData();
+  return Data !== void 0 && Data.GetType() === CSWeaponType.KNIFE;
+}
 function SpawnTemplateEntities(TemplateName, Position, Rotation) {
   const Template = Instance.FindEntityByName(TemplateName);
   if (!IsPointTemplate(Template)) {
@@ -212,7 +216,7 @@ function ForEachLivePawn(Visitor) {
 import { CSGearSlot, CSDamageTypes as CSDamageTypes2, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
 
 // src/bm_combat.ts
-import { Instance as Instance3, Console, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
+import { Instance as Instance3, Console, CSDamageTypes, CSWeaponType as CSWeaponType2 } from "cs_script/point_script";
 
 // src/bm_effects.ts
 import { Instance as Instance2 } from "cs_script/point_script";
@@ -951,6 +955,8 @@ var EPlayerClass = /* @__PURE__ */ ((EPlayerClass2) => {
   EPlayerClass2["Beamer"] = "beamer";
   EPlayerClass2["Boxer"] = "boxer";
   EPlayerClass2["Shocker"] = "shocker";
+  EPlayerClass2["Shrinker"] = "shrinker";
+  EPlayerClass2["Gunner"] = "gunner";
   return EPlayerClass2;
 })(EPlayerClass || {});
 var TF2RocketFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
@@ -968,6 +974,7 @@ var DefaultSizeScale = 1;
 var StrippedGearSlots = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
 var NoClassStrippedGearSlots = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.GRENADES];
 var NoClassMelee = "weapon_knife";
+var PickFxLifetime = 3;
 var BeamStartDrop = { x: 0, y: 0, z: 12 };
 function ApplyBody(Pawn, Health, SizeScale) {
   Pawn.SetMaxHealth(Health);
@@ -1014,10 +1021,19 @@ var PlayerClass = class {
     if (bHasSecondary && this.Settings.SecondaryLauncher) {
       EquipLauncher(Pawn, Slot, this.Settings.Secondary, this.Settings.SecondaryLauncher);
     }
+    const Melee = this.Settings.bStartWithMelee ? Pawn.FindWeaponBySlot(CSGearSlot.KNIFE) : void 0;
+    if (Melee) {
+      Pawn.SwitchToWeapon(Melee);
+    }
     this.OnLoadoutApplied(Pawn);
   }
   // Override for class-specific setup. Runs after the shared loadout.
   OnLoadoutApplied(Pawn) {
+  }
+  PlayPickFx(Pawn) {
+    if (this.Settings.PickFxTemplate !== "") {
+      SpawnTemporaryTemplate(this.Settings.PickFxTemplate, Pawn.GetEyePosition(), PickFxLifetime);
+    }
   }
   // Called when someone playing this class fires their primary
   OnPrimaryFire(Pawn, Slot, Now) {
@@ -1148,11 +1164,12 @@ function GiveNoClassLoadout(Pawn) {
 }
 
 // src/classes/bm_classlist.ts
-import { CSGearSlot as CSGearSlot3, CSWeaponType as CSWeaponType3 } from "cs_script/point_script";
+import { CSGearSlot as CSGearSlot2, CSWeaponType as CSWeaponType3 } from "cs_script/point_script";
 
 // src/classes/bm_soldier.ts
 var SoldierSettings = {
   DisplayName: "Soldier",
+  PickFxTemplate: "soldier_pick_template",
   Primary: "weapon_sg556",
   Secondary: "",
   Melee: "weapon_knife",
@@ -1207,6 +1224,7 @@ import { Instance as Instance5, CSInputs as CSInputs2 } from "cs_script/point_sc
 var TF2StickyFalloff = { RampUp: 1.1, FallOff: 0.9, OptimalDistance: 512 };
 var DemoSettings = {
   DisplayName: "Exploder",
+  PickFxTemplate: "demo_pick_template",
   Primary: "weapon_sawedoff",
   Secondary: "weapon_deagle",
   Melee: "",
@@ -1377,7 +1395,7 @@ var DemomanClass = class extends PlayerClass {
 };
 
 // src/classes/bm_medic.ts
-import { Instance as Instance6, Console as Console2, CSInputs as CSInputs3, CSGearSlot as CSGearSlot2, CSWeaponType as CSWeaponType2 } from "cs_script/point_script";
+import { Instance as Instance6, Console as Console2, CSInputs as CSInputs3 } from "cs_script/point_script";
 var CrossbowRampUp = [
   { Distance: 0, Scale: 0.5 },
   { Distance: 256, Scale: 0.5 },
@@ -1385,11 +1403,13 @@ var CrossbowRampUp = [
 ];
 var MedicSettings = {
   DisplayName: "Medic",
+  PickFxTemplate: "medic_pick_template",
   Primary: "weapon_nova",
   Secondary: "",
   Melee: "weapon_knife",
   Health: 150,
   SizeScale: 0.9,
+  bStartWithMelee: true,
   PrimaryLauncher: {
     FireInterval: 0.2,
     ClipSize: 1,
@@ -1432,12 +1452,6 @@ var MedicClass = class extends PlayerClass {
   constructor() {
     super(MedicSettings);
   }
-  OnLoadoutApplied(Pawn) {
-    const Knife = Pawn.FindWeaponBySlot(CSGearSlot2.KNIFE);
-    if (Knife) {
-      Pawn.SwitchToWeapon(Knife);
-    }
-  }
   OnPrimaryFire(Pawn, Slot, Now) {
     const Projectile = LaunchProjectile(Pawn, this.Settings.BoltSpeed, 0, this.Settings.BoltGravityScale, BoltTemplateName);
     this.Bolts.push({ ...Projectile, StuckUntil: void 0 });
@@ -1452,8 +1466,7 @@ var MedicClass = class extends PlayerClass {
   }
   TickPlayer(Pawn, Slot, Now, DeltaTime) {
     const State = this.GetPlayerState(Slot);
-    const ActiveWeapon = Pawn.GetActiveWeapon();
-    const bHoldingMedigun = !!ActiveWeapon && ActiveWeapon.GetData().GetType() === CSWeaponType2.KNIFE;
+    const bHoldingMedigun = IsKnife(Pawn.GetActiveWeapon());
     const bFiring = bHoldingMedigun && Pawn.IsInputPressed(CSInputs3.ATTACK);
     let Target = bFiring ? State.HealTarget : void 0;
     if (Target && !this.IsHealTargetValid(Pawn, Target)) {
@@ -1530,7 +1543,7 @@ var MedicClass = class extends PlayerClass {
     this.DecayAccumulators.delete(Slot);
   }
   ModifyOutgoingDamage(Event) {
-    if (Event.weapon && Event.weapon.GetData().GetType() === CSWeaponType2.KNIFE) {
+    if (IsKnife(Event.weapon)) {
       return { damage: MedicKnifeDamage };
     }
     return super.ModifyOutgoingDamage(Event);
@@ -1656,6 +1669,7 @@ var RailerBeamFalloff = [
 ];
 var RailerSettings = {
   DisplayName: "Railer",
+  PickFxTemplate: "railer_pick_template",
   Primary: "weapon_famas",
   Secondary: "weapon_revolver",
   Melee: "",
@@ -1739,6 +1753,7 @@ var BeamerBeamFalloff = [
 ];
 var BeamerSettings = {
   DisplayName: "Beamer",
+  PickFxTemplate: "beamer_pick_template",
   Primary: "weapon_negev",
   Secondary: "weapon_elite",
   Melee: "",
@@ -1765,7 +1780,7 @@ var BeamerSettings = {
     ReloadFxTemplate: "beamer_shot_reload_template"
   },
   EnergyBeam: {
-    Damage: 5,
+    Damage: 7,
     HeadshotMultiplier: 1,
     Range: 2048,
     Spread: 0,
@@ -1871,6 +1886,7 @@ var BoxerCubeFalloff = [
 ];
 var BoxerSettings = {
   DisplayName: "Boxer",
+  PickFxTemplate: "boxer_pick_template",
   Primary: "weapon_m249",
   Secondary: "weapon_deagle",
   Melee: "",
@@ -1980,6 +1996,7 @@ var BoxerClass = class extends PlayerClass {
 import { Console as Console4 } from "cs_script/point_script";
 var ShockerSettings = {
   DisplayName: "Shocker",
+  PickFxTemplate: "shocker_pick_template",
   Primary: "weapon_m4a1",
   Secondary: "weapon_p250",
   Melee: "weapon_knife",
@@ -2085,6 +2102,133 @@ var ShockerClass = class extends PlayerClass {
   }
 };
 
+// src/classes/bm_shrinker.ts
+import { CSInputs as CSInputs5 } from "cs_script/point_script";
+var ShrinkerSettings = {
+  DisplayName: "Shrinker",
+  PickFxTemplate: "shrinker_pick_template",
+  Primary: "weapon_glock",
+  Secondary: "",
+  Melee: "weapon_knife",
+  Health: 125,
+  SizeScale: 1,
+  bStartWithMelee: true,
+  PrimaryLauncher: void 0,
+  SecondaryLauncher: void 0,
+  ShrinkKey: CSInputs5.ATTACK2,
+  ShrunkScale: 0.4,
+  ShrinkTime: 0.75,
+  GrowTime: 0.75,
+  ShrunkDuration: 8,
+  RechargeTime: 16,
+  MinShrinkCharge: 10
+};
+var MaxShrinkCharge = 100;
+var ShrinkerClass = class extends PlayerClass {
+  PlayerStates = /* @__PURE__ */ new Map();
+  constructor() {
+    super(ShrinkerSettings);
+  }
+  TickPlayer(Pawn, Slot, Now, DeltaTime) {
+    const State = this.GetPlayerState(Slot);
+    const bKeyDown = Pawn.IsInputPressed(this.Settings.ShrinkKey);
+    if (bKeyDown && !State.bShrinkKeyHeld && IsKnife(Pawn.GetActiveWeapon())) {
+      this.ToggleShrink(State);
+    }
+    State.bShrinkKeyHeld = bKeyDown;
+    this.TickCharge(State, DeltaTime);
+    this.TickSize(Pawn, State, DeltaTime);
+  }
+  ClearPlayer(Slot) {
+    this.PlayerStates.delete(Slot);
+  }
+  GetHudCounter(Slot) {
+    const State = this.PlayerStates.get(Slot);
+    return { Label: "Shrink", Count: Math.floor(State ? State.Charge : MaxShrinkCharge), Max: MaxShrinkCharge };
+  }
+  // Ignored until the last shrink or grow has finished
+  ToggleShrink(State) {
+    const bSettled = State.ShrinkAlpha === (State.bWantsShrunk ? 1 : 0);
+    if (bSettled && (State.bWantsShrunk || State.Charge >= this.Settings.MinShrinkCharge)) {
+      State.bWantsShrunk = !State.bWantsShrunk;
+    }
+  }
+  // Drains while shrunk, growing them back when it runs out, and only refills at full size
+  TickCharge(State, DeltaTime) {
+    if (State.bWantsShrunk) {
+      State.Charge = Math.max(0, State.Charge - MaxShrinkCharge * DeltaTime / this.Settings.ShrunkDuration);
+      State.bWantsShrunk = State.Charge > 0;
+    } else if (State.ShrinkAlpha === 0) {
+      State.Charge = Math.min(MaxShrinkCharge, State.Charge + MaxShrinkCharge * DeltaTime / this.Settings.RechargeTime);
+    }
+  }
+  TickSize(Pawn, State, DeltaTime) {
+    const Target = State.bWantsShrunk ? 1 : 0;
+    if (State.ShrinkAlpha === Target) {
+      return;
+    }
+    const Duration = State.bWantsShrunk ? this.Settings.ShrinkTime : this.Settings.GrowTime;
+    const Step = Duration > 0 ? DeltaTime / Duration : 1;
+    State.ShrinkAlpha = State.bWantsShrunk ? Math.min(1, State.ShrinkAlpha + Step) : Math.max(0, State.ShrinkAlpha - Step);
+    const Eased = State.ShrinkAlpha * State.ShrinkAlpha * (3 - 2 * State.ShrinkAlpha);
+    Pawn.SetModelScale(this.Settings.SizeScale + (this.Settings.ShrunkScale - this.Settings.SizeScale) * Eased);
+  }
+  GetPlayerState(Slot) {
+    return GetOrCreate(this.PlayerStates, Slot, () => {
+      return { Charge: MaxShrinkCharge, bWantsShrunk: false, ShrinkAlpha: 0, bShrinkKeyHeld: false };
+    });
+  }
+};
+
+// src/classes/bm_gunner.ts
+var GunnerSettings = {
+  DisplayName: "Gunner",
+  PickFxTemplate: "gunner_pick_template",
+  Primary: "weapon_mag7",
+  Secondary: "",
+  Melee: "weapon_knife",
+  Health: 125,
+  SizeScale: 1,
+  bStartWithMelee: true,
+  PrimaryLauncher: {
+    FireInterval: 0.75,
+    ClipSize: 6,
+    ReloadFirstTime: 2,
+    ReloadEachTime: 0,
+    ChargeTime: 0,
+    DeployTime: 0.1,
+    FireFxTemplate: "gunner_shot_fire_template",
+    ReloadFxTemplate: "gunner_shot_reload_template"
+  },
+  SecondaryLauncher: void 0,
+  Shotgun: {
+    Damage: 12,
+    HeadshotMultiplier: 1,
+    Range: 2048,
+    Spread: 5,
+    Pellets: 8,
+    bPierces: false,
+    Falloff: BeamerShotgunFalloff,
+    Knockback: 250,
+    SelfKnockback: 120,
+    bBloodSplatter: true,
+    bHeldBeam: false,
+    BeamTemplate: "gunner_shot_tracer_template",
+    BeamEndName: "gunner_shot_tracer_end",
+    BeamLifetime: 0.06,
+    ImpactTemplate: "",
+    ImpactLifetime: 0
+  }
+};
+var GunnerClass = class extends PlayerClass {
+  constructor() {
+    super(GunnerSettings);
+  }
+  OnPrimaryFire(Pawn, Slot, Now) {
+    FireHitscanWeapon(Pawn, this.Settings.Shotgun, Pawn.FindWeapon(this.Settings.Primary));
+  }
+};
+
 // src/classes/bm_classlist.ts
 var ClassDefinitions = {
   ["demo" /* Demoman */]: new DemomanClass(),
@@ -2093,14 +2237,16 @@ var ClassDefinitions = {
   ["railer" /* Railer */]: new RailerClass(),
   ["beamer" /* Beamer */]: new BeamerClass(),
   ["boxer" /* Boxer */]: new BoxerClass(),
-  ["shocker" /* Shocker */]: new ShockerClass()
+  ["shocker" /* Shocker */]: new ShockerClass(),
+  ["shrinker" /* Shrinker */]: new ShrinkerClass(),
+  ["gunner" /* Gunner */]: new GunnerClass()
 };
 function GiveLoadout(Pawn, PlayerClass3) {
   ClassDefinitions[PlayerClass3].ApplyLoadout(Pawn);
 }
 function IsWeaponAllowed(PlayerClass3, Weapon) {
   const Data = Weapon.GetData();
-  if (!Data || Data.GetGearSlot() === CSGearSlot3.C4) {
+  if (!Data || Data.GetGearSlot() === CSGearSlot2.C4) {
     return true;
   }
   const bIsKnife = Data.GetType() === CSWeaponType3.KNIFE;
@@ -2203,7 +2349,7 @@ function IsCustomHudLayout(Ent) {
 }
 
 // src/bm_ui.ts
-import { Instance as Instance8, Console as Console6, CSInputs as CSInputs5 } from "cs_script/point_script";
+import { Instance as Instance8, Console as Console6, CSInputs as CSInputs6 } from "cs_script/point_script";
 var ClassUiName = "class_hud";
 var MenuPanelId = "ClassMenu";
 var HudCardsId = "HudCards";
@@ -2212,7 +2358,7 @@ var IndicatorPanelId = "ClassIndicator";
 var ClassNameLabelId = "ClassName";
 var PickButtonPrefix = "Pick_";
 var CloseButtonId = "CloseMenu";
-var MenuToggleKey = CSInputs5.USE;
+var MenuToggleKey = CSInputs6.USE;
 var NoClassName = "No class";
 var AmmoPanelId = "AmmoPanel";
 var AmmoClipLabelId = "AmmoClip";
@@ -2257,8 +2403,7 @@ function OpenClassMenu(Slot) {
     return;
   }
   GOpenMenus.add(Slot);
-  Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", true);
-  Ui.SetInputCaptureEnabled(Slot, true);
+  SetMenuOpen(Ui, Slot, true);
 }
 function CloseClassMenu(Slot) {
   GOpenMenus.delete(Slot);
@@ -2266,8 +2411,12 @@ function CloseClassMenu(Slot) {
   if (!Ui) {
     return;
   }
-  Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", false);
-  Ui.SetInputCaptureEnabled(Slot, false);
+  SetMenuOpen(Ui, Slot, false);
+}
+function SetMenuOpen(Ui, Slot, bOpen) {
+  Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", bOpen);
+  Ui.SetHasClassForPlayer(Slot, HudCardsId, "MenuOpen", bOpen);
+  Ui.SetInputCaptureEnabled(Slot, bOpen);
 }
 function ToggleClassMenu(Slot) {
   if (GOpenMenus.has(Slot)) {
@@ -2322,9 +2471,11 @@ function ShowClassIndicator(Slot, PlayerClass3, IsT) {
   Ui.SetHasClassForPlayer(Slot, HudCardsId, "Team_t", IsT);
   Ui.SetHasClassForPlayer(Slot, HudCardsId, "Team_ct", !IsT);
   Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Shown", true);
+  for (const Choice of AllClasses) {
+    Ui.SetHasClassForPlayer(Slot, `${PickButtonPrefix}${Choice}`, "Current", Choice === PlayerClass3);
+  }
   if (GOpenMenus.has(Slot)) {
-    Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", true);
-    Ui.SetInputCaptureEnabled(Slot, true);
+    SetMenuOpen(Ui, Slot, true);
   }
 }
 function ShowAmmo(Slot, Ammo) {
@@ -3586,7 +3737,10 @@ function RequestPlayerClass(Player, PlayerClass3) {
   const Pawn = Player.GetPlayerPawn();
   const bAlive = Pawn !== void 0 && Pawn.IsValid() && Pawn.IsAlive();
   const bInSpawn = bAlive && Pawn !== void 0 && IsInFriendlySpawnZone(Pawn, Slot);
-  if (!bAlive || CurrentClass === "none" /* None */ || bInSpawn && PlayerClass3 !== CurrentClass) {
+  if (PlayerClass3 !== "none" /* None */ && Pawn && Pawn.IsValid()) {
+    ClassDefinitions[PlayerClass3].PlayPickFx(Pawn);
+  }
+  if (!bAlive || CurrentClass === "none" /* None */ || (bInSpawn || bDebug) && PlayerClass3 !== CurrentClass) {
     GPendingClassBySlot.delete(Slot);
     SetPlayerClass(Player, PlayerClass3);
     return;
@@ -3728,7 +3882,7 @@ function EnsureWeaponInHand(Pawn) {
   if (Active && Active.IsValid()) {
     return;
   }
-  for (const GearSlot of [CSGearSlot4.RIFLE, CSGearSlot4.PISTOL, CSGearSlot4.KNIFE]) {
+  for (const GearSlot of [CSGearSlot3.RIFLE, CSGearSlot3.PISTOL, CSGearSlot3.KNIFE]) {
     const Weapon = Pawn.FindWeaponBySlot(GearSlot);
     if (Weapon) {
       Pawn.SwitchToWeapon(Weapon);

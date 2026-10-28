@@ -111,8 +111,6 @@
 	vertical-align: bottom;
 }
 
-/* The bright cross sits in a bottom-anchored box that clips it, and the script sizes the box with a Fill_<0 - 20>
-   class (5% steps), so the cross fills up from the bottom with the player's health */
 .CrossFill
 {
 	width: 100%;
@@ -237,8 +235,6 @@
 	background-color: #ffffff30;
 }
 
-/* The cross is an upright plus two arms that only touch it, not two overlapping bars, so see-through colours
-   don't double up in the middle */
 .CrossArm
 {
 	width: 15px;
@@ -368,132 +364,211 @@
 .ClassMenu
 {
 	visibility: collapse;
-	horizontal-align: center;
-	vertical-align: center;
+	opacity: 0;
+	horizontal-align: left;
+	vertical-align: bottom;
+	margin-bottom: 100px;
+	width: 420px;
 	flow-children: down;
-	width: 900px;
-	padding: 18px;
-	border-radius: 4px;
-	background-color: #0b0f14ee;
-	box-shadow: #000000c0 0px 8px 30px 0px;
+	border-radius: 0px 22px 0px 0px;
+	background-color: gradient( linear, 0% 0%, 0% 100%, from( #4a5360 ), color-stop( 0.005, #4a5360 ), color-stop( 0.008, #1a2029 ), to( #0b0f14 ) );
+	transition-property: opacity;
+	transition-duration: 0.12s;
+}
+
+.HudCards.Team_t .ClassMenu
+{
+	background-color: gradient( linear, 0% 0%, 0% 100%, from( #ee5a5a ), color-stop( 0.005, #ee5a5a ), color-stop( 0.008, #6b2024 ), to( #300c0f ) );
+}
+
+.HudCards.Team_ct .ClassMenu
+{
+	background-color: gradient( linear, 0% 0%, 0% 100%, from( #7fd4ff ), color-stop( 0.005, #7fd4ff ), color-stop( 0.008, #1d4a73 ), to( #0b2034 ) );
 }
 
 .ClassMenu.Open
 {
 	visibility: visible;
+	opacity: 1;
+}
+
+.HudCards.MenuOpen .ClassIndicator
+{
+	visibility: visible;
+	width: 420px;
+	padding: 0px;
+	border-radius: 0px;
+}
+
+.HudCards.MenuOpen .ClassStack
+{
+	margin-left: 22px;
+}
+
+.HintOpen
+{
+	visibility: collapse;
+}
+
+.HudCards.MenuOpen .HintOpen
+{
+	visibility: visible;
+}
+
+.HudCards.MenuOpen .HintClosed
+{
+	visibility: collapse;
 }
 
 .MenuTitle
 {
-	horizontal-align: center;
-	margin-bottom: 14px;
+	margin: 16px 0px 8px 22px;
 	font-family: Stratum2 Medium Condensed;
-	font-size: 26px;
-	color: #ffffff;
+	font-size: 15px;
+	color: #ffffffa0;
 	text-transform: uppercase;
 	letter-spacing: 1.5px;
 }
 
-.ClassButtons
+.ClassList
+{
+	width: 400px;
+	horizontal-align: center;
+	flow-children: down;
+}
+
+.ClassRow
 {
 	width: 100%;
-	flow-children: right;
-}
-
-.ClassButton
-{
-	width: fill-parent-flow( 1.0 );
-	height: 130px;
-	margin: 0px 5px;
-	padding: 12px;
+	margin-bottom: 3px;
 	flow-children: down;
-	border-radius: 3px;
-	border: 2px solid #ffffff14;
-	background-color: #ffffff0d;
+	border-radius: 10px;
+	background-color: #ffffff00;
+	transition-property: background-color;
+	transition-duration: 0.1s;
 }
 
-.ClassButton:hover
+.ClassRow:hover
 {
 	background-color: #ffffff22;
 }
 
-.ClassButton.Selected
+.ClassRow.Current
 {
-	border: 2px solid #ffffffaa;
+	background-color: #ffffff14;
 }
 
-.ClassButtonName
+.SoldierRow:hover
 {
-	width: 100%;
+	background-color: #d9b26a;
+}
+
+.DemoRow:hover
+{
+	background-color: #e8823a;
+}
+
+.MedicRow:hover
+{
+	background-color: #ee5a5a;
+}
+
+.RailerRow:hover
+{
+	background-color: #7fd4ff;
+}
+
+.BeamerRow:hover
+{
+	background-color: #b07cff;
+}
+
+.BoxerRow:hover
+{
+	background-color: #6fdc8c;
+}
+
+.ShockerRow:hover
+{
+	background-color: #c48cff;
+}
+
+.ShrinkerRow:hover
+{
+	background-color: #ff9ad5;
+}
+
+.GunnerRow:hover
+{
+	background-color: #9ad0a0;
+}
+
+.ClassRowName
+{
+	margin: 6px 12px 0px 12px;
 	font-family: Stratum2 Medium Condensed;
-	font-size: 24px;
+	font-size: 22px;
+	color: #ffffff;
 	text-transform: uppercase;
 	letter-spacing: 1.2px;
-	color: #ffffff;
+	text-shadow: 0px 2px 4px 1.0 #00000080;
+	transition-property: color;
+	transition-duration: 0.1s;
 }
 
-.SoldierButton .ClassButtonName
+.ClassRowInfo
 {
-	color: #d9b26a;
-}
-
-.DemoButton .ClassButtonName
-{
-	color: #e8823a;
-}
-
-.MedicButton .ClassButtonName
-{
-	color: #ee5a5a;
-}
-
-.BeamerButton .ClassButtonName
-{
-	color: #b07cff;
-}
- 
-.RailerButton .ClassButtonName
-{
-	color: #7fd4ff;
-}
-
-.BoxerButton .ClassButtonName
-{
-	color: #6fdc8c;
-}
-
-.ShockerButton .ClassButtonName
-{
-	color: #c48cff;
-}
-
-.ClassButtonInfo
-{
-	width: 100%;
-	margin-top: 8px;
+	width: 376px;
+	margin: 0px 12px 7px 12px;
 	font-size: 13px;
-	color: #b8bcc2;
+	color: #ffffffa0;
 	white-space: normal;
+	transition-property: color;
+	transition-duration: 0.1s;
+}
+
+.ClassRow:hover .ClassRowName
+{
+	color: #0b0f14;
+	text-shadow: 0px 0px 0px 0.0 #00000000;
+}
+
+.ClassRow:hover .ClassRowInfo
+{
+	color: #0b0f14c8;
 }
 
 .MenuFooter
 {
-	horizontal-align: right;
-	margin-top: 14px;
+	width: 400px;
+	horizontal-align: center;
+	margin-top: 4px;
+	margin-bottom: 12px;
 	flow-children: right;
 }
 
 .FooterButton
 {
-	width: 120px;
+	width: fill-parent-flow( 1.0 );
 	height: 34px;
-	margin-left: 8px;
-	border-radius: 3px;
-	border: 1px solid #ffffff14;
-	background-color: #ffffff0d;
+	margin-left: 6px;
+	border-radius: 10px;
+	background-color: #ffffff12;
+	transition-property: background-color;
+	transition-duration: 0.1s;
+}
+
+#Pick_none
+{
+	margin-left: 0px;
 }
 
 .FooterButton:hover
+{
+	background-color: #ffffff30;
+}
+
+.FooterButton.Current
 {
 	background-color: #ffffff22;
 }

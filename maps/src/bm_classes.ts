@@ -20,6 +20,8 @@ export enum EPlayerClass
 	Beamer = "beamer",
 	Boxer = "boxer",
 	Shocker = "shocker",
+	Shrinker = "shrinker",
+	Gunner = "gunner",
 }
 
 export type EPlayableClass = Exclude<EPlayerClass, EPlayerClass.None>;
@@ -27,6 +29,7 @@ export type EPlayableClass = Exclude<EPlayerClass, EPlayerClass.None>;
 export interface FClassSettings
 {
 	readonly DisplayName: string;
+	readonly PickFxTemplate: string;
 	readonly Primary: string;
 	readonly Secondary: string;
 	readonly Melee: string;
@@ -34,6 +37,7 @@ export interface FClassSettings
 	readonly SizeScale: number;
 	readonly PrimaryLauncher: FLauncherSettings | undefined;
 	readonly SecondaryLauncher: FLauncherSettings | undefined;
+	readonly bStartWithMelee?: boolean;
 }
 
 export interface FHudCounter
@@ -43,7 +47,7 @@ export interface FHudCounter
 	readonly Max: number;
 }
 
-export interface FBeamWeaponSettings
+export interface FHitscanWeaponSettings
 {
 	readonly Damage: number;
 	readonly HeadshotMultiplier: number;
@@ -85,6 +89,7 @@ const DefaultSizeScale: number = 1.0;
 const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
 const NoClassStrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.GRENADES];
 const NoClassMelee: string = "weapon_knife";
+const PickFxLifetime: number = 3;
 
 export const BeamStartDrop: FVector = { x: 0, y: 0, z: 12 };
 
@@ -161,12 +166,26 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 			EquipLauncher(Pawn, Slot, this.Settings.Secondary, this.Settings.SecondaryLauncher);
 		}
 
+		const Melee: CSWeaponBase | undefined = this.Settings.bStartWithMelee ? Pawn.FindWeaponBySlot(CSGearSlot.KNIFE) : undefined;
+		if (Melee)
+		{
+			Pawn.SwitchToWeapon(Melee);
+		}
+
 		this.OnLoadoutApplied(Pawn);
 	}
 
 	// Override for class-specific setup. Runs after the shared loadout.
 	protected OnLoadoutApplied(Pawn: CSPlayerPawn): void
 	{
+	}
+
+	public PlayPickFx(Pawn: CSPlayerPawn): void
+	{
+		if (this.Settings.PickFxTemplate !== "")
+		{
+			SpawnTemporaryTemplate(this.Settings.PickFxTemplate, Pawn.GetEyePosition(), PickFxLifetime);
+		}
 	}
 
 	// Called when someone playing this class fires their primary
@@ -275,7 +294,7 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 
 // Hitscan weapons ////////////////////////////////////////////////////////////////////////////////////
 
-export function FireHitscanWeapon(Shooter: CSPlayerPawn, Settings: FBeamWeaponSettings, Weapon: CSWeaponBase | undefined, Intercept?: (Start: FVector, End: FVector) => FVector | undefined): void
+export function FireHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeaponSettings, Weapon: CSWeaponBase | undefined, Intercept?: (Start: FVector, End: FVector) => FVector | undefined): void
 {
 	const Start: FVector = Shooter.GetEyePosition();
 	const Aim: FRotator = Shooter.GetEyeAngles();
@@ -317,7 +336,7 @@ export function FireHitscanWeapon(Shooter: CSPlayerPawn, Settings: FBeamWeaponSe
 	ApplyKnockback(Shooter, Backwards, Settings.Damage * Settings.Pellets, Settings.SelfKnockback, true);
 }
 
-export function TraceHitscanWeapon(Shooter: CSPlayerPawn, Settings: FBeamWeaponSettings, Start: FVector, Direction: FVector): FHitscanResult
+export function TraceHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeaponSettings, Start: FVector, Direction: FVector): FHitscanResult
 {
 	const MaxHits: number = Settings.bPierces ? MaxBeamHits : 1;
 	return TraceHitscan(Shooter, Start, VectorMath.Add(Start, VectorMath.Scale(Direction, Settings.Range)), MaxHits);

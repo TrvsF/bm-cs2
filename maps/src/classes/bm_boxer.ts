@@ -5,7 +5,7 @@ import { EProjectileShape, LaunchProjectile, MovePiercingProjectile, IsProjectil
 import type { FProjectile, FPiercingProjectile, FPiercingStep, FDamageCurve, FHitscanHit } from "../bm_combat";
 import { SpawnBloodSplatter } from "../bm_effects";
 import { BeamerShotgunFalloff, PlayerClass, FireHitscanWeapon, DealShockDamage } from "../bm_classes";
-import type { FClassSettings, FBeamWeaponSettings } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +19,7 @@ export interface FBoxerSettings extends FClassSettings
 	readonly CubeFalloff: FDamageCurve;
 	readonly CubeKnockback: number;
 	readonly CubeLifetime: number;
-	readonly Shotgun: FBeamWeaponSettings;
+	readonly Shotgun: FHitscanWeaponSettings;
 }
 
 export interface FCube extends FPiercingProjectile
@@ -38,6 +38,7 @@ const BoxerCubeFalloff: FDamageCurve =
 export const BoxerSettings: FBoxerSettings =
 {
 	DisplayName: "Boxer",
+	PickFxTemplate: "boxer_pick_template",
 	Primary: "weapon_m249",
 	Secondary: "weapon_deagle",
 	Melee: "",

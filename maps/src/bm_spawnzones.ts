@@ -50,6 +50,7 @@ export function TickSpawnZones(Now: number): void
 		GNextScanTime = Now + RescanInterval;
 		ScanSpawnZones();
 	}
+	
 	if (GZones.length === 0)
 	{
 		return;
@@ -118,7 +119,6 @@ function ScanSpawnZones(): void
 	GLastScanReport = Report;
 }
 
-// Hooks up any zone triggers not already known. Several brushes can share a team by starting with the same name.
 function AddZones(Name: string, Team: ETeam): void
 {
 	for (const Ent of Instance.FindEntitiesByName(`${Name}*`))
@@ -192,7 +192,6 @@ function PushOut(Pawn: CSPlayerPawn, Slot: number, Visitor: FZoneVisitor, Zone: 
 		return;
 	}
 
-	// Nowhere known outside (e.g. they joined the server in there), so shove them away from its middle
 	const Offset: FVector = VectorMath.Subtract(Pawn.GetAbsOrigin(), Zone.Entity.GetAbsOrigin());
 	const Away: FVector = VectorMath.GetSafeNormal({ x: Offset.x, y: Offset.y, z: 0 });
 	Pawn.Teleport({ velocity: VectorMath.Scale(Away, SpawnZoneSettings.PushOutSpeed) });

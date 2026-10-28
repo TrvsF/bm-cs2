@@ -6,14 +6,14 @@ import type { FDamageCurve } from "../bm_combat";
 import { SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam } from "../bm_effects";
 import type { FHeldBeam } from "../bm_effects";
 import { BeamerShotgunFalloff, BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon } from "../bm_classes";
-import type { FClassSettings, FBeamWeaponSettings } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
 export interface FBeamerSettings extends FClassSettings
 {
-	readonly EnergyBeam: FBeamWeaponSettings;
-	readonly Shotgun: FBeamWeaponSettings;
+	readonly EnergyBeam: FHitscanWeaponSettings;
+	readonly Shotgun: FHitscanWeaponSettings;
 }
 
 interface FBeamerPlayerState
@@ -34,6 +34,7 @@ const BeamerBeamFalloff: FDamageCurve =
 export const BeamerSettings: FBeamerSettings =
 {
 	DisplayName: "Beamer",
+	PickFxTemplate: "beamer_pick_template",
 	Primary: "weapon_negev",
 	Secondary: "weapon_elite",
 	Melee: "",
@@ -64,7 +65,7 @@ export const BeamerSettings: FBeamerSettings =
 
 	EnergyBeam:
 	{
-		Damage: 5,
+		Damage: 7,
 		HeadshotMultiplier: 1,
 		Range: 2048,
 		Spread: 0,
@@ -138,7 +139,7 @@ export class BeamerClass extends PlayerClass<FBeamerSettings>
 			return;
 		}
 
-		const Beam: FBeamWeaponSettings = this.Settings.EnergyBeam;
+		const Beam: FHitscanWeaponSettings = this.Settings.EnergyBeam;
 		const Start: FVector = Pawn.GetEyePosition();
 		const End: FVector = TraceHitscanWeapon(Pawn, Beam, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
 		const BeamStart: FVector = VectorMath.Subtract(Start, BeamStartDrop);

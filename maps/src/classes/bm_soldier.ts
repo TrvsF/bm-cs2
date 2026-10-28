@@ -25,6 +25,7 @@ export interface FRocket extends FProjectile
 export const SoldierSettings: FSoliderSettings =
 {
 	DisplayName: "Soldier",
+	PickFxTemplate: "soldier_pick_template",
 	Primary: "weapon_sg556",
 	Secondary: "",
 	Melee: "weapon_knife",

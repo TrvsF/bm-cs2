@@ -73,8 +73,7 @@ export function OpenClassMenu(Slot: number): void
 		return;
 	}
 	GOpenMenus.add(Slot);
-	Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", true);
-	Ui.SetInputCaptureEnabled(Slot, true);
+	SetMenuOpen(Ui, Slot, true);
 }
 
 export function CloseClassMenu(Slot: number): void
@@ -85,8 +84,14 @@ export function CloseClassMenu(Slot: number): void
 	{
 		return;
 	}
-	Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", false);
-	Ui.SetInputCaptureEnabled(Slot, false);
+	SetMenuOpen(Ui, Slot, false);
+}
+
+function SetMenuOpen(Ui: CustomHudLayout, Slot: number, bOpen: boolean): void
+{
+	Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", bOpen);
+	Ui.SetHasClassForPlayer(Slot, HudCardsId, "MenuOpen", bOpen);
+	Ui.SetInputCaptureEnabled(Slot, bOpen);
 }
 
 export function ToggleClassMenu(Slot: number): void
@@ -167,11 +172,14 @@ export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass, IsT:
 	Ui.SetHasClassForPlayer(Slot, HudCardsId, "Team_t", IsT);
 	Ui.SetHasClassForPlayer(Slot, HudCardsId, "Team_ct", !IsT);
 	Ui.SetHasClassForPlayer(Slot, IndicatorPanelId, "Shown", true);
+	for (const Choice of AllClasses)
+	{
+		Ui.SetHasClassForPlayer(Slot, `${PickButtonPrefix}${Choice}`, "Current", Choice === PlayerClass);
+	}
 
 	if (GOpenMenus.has(Slot))
 	{
-		Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", true);
-		Ui.SetInputCaptureEnabled(Slot, true);
+		SetMenuOpen(Ui, Slot, true);
 	}
 }
 

@@ -34,10 +34,58 @@
 		</Panel>
 
 		<Panel id="HudCards" class="HudCards" hittest="false">
+			<Panel id="ClassMenu" class="ClassMenu">
+				<Label class="MenuTitle" text="Select a Class" hittest="false" />
+				<Panel class="ClassList">
+					<Button id="Pick_soldier" class="ClassRow SoldierRow">
+						<Label class="ClassRowName" text="Soldier" hittest="false" />
+						<Label class="ClassRowInfo" text="RPG &amp; Knife. Use the knife mid-air for massive damage!" hittest="false" />
+					</Button>
+					<Button id="Pick_demo" class="ClassRow DemoRow">
+						<Label class="ClassRowName" text="Demoman" hittest="false" />
+						<Label class="ClassRowInfo" text="Stickies &amp; Pipes. Right-click to detonate the footballs!" hittest="false" />
+					</Button>
+					<Button id="Pick_medic" class="ClassRow MedicRow">
+						<Label class="ClassRowName" text="Medic" hittest="false" />
+						<Label class="ClassRowInfo" text="Medic!" hittest="false" />
+					</Button>
+					<Button id="Pick_railer" class="ClassRow RailerRow">
+						<Label class="ClassRowName" text="Railer" hittest="false" />
+						<Label class="ClassRowInfo" text="Pea Shooter &amp; Beam Cannon. Try jumping with the beam!" hittest="false" />
+					</Button>
+					<Button id="Pick_beamer" class="ClassRow BeamerRow">
+						<Label class="ClassRowName" text="Beamer" hittest="false" />
+						<Label class="ClassRowInfo" text="Minigun &amp; Shotguns. You're so big owo!" hittest="false" />
+					</Button>
+					<Button id="Pick_boxer" class="ClassRow BoxerRow">
+						<Label class="ClassRowName" text="Boxer" hittest="false" />
+						<Label class="ClassRowInfo" text="Cubes &amp; Crap. The cubes feast on all!" hittest="false" />
+					</Button>
+					<Button id="Pick_shocker" class="ClassRow ShockerRow">
+						<Label class="ClassRowName" text="Shocker" hittest="false" />
+						<Label class="ClassRowInfo" text="Ball &amp; Beam." hittest="false" />
+					</Button>
+					<Button id="Pick_shrinker" class="ClassRow ShrinkerRow">
+						<Label class="ClassRowName" text="Shrinker" hittest="false" />
+						<Label class="ClassRowInfo" text="Glock &amp; Knife. Right-click the knife to go small." hittest="false" />
+					</Button>
+					<Button id="Pick_gunner" class="ClassRow GunnerRow">
+						<Label class="ClassRowName" text="Gunner" hittest="false" />
+						<Label class="ClassRowInfo" text="Mag-7 &amp; Knife." hittest="false" />
+					</Button>
+				</Panel>
+				<Panel class="MenuFooter">
+					<Button id="CloseMenu" class="FooterButton">
+						<Label class="FooterButtonText" text="Close" hittest="false" />
+					</Button>
+				</Panel>
+			</Panel>
+
 			<Panel id="ClassIndicator" class="HudCard ClassIndicator" hittest="false">
 				<Panel class="ClassStack" hittest="false">
 					<Label id="ClassName" class="ClassName" text="{s:classname}" hittest="false" />
-					<Label class="ClassHint" text="E : Switch" hittest="false" />
+					<Label class="ClassHint HintClosed" text="E : Switch" hittest="false" />
+					<Label class="ClassHint HintOpen" text="E : Close" hittest="false" />
 				</Panel>
 			</Panel>
 
@@ -85,49 +133,5 @@
 				</Panel>
 			</Panel>
 		</Panel>
-
-		<Panel id="ClassMenu" class="ClassMenu">
-			<Label class="MenuTitle" text="Choose your class" hittest="false" />
-			<Panel class="ClassButtons">
-				<Button id="Pick_soldier" class="ClassButton SoldierButton">
-					<Label class="ClassButtonName" text="Soldier" hittest="false" />
-					<Label class="ClassButtonInfo" text="RPG &amp; Knife. Use the knife mid-air for massive damage!" hittest="false" />
-				</Button>
-				<Button id="Pick_demo" class="ClassButton DemoButton">
-					<Label class="ClassButtonName" text="Demoman" hittest="false" />
-					<Label class="ClassButtonInfo" text="Stickies &amp; Pipes. Right-click to detonate the footballs!" hittest="false" />
-				</Button>
-				<Button id="Pick_medic" class="ClassButton MedicButton">
-					<Label class="ClassButtonName" text="Medic" hittest="false" />
-					<Label class="ClassButtonInfo" text="Medic!" hittest="false" />
-				</Button>
-				<Button id="Pick_railer" class="ClassButton RailerButton">
-					<Label class="ClassButtonName" text="Railer" hittest="false" />
-					<Label class="ClassButtonInfo" text="Pea Shooter &amp; Beam Cannon. Try jumping with the beam!" hittest="false" />
-				</Button>
-				<Button id="Pick_beamer" class="ClassButton BeamerButton">
-					<Label class="ClassButtonName" text="Beamer" hittest="false" />
-					<Label class="ClassButtonInfo" text="Minigun &amp; Shotguns. You're so big owo!" hittest="false" />
-				</Button>
-				<Button id="Pick_boxer" class="ClassButton BoxerButton">
-					<Label class="ClassButtonName" text="Boxer" hittest="false" />
-					<Label class="ClassButtonInfo" text="Cubes &amp; Crap. The cubes feast on all!" hittest="false" />
-				</Button>
-				<Button id="Pick_shocker" class="ClassButton ShockerButton">
-					<Label class="ClassButtonName" text="Shocker" hittest="false" />
-					<Label class="ClassButtonInfo" text="Ball &amp; Beam." hittest="false" />
-				</Button>
-			</Panel>
-			
-			<Panel class="MenuFooter">
-				<Button id="Pick_none" class="FooterButton">
-					<Label class="FooterButtonText" text="No class" hittest="false" />
-				</Button>
-				<Button id="CloseMenu" class="FooterButton">
-					<Label class="FooterButtonText" text="Close" hittest="false" />
-				</Button>
-			</Panel>
-		</Panel>
-
 	</Panel>
 </root>

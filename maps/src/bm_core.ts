@@ -1,4 +1,4 @@
-import { Instance } from "cs_script/point_script";
+import { Instance, CSWeaponType } from "cs_script/point_script";
 import type
 {
 	Entity,
@@ -13,7 +13,7 @@ import type
 	ColorArg,
 } from "cs_script/point_script";
 
-export const bDebug: boolean = false;
+export const bDebug: boolean = true;
 export const TickInterval: number = 1 / 64;
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -325,6 +325,12 @@ export function IsWeapon(Weapon: CSWeaponBase | undefined, Name: string): boolea
 	}
 	const Data: CSWeaponData | undefined = Weapon.GetData();
 	return Data !== undefined && Data.GetName() === Name;
+}
+
+export function IsKnife(Weapon: CSWeaponBase | undefined): boolean
+{
+	const Data: CSWeaponData | undefined = Weapon?.GetData();
+	return Data !== undefined && Data.GetType() === CSWeaponType.KNIFE;
 }
 
 export function SpawnFromTemplate(TemplateName: string, Position: FVector): Entity | undefined

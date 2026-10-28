@@ -10,6 +10,8 @@ import { RailerClass } from "./bm_railer";
 import { BeamerClass } from "./bm_beamer";
 import { BoxerClass } from "./bm_boxer";
 import { ShockerClass } from "./bm_shocker";
+import { ShrinkerClass } from "./bm_shrinker";
+import { GunnerClass } from "./bm_gunner";
 
 // Class list //////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,6 +24,8 @@ export const ClassDefinitions: Readonly<Record<EPlayableClass, PlayerClass<FClas
 	[EPlayerClass.Beamer]: new BeamerClass(),
 	[EPlayerClass.Boxer]: new BoxerClass(),
 	[EPlayerClass.Shocker]: new ShockerClass(),
+	[EPlayerClass.Shrinker]: new ShrinkerClass(),
+	[EPlayerClass.Gunner]: new GunnerClass(),
 };
 
 export function GiveLoadout(Pawn: CSPlayerPawn, PlayerClass: EPlayableClass): void
