@@ -61,7 +61,7 @@ export const DemoSettings: FDemoSettings =
 	Secondary: "weapon_deagle",
 	Melee: "",
 	Health: 130,
-	SizeScale: 1.0,
+	SizeScale: 1.2,
 	PrimaryLauncher:
 	{
 		FireInterval: 0.6,

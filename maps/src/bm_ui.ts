@@ -1,11 +1,13 @@
 import { Instance, Console, CSInputs } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CustomHudLayout } from "cs_script/point_script";
-import { LogPrefix, ForEachLivePawn } from "./bm_core";
+import { LogPrefix, ForEachLivePawn, GetOrCreate } from "./bm_core";
 import { EPlayerClass } from "./bm_classes";
-import type { FHudCounter } from "./bm_classes";
+import type { FHudCounter, FClassSettings } from "./bm_classes";
 import { ClassDefinitions } from "./classes/bm_classlist";
 import type { FLauncherAmmo } from "./bm_launcher";
 import type { FPayloadStatus } from "./gamemodes/bm_payload";
+import { EBuildHint } from "./bm_buildings";
+import type { FBuildingHudRow, FBuildHints, FBuildHint } from "./bm_buildings";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,6 +22,7 @@ const CentreBarId: string = "CentreBar";
 const IndicatorPanelId: string = "ClassIndicator";
 const ClassNameLabelId: string = "ClassName";
 const PickButtonPrefix: string = "Pick_";
+const PickStatsPrefix: string = "PickStats_";
 const CloseButtonId: string = "CloseMenu";
 const MenuToggleKey: CSInputs = CSInputs.USE;
 const NoClassName: string = "No class";
@@ -50,6 +53,16 @@ const MaxPayloadTicks: number = 5;
 const PayloadStateClasses: readonly string[] = ["Pushing", "Blocked", "RollingBack", "Overtime", "Delivered"];
 const HurtHealthFraction: number = 0.5;
 const CriticalHealthFraction: number = 0.25;
+const BuildingPanelId: string = "BuildingPanel";
+const BuildingRowPrefix: string = "BuildingRow";
+const BuildingNamePrefix: string = "BuildingName";
+const BuildingStatusPrefix: string = "BuildingStatus";
+const BuildingHealthPrefix: string = "BuildingHealth";
+const BuildingHealthTextPrefix: string = "BuildingHealthText";
+const MaxBuildingRows: number = 4;
+const BuildHintPrefix: string = "BuildHint";
+const BuildHintSides: readonly string[] = ["Left", "Right"];
+const AllBuildHintStates: readonly EBuildHint[] = Object.values(EBuildHint);
 
 const AllClasses: readonly EPlayerClass[] = Object.values(EPlayerClass);
 
@@ -61,6 +74,8 @@ const GShownCrossSteps: Map<number, number> = new Map<number, number>();
 const GShownBars: Map<number, Map<string, number>> = new Map<number, Map<string, number>>();
 const GShownCounter: Map<number, string> = new Map<number, string>();
 const GSentPayload: Map<number, Map<string, string>> = new Map<number, Map<string, string>>();
+const GShownBuildings: Map<number, string[]> = new Map<number, string[]>();
+const GShownBuildHints: Map<number, string[]> = new Map<number, string[]>();
 let GbWarnedNoClassUi: boolean = false;
 
 // Menu ////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,9 +104,27 @@ export function CloseClassMenu(Slot: number): void
 
 function SetMenuOpen(Ui: CustomHudLayout, Slot: number, bOpen: boolean): void
 {
+	if (bOpen)
+	{
+		ShowClassStats(Ui, Slot);
+	}
 	Ui.SetHasClassForPlayer(Slot, MenuPanelId, "Open", bOpen);
 	Ui.SetHasClassForPlayer(Slot, HudCardsId, "MenuOpen", bOpen);
 	Ui.SetInputCaptureEnabled(Slot, bOpen);
+}
+
+function ShowClassStats(Ui: CustomHudLayout, Slot: number): void
+{
+	for (const Choice of AllClasses)
+	{
+		if (Choice === EPlayerClass.None)
+		{
+			continue;
+		}
+		const Settings: FClassSettings = ClassDefinitions[Choice].Settings;
+		const Scale: string = Number.isInteger(Settings.SizeScale) ? Settings.SizeScale.toFixed(1) : String(Number(Settings.SizeScale.toFixed(2)));
+		Ui.SetDialogVariableStringForPlayer(Slot, `${PickStatsPrefix}${Choice}`, "stats", `${Settings.Health}hp ${Scale}x`);
+	}
 }
 
 export function ToggleClassMenu(Slot: number): void
@@ -249,7 +282,92 @@ function ShowBar(Slot: number, BarId: string, Fraction: number | undefined): voi
 	}
 }
 
-// A class's counter (e.g. stickies out), at the right end of the ammo side of the bar. undefined hides it.
+export function ShowBuildings(Slot: number, Rows: readonly FBuildingHudRow[]): void
+{
+	const Shown: string[] = GetOrCreate(GShownBuildings, Slot, (): string[] =>
+	{
+		return [];
+	});
+	let Ui: CustomHudLayout | undefined = undefined;
+	for (let Index: number = 0; Index <= MaxBuildingRows; Index++)
+	{
+		const Row: FBuildingHudRow | undefined = Index < MaxBuildingRows ? Rows[Index] : undefined;
+		const bPanel: boolean = Index === MaxBuildingRows;
+		const Key: string = bPanel ? (Rows.length > 0 ? "Shown" : "") : Row ? `${Row.Name}|${Row.Health}|${Row.MaxHealth}|${Row.Status}` : "";
+		if ((Shown[Index] ?? "") === Key)
+		{
+			continue;
+		}
+		Ui ??= FindClassUi();
+		if (!Ui)
+		{
+			return;
+		}
+		Shown[Index] = Key;
+		if (bPanel)
+		{
+			Ui.SetHasClassForPlayer(Slot, BuildingPanelId, "Shown", Rows.length > 0);
+			continue;
+		}
+		const RowId: string = `${BuildingRowPrefix}${Index}`;
+		if (!Row)
+		{
+			Ui.SetHasClassForPlayer(Slot, RowId, "Shown", false);
+			continue;
+		}
+		const Fraction: number = Row.MaxHealth > 0 ? Row.Health / Row.MaxHealth : 0;
+		Ui.SetDialogVariableStringForPlayer(Slot, `${BuildingNamePrefix}${Index}`, "name", Row.Name);
+		Ui.SetDialogVariableStringForPlayer(Slot, `${BuildingStatusPrefix}${Index}`, "status", Row.Status);
+		Ui.SetDialogVariableStringForPlayer(Slot, `${BuildingHealthTextPrefix}${Index}`, "health", `${Row.Health} / ${Row.MaxHealth}`);
+		ShowBar(Slot, `${BuildingHealthPrefix}${Index}`, Fraction);
+		Ui.SetHasClassForPlayer(Slot, RowId, "Hurt", Fraction <= HurtHealthFraction);
+		Ui.SetHasClassForPlayer(Slot, RowId, "Critical", Fraction <= CriticalHealthFraction);
+		Ui.SetHasClassForPlayer(Slot, RowId, "Shown", true);
+	}
+}
+
+export function ShowBuildHints(Slot: number, Hints: FBuildHints | undefined): void
+{
+	const Shown: string[] = GetOrCreate(GShownBuildHints, Slot, (): string[] =>
+	{
+		return [];
+	});
+	const Sides: readonly (FBuildHint | undefined)[] = [Hints?.Left, Hints?.Right];
+	let Ui: CustomHudLayout | undefined = undefined;
+	for (let Index: number = 0; Index < Sides.length; Index++)
+	{
+		const Hint: FBuildHint | undefined = Sides[Index];
+		const Key: string = Hint ? `${Hint.Name}|${Hint.Detail}|${Hint.State}` : "";
+		if ((Shown[Index] ?? "") === Key)
+		{
+			continue;
+		}
+		Ui ??= FindClassUi();
+		if (!Ui)
+		{
+			return;
+		}
+		Shown[Index] = Key;
+		const PanelId: string = `${BuildHintPrefix}${BuildHintSides[Index]}`;
+		if (!Hint)
+		{
+			Ui.SetHasClassForPlayer(Slot, PanelId, "Shown", false);
+			continue;
+		}
+		const Words: string[] = Hint.Name.split(" ");
+		Ui.SetDialogVariableStringForPlayer(Slot, `${PanelId}Word0`, "word", Words[0] ?? "");
+		Ui.SetDialogVariableStringForPlayer(Slot, `${PanelId}Word1`, "word", Words.slice(1).join(" "));
+		Ui.SetDialogVariableStringForPlayer(Slot, `${PanelId}Detail`, "detail", Hint.Detail);
+		Ui.SetHasClassForPlayer(Slot, PanelId, "HasWord1", Words.length > 1);
+		Ui.SetHasClassForPlayer(Slot, PanelId, "HasDetail", Hint.Detail !== "");
+		for (const State of AllBuildHintStates)
+		{
+			Ui.SetHasClassForPlayer(Slot, PanelId, State, State === Hint.State);
+		}
+		Ui.SetHasClassForPlayer(Slot, PanelId, "Shown", true);
+	}
+}
+
 export function ShowCounter(Slot: number, Counter: FHudCounter | undefined): void
 {
 	const Key: string = Counter ? `${Counter.Label}|${Counter.Count}|${Counter.Max}` : "";
@@ -424,6 +542,8 @@ export function ResetClassUi(Slot: number): void
 	GShownBars.delete(Slot);
 	GShownCounter.delete(Slot);
 	GSentPayload.delete(Slot);
+	GShownBuildings.delete(Slot);
+	GShownBuildHints.delete(Slot);
 	const Ui: CustomHudLayout | undefined = FindClassUi();
 	if (!Ui)
 	{

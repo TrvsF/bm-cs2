@@ -34,8 +34,8 @@ export const RailerSettings: FRailerSettings =
 	Primary: "weapon_famas",
 	Secondary: "weapon_revolver",
 	Melee: "",
-	Health: 100,
-	SizeScale: 0.8,
+	Health: 110,
+	SizeScale: 0.85,
 	PrimaryLauncher:
 	{
 		FireInterval: 0.06,

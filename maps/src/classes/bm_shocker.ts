@@ -39,7 +39,7 @@ export const ShockerSettings: FShockerSettings =
 	Secondary: "weapon_p250",
 	Melee: "weapon_knife",
 	Health: 125,
-	SizeScale: 1.0,
+	SizeScale: 1.1,
 	PrimaryLauncher:
 	{
 		FireInterval: 0.5,
@@ -53,7 +53,7 @@ export const ShockerSettings: FShockerSettings =
 	},
 	SecondaryLauncher:
 	{
-		FireInterval: 0.75,
+		FireInterval: 0.4,
 		ClipSize: 5,
 		ReloadFirstTime: 1.6,
 		ReloadEachTime: 0,
@@ -65,7 +65,7 @@ export const ShockerSettings: FShockerSettings =
 
 	ShockBeam:
 	{
-		Damage: 45,
+		Damage: 33,
 		HeadshotMultiplier: 1,
 		Range: 8192,
 		Spread: 0,
@@ -83,11 +83,11 @@ export const ShockerSettings: FShockerSettings =
 		ImpactLifetime: 1,
 	},
 
-	BallSpeed: 1150,
+	BallSpeed: 1000,
 	BallSize: 16,
 	BallDamage: 50,
 	BallRadius: 80,
-	BallKnockback: 300,
+	BallKnockback: 500,
 	BallLifetime: 5,
 	BallFxTemplate: "shock_ball_explode_template",
 

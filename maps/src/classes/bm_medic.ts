@@ -4,6 +4,7 @@ import { TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, Ge
 import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve } from "../bm_combat";
 import type { FProjectile, FDamageCurve } from "../bm_combat";
+import { DamageTracedBuilding } from "../bm_buildings";
 import { BeamStartDrop, PlayerClass, DealShockDamage } from "../bm_classes";
 import type { FClassSettings, FHudCounter } from "../bm_classes";
 
@@ -59,6 +60,7 @@ export const MedicSettings: FMedicSettings =
 	Health: 150,
 	SizeScale: 0.9,
 	bStartWithMelee: true,
+	MeleeDamage: 20,
 	PrimaryLauncher:
 	{
 		FireInterval: 0.2,
@@ -90,7 +92,6 @@ export const MedicSettings: FMedicSettings =
 };
 
 const BoltTemplateName: string = "crossbow_bolt_template";
-const MedicKnifeDamage: number = 20;
 const UberReadyColor: FColor = { r: 255, g: 255, b: 255 };
 
 // Medic ///////////////////////////////////////////////////////////////////////////////////////////
@@ -228,15 +229,6 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 		this.DecayAccumulators.delete(Slot);
 	}
 
-	public override ModifyOutgoingDamage(Event: FModifyDamageEvent): FModifyDamageResult
-	{
-		if (IsKnife(Event.weapon))
-		{
-			return { damage: MedicKnifeDamage };
-		}
-		return super.ModifyOutgoingDamage(Event);
-	}
-
 	public override GetHudCounter(Slot: number): FHudCounter | undefined
 	{
 		const State: FMedicPlayerState | undefined = this.PlayerStates.get(Slot);
@@ -271,6 +263,11 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 			this.BoltHitPlayer(Bolt, Hit.hitEntity);
 			return false;
 		}
+		if (Hit && DamageTracedBuilding(Hit, this.Settings.BoltDamage * this.GetBoltRangeScale(Bolt), Bolt.Owner))
+		{
+			DestroyProjectile(Bolt);
+			return false;
+		}
 		if (Hit)
 		{
 			Bolt.StuckUntil = Now + this.Settings.BoltStickTime;
@@ -281,11 +278,16 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 		return true;
 	}
 
+	private GetBoltRangeScale(Bolt: FBolt): number
+	{
+		return EvaluateDamageCurve(this.Settings.BoltRampUp, VectorMath.Size(VectorMath.Subtract(Bolt.Position, Bolt.Start)));
+	}
+
 	private BoltHitPlayer(Bolt: FBolt, Victim: CSPlayerPawn): void
 	{
 		const Medic: CSPlayerPawn = Bolt.Owner;
 		const Distance: number = VectorMath.Size(VectorMath.Subtract(Bolt.Position, Bolt.Start));
-		const RangeScale: number = EvaluateDamageCurve(this.Settings.BoltRampUp, Distance);
+		const RangeScale: number = this.GetBoltRangeScale(Bolt);
 		const MedicName: string = GetPawnName(Medic);
 		const VictimName: string = GetPawnName(Victim);
 

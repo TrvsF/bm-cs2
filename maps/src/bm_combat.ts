@@ -3,6 +3,8 @@ import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult, BaseTraceConfig }
 import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, SpawnTemplateEntities, ForEachLivePawn, bDebug } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
+import { GetOwnedBuildingEntities, FindBuildingOnLine, ClipTraceToBuildings, DamageBuildingsInRadius } from "./bm_buildings";
+import type { FBuilding, FBuildingHit } from "./bm_buildings";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,6 +65,12 @@ export interface FDamageFalloff
 	readonly OptimalDistance: number;
 }
 
+export interface FSelfBlast
+{
+	readonly Damage: number;
+	readonly Knockback: number;
+}
+
 export interface FDamageCurveKey
 {
 	readonly Distance: number;
@@ -81,6 +89,7 @@ export interface FHitscanResult
 {
 	readonly Hits: FHitscanHit[];
 	readonly End: FVector;
+	readonly HitBuilding: FBuilding | undefined;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -123,6 +132,7 @@ export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: nu
 		Models: TemplateName !== undefined ? SpawnProjectileModels(TemplateName, Start) : [],
 	};
 	PlaceProjectileModels(Projectile, true);
+	TintProjectile(Projectile, GetTeamColor(Owner));
 	return Projectile;
 }
 
@@ -309,8 +319,12 @@ function SweepProjectile(Projectile: FProjectile, DeltaTime: number, bHitPlayers
 	return Trace.didHit ? Trace : undefined;
 }
 
-// A line for a point, otherwise its whole shape at its size, from where it is now to End
 function TraceProjectile(Projectile: FProjectile, End: FVector, Ignored: Entity[], bHitPlayers: boolean): TraceResult
+{
+	return ClipTraceToBuildings(TraceProjectileShape(Projectile, End, Ignored, bHitPlayers), Projectile.Position, End, Projectile.Radius, Projectile.Owner);
+}
+
+function TraceProjectileShape(Projectile: FProjectile, End: FVector, Ignored: Entity[], bHitPlayers: boolean): TraceResult
 {
 	const Trace: BaseTraceConfig = { start: Projectile.Position, end: End, ignoreEntity: Ignored, ignorePlayers: !bHitPlayers };
 	if (Projectile.Radius <= 0)
@@ -410,7 +424,7 @@ function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): voi
 	}
 }
 
-export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined, FxTemplate: string = ExplosionTemplateName): void
+export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined, FxTemplate: string = ExplosionTemplateName, SelfBlast: FSelfBlast | undefined = undefined): number
 {
 	const Origin: FVector = VectorMath.Add(Position, ExplosionOffset);
 
@@ -422,9 +436,11 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 	SpawnScorchMark(Position);
 	if (!Attacker.IsValid())
 	{
-		return;
+		return 0;
 	}
+	DamageBuildingsInRadius(Origin, Radius, Damage, Attacker);
 
+	let DamageTotal: number = 0;
 	ForEachLivePawn((Victim: CSPlayerPawn): void =>
 	{
 		const Target: FVector = GetChestPosition(Victim);
@@ -451,9 +467,10 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		const RangeScale: number = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
 		const BlastDamage: number = Damage * Falloff * RangeScale;
 		const Away: FVector = Distance > 1 ? Offset : UpVector;
-		const Push: FVector = ApplyKnockback(Victim, Away, BlastDamage, Knockback, bIsSelf);
+		const SelfOverride: FSelfBlast | undefined = bIsSelf ? SelfBlast : undefined;
+		const Push: FVector = SelfOverride ? ApplyKnockback(Victim, Away, SelfOverride.Damage, SelfOverride.Knockback, true) : ApplyKnockback(Victim, Away, BlastDamage, Knockback, bIsSelf);
 
-		const DamageTaken: number = bIsSelf ? BlastDamage * SelfBlastDamageScale : BlastDamage;
+		const DamageTaken: number = SelfOverride ? SelfOverride.Damage : bIsSelf ? BlastDamage * SelfBlastDamageScale : BlastDamage;
 		const DamageDealt: number = Victim.TakeDamage(
 		{
 			damage: DamageTaken,
@@ -464,12 +481,14 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 
 		if (!bIsSelf && DamageDealt > 0)
 		{
+			DamageTotal += DamageDealt;
 			SpawnBloodSplatter(Origin, Victim);
 		}
 
 		const PushDirection: FVector = VectorMath.GetSafeNormal(Push);
 		Console.Log(`${LogPrefix} ${GetPawnName(Attacker)} Damaged (explosive) ${GetPawnName(Victim)} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
 	});
+	return DamageTotal;
 }
 
 // Damage Falloff /////////////////////////////////////////////////////////////////////////////////
@@ -524,9 +543,10 @@ function GetRangeDamageScale(Attacker: CSPlayerPawn, Victim: CSPlayerPawn, Fallo
 
 export function TraceHitscan(Shooter: CSPlayerPawn, Start: FVector, End: FVector, MaxHits: number): FHitscanResult
 {
-	const Ignored: Entity[] = [Shooter];
+	const Ignored: Entity[] = [Shooter, ...GetOwnedBuildingEntities(Shooter)];
 	const Hits: FHitscanHit[] = [];
 	let StopPoint: FVector = End;
+	let WorldTrace: TraceResult | undefined = undefined;
 	for (let TraceCount: number = 0; TraceCount < MaxHitscanTraces; TraceCount++)
 	{
 		const Trace: TraceResult = Instance.TraceLine({ start: Start, end: End, ignoreEntity: Ignored, traceHitboxes: true });
@@ -540,6 +560,7 @@ export function TraceHitscan(Shooter: CSPlayerPawn, Start: FVector, End: FVector
 		const Victim: Entity | undefined = Trace.hitEntity;
 		if (!IsPlayerPawn(Victim))
 		{
+			WorldTrace = Trace;
 			break;
 		}
 		Ignored.push(Victim);
@@ -553,7 +574,17 @@ export function TraceHitscan(Shooter: CSPlayerPawn, Start: FVector, End: FVector
 			break;
 		}
 	}
-	return { Hits: Hits, End: StopPoint };
+	const Building: FBuildingHit | undefined = FindBuildingOnLine(Shooter, Start, StopPoint, WorldTrace);
+	if (!Building)
+	{
+		return { Hits: Hits, End: StopPoint, HitBuilding: undefined };
+	}
+	const Reach: number = VectorMath.Size(VectorMath.Subtract(Building.Point, Start));
+	const HitsBefore: FHitscanHit[] = Hits.filter((Hit: FHitscanHit): boolean =>
+	{
+		return VectorMath.Size(VectorMath.Subtract(Hit.Trace.end, Start)) <= Reach;
+	});
+	return { Hits: HitsBefore, End: Building.Point, HitBuilding: Building.Building };
 }
 
 export function GetSpreadDirection(Aim: FRotator, SpreadDegrees: number): FVector

@@ -11,9 +11,10 @@ import type
 	Vector,
 	QAngle,
 	ColorArg,
+	CSInputs,
 } from "cs_script/point_script";
 
-export const bDebug: boolean = true;
+export const bDebug: boolean = false;
 export const TickInterval: number = 1 / 64;
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -32,6 +33,7 @@ export type FPlayerResetEvent = TEventOf<typeof Instance.OnPlayerReset>;
 export type FPlayerKillEvent = TEventOf<typeof Instance.OnPlayerKill>;
 export type FPlayerDisconnectEvent = TEventOf<typeof Instance.OnPlayerDisconnect>;
 export type FGunFireEvent = TEventOf<typeof Instance.OnGunFire>;
+export type FKnifeAttackEvent = TEventOf<typeof Instance.OnKnifeAttack>;
 export type FWeaponPickupEvent = TEventOf<typeof Instance.OnWeaponPickup>;
 export type FWeaponDropEvent = TEventOf<typeof Instance.OnWeaponDrop>;
 export type FPlayerDamageEvent = TEventOf<typeof Instance.OnPlayerDamage>;
@@ -170,6 +172,19 @@ export abstract class VectorMath
 	}
 }
 
+export interface FHeldInputs
+{
+	Mask: number;
+}
+
+export function ConsumePress(Pawn: CSPlayerPawn, Held: FHeldInputs, Input: CSInputs): boolean
+{
+	const bDown: boolean = Pawn.IsInputPressed(Input);
+	const bWasDown: boolean = (Held.Mask & Input) !== 0;
+	Held.Mask = bDown ? Held.Mask | Input : Held.Mask & ~Input;
+	return bDown && !bWasDown;
+}
+
 export interface FRotationMatrix
 {
 	readonly Forward: FVector;
@@ -300,7 +315,12 @@ export function GetOrCreate<TKey, TValue>(Values: Map<TKey, TValue>, Key: TKey, 
 
 export function GetTeamColor(Ent: Entity): FColor
 {
-	return Ent.GetTeamNumber() === ETeam.Terrorist ? TerroristColor : CounterTerroristColor;
+	return GetColorForTeam(Ent.GetTeamNumber());
+}
+
+export function GetColorForTeam(Team: number): FColor
+{
+	return Team === ETeam.Terrorist ? TerroristColor : CounterTerroristColor;
 }
 
 export function GetPlayerSlot(Ent: Entity | undefined): number
