@@ -8,6 +8,7 @@ import type
 	FPlayerKillEvent,
 	FPlayerDisconnectEvent,
 	FGunFireEvent,
+	FKnifeAttackEvent,
 	FWeaponPickupEvent,
 	FWeaponDropEvent,
 	FPlayerDamageEvent,
@@ -21,11 +22,13 @@ import { ClassDefinitions, GiveLoadout, IsWeaponAllowed } from "./classes/bm_cla
 import { ClearDecals } from "./bm_effects";
 import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
-import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ResetClassUi } from "./bm_ui";
-import { TickLauncher, ClearLauncher, GetLauncherAmmo } from "./bm_launcher";
+import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ShowBuildings, ShowBuildHints, ResetClassUi } from "./bm_ui";
+import { TickLauncher, ClearLauncher, GetLauncherAmmo, EmptyRealGuns } from "./bm_launcher";
 import type { FLauncherShot } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
-import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone } from "./bm_spawnzones";
+import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone, RefreshSpawnZoneTouches } from "./bm_spawnzones";
+import { TickBuildings, ClearBuildings, RemoveBuildings, GetBuildingHudRows, GetBuildHints, RepairBuildingInReach } from "./bm_buildings";
+import type { FBuildKeys } from "./bm_buildings";
 import { GameMode } from "./bm_gamemode";
 import { FreeForAllMode } from "./gamemodes/bm_freeforall";
 import { PayloadMode } from "./gamemodes/bm_payload";
@@ -63,6 +66,7 @@ function Tick(): void
 			if (PlayerClass !== undefined)
 			{
 				const Definition = ClassDefinitions[PlayerClass];
+				EmptyRealGuns(Pawn);
 				const Shot: FLauncherShot | undefined = TickLauncher(Pawn, Slot, Now);
 				if (Shot)
 				{
@@ -75,6 +79,7 @@ function Tick(): void
 		{
 			Definition.TickWorldLate(Now, DeltaTime);
 		}
+		TickBuildings(Now, DeltaTime);
 		GActiveMode.Tick(Now, DeltaTime);
 		TickHealthKits(Now);
 		TickSpawnZones(Now);
@@ -101,6 +106,7 @@ function BeginPlay(): void
 	Instance.OnRoundStart(HandleRoundStart);
 	Instance.OnRoundEnd(HandleRoundEnd);
 	Instance.OnGunFire(HandleGunFire);
+	Instance.OnKnifeAttack(HandleKnifeAttack);
 	Instance.OnWeaponPickup(HandleWeaponPickup);
 	Instance.OnWeaponDrop(HandleWeaponDrop);
 	Instance.OnPlayerDamage(HandlePlayerDamage);
@@ -164,6 +170,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 
 	ClearPlayer(Slot);
 	ForgetSpawnZoneHistory(Slot);
+	RefreshSpawnZoneTouches();
 	GActiveMode.OnPlayerSpawn(Pawn, Slot);
 	AssignRandomBotClass(Pawn, Slot);
 	const bHadClass: boolean = GClassBySlot.has(Slot);
@@ -173,7 +180,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 
 	SetTimer(0.1, (): void =>
 	{
-		if (!Pawn.IsValid() || !Pawn.IsAlive())
+		if (!Pawn.IsValid() || !Pawn.IsAlive() || GClassBySlot.get(Slot) !== PlayerClass)
 		{
 			return;
 		}
@@ -198,6 +205,7 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 	if (Slot !== INDEX_NONE)
 	{
 		ClearPlayer(Slot);
+		RemoveBuildings(Slot);
 		ForgetSpawnZonePlayer(Slot);
 	}
 }
@@ -205,6 +213,7 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 {
 	ClearPlayer(Event.playerSlot);
+	RemoveBuildings(Event.playerSlot);
 	ForgetSpawnZonePlayer(Event.playerSlot);
 	for (const Mode of GameModes)
 	{
@@ -223,6 +232,7 @@ function HandleRoundStart(): void
 		Definition.OnRoundStart();
 	}
 	ClearDecals();
+	ClearBuildings();
 	ResetHealthKits();
 	ResetSpawnZones();
 	SelectGameMode();
@@ -255,6 +265,22 @@ function HandleGunFire(Event: FGunFireEvent): void
 	else if (IsWeapon(Weapon, Definition.Settings.Secondary) && !Definition.Settings.SecondaryLauncher)
 	{
 		Definition.OnSecondaryFire(Pawn, Slot, Instance.GetGameTime());
+	}
+}
+
+function HandleKnifeAttack(Event: FKnifeAttackEvent): void
+{
+	const Pawn: CSPlayerPawn | undefined = Event.weapon.GetOwner();
+	const Slot: number = GetPlayerSlot(Pawn);
+	const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
+	if (!Pawn || PlayerClass === undefined)
+	{
+		return;
+	}
+	const RepairPerHit: number | undefined = ClassDefinitions[PlayerClass].Settings.RepairPerHit;
+	if (RepairPerHit !== undefined)
+	{
+		RepairBuildingInReach(Pawn, Slot, RepairPerHit, Instance.GetGameTime());
 	}
 }
 
@@ -376,11 +402,11 @@ function ApplyMatchSettings(): void
 	const Commands: string[] = [];
 
 	Commands.push(`mp_teammates_are_enemies ${IsFriendlyFire() ? 1 : 0}`, `mp_friendlyfire ${IsFriendlyFire() ? 1 : 0}`);
+	Commands.push("sv_infinite_ammo 0");
 
 	if (bDebug)
 	{
 		Commands.push("mp_do_warmup_period 0", "mp_warmuptime 0", "mp_freezetime 0");
-		Commands.push("sv_infinite_ammo 1");
 		Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any");
 	}
 	Commands.push(...GActiveMode.GetMatchCommands());
@@ -469,6 +495,10 @@ function ApplyPendingClass(Slot: number): void
 	}
 
 	GPendingClassBySlot.delete(Slot);
+	if (NextClass !== (GClassBySlot.get(Slot) ?? EPlayerClass.None))
+	{
+		RemoveBuildings(Slot);
+	}
 	if (NextClass === EPlayerClass.None)
 	{
 		GClassBySlot.delete(Slot);
@@ -483,6 +513,10 @@ function SetPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): 
 {
 	const Slot: number = Player.GetPlayerSlot();
 	ClearPlayer(Slot);
+	if (PlayerClass !== (GClassBySlot.get(Slot) ?? EPlayerClass.None))
+	{
+		RemoveBuildings(Slot);
+	}
 
 	const Pawn: CSPlayerPawn | undefined = Player.GetPlayerPawn();
 	if (PlayerClass === EPlayerClass.None)
@@ -561,6 +595,8 @@ function ClearPlayer(Slot: number): void
 	ShowAmmo(Slot, undefined);
 	ShowHealth(Slot, undefined);
 	ShowCounter(Slot, undefined);
+	ShowBuildings(Slot, []);
+	ShowBuildHints(Slot, undefined);
 }
 
 function TickPlayerHud(): void
@@ -574,6 +610,9 @@ function TickPlayerHud(): void
 			ShowHealth(Slot, Pawn);
 			ShowAmmo(Slot, GetLauncherAmmo(Pawn, Slot));
 			ShowCounter(Slot, PlayerClass !== undefined ? ClassDefinitions[PlayerClass].GetHudCounter(Slot) : undefined);
+			ShowBuildings(Slot, GetBuildingHudRows(Slot, Instance.GetGameTime()));
+			const BuildKeys: FBuildKeys | undefined = PlayerClass !== undefined ? ClassDefinitions[PlayerClass].GetBuildKeys(Pawn) : undefined;
+			ShowBuildHints(Slot, BuildKeys ? GetBuildHints(Slot, BuildKeys, Instance.GetGameTime()) : undefined);
 			GActiveMode.TickPlayerHud(Pawn, Slot);
 		}
 	});

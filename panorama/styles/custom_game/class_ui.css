@@ -368,7 +368,7 @@
 	horizontal-align: left;
 	vertical-align: bottom;
 	margin-bottom: 100px;
-	width: 420px;
+	width: 540px;
 	flow-children: down;
 	border-radius: 0px 22px 0px 0px;
 	background-color: gradient( linear, 0% 0%, 0% 100%, from( #4a5360 ), color-stop( 0.005, #4a5360 ), color-stop( 0.008, #1a2029 ), to( #0b0f14 ) );
@@ -395,7 +395,7 @@
 .HudCards.MenuOpen .ClassIndicator
 {
 	visibility: visible;
-	width: 420px;
+	width: 540px;
 	padding: 0px;
 	border-radius: 0px;
 }
@@ -422,9 +422,9 @@
 
 .MenuTitle
 {
-	margin: 16px 0px 8px 22px;
+	margin: 20px 0px 12px 22px;
 	font-family: Stratum2 Medium Condensed;
-	font-size: 15px;
+	font-size: 16px;
 	color: #ffffffa0;
 	text-transform: uppercase;
 	letter-spacing: 1.5px;
@@ -432,15 +432,16 @@
 
 .ClassList
 {
-	width: 400px;
+	width: 516px;
 	horizontal-align: center;
+	margin-bottom: 12px;
 	flow-children: down;
 }
 
 .ClassRow
 {
 	width: 100%;
-	margin-bottom: 3px;
+	margin-bottom: 4px;
 	flow-children: down;
 	border-radius: 10px;
 	background-color: #ffffff00;
@@ -498,16 +499,21 @@
 	background-color: #ff9ad5;
 }
 
-.GunnerRow:hover
+.BuilderRow:hover
 {
 	background-color: #9ad0a0;
 }
 
+.ClassRowHead
+{
+	margin: 10px 14px 0px 14px;
+	flow-children: right;
+}
+
 .ClassRowName
 {
-	margin: 6px 12px 0px 12px;
 	font-family: Stratum2 Medium Condensed;
-	font-size: 22px;
+	font-size: 25px;
 	color: #ffffff;
 	text-transform: uppercase;
 	letter-spacing: 1.2px;
@@ -516,11 +522,23 @@
 	transition-duration: 0.1s;
 }
 
+.ClassRowStats
+{
+	vertical-align: bottom;
+	margin: 0px 0px 3px 6px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 15px;
+	color: #ffffff90;
+	letter-spacing: 0.5px;
+	transition-property: color;
+	transition-duration: 0.1s;
+}
+
 .ClassRowInfo
 {
-	width: 376px;
-	margin: 0px 12px 7px 12px;
-	font-size: 13px;
+	width: 488px;
+	margin: 2px 14px 11px 14px;
+	font-size: 14px;
 	color: #ffffffa0;
 	white-space: normal;
 	transition-property: color;
@@ -533,56 +551,14 @@
 	text-shadow: 0px 0px 0px 0.0 #00000000;
 }
 
+.ClassRow:hover .ClassRowStats
+{
+	color: #0b0f14b0;
+}
+
 .ClassRow:hover .ClassRowInfo
 {
 	color: #0b0f14c8;
-}
-
-.MenuFooter
-{
-	width: 400px;
-	horizontal-align: center;
-	margin-top: 4px;
-	margin-bottom: 12px;
-	flow-children: right;
-}
-
-.FooterButton
-{
-	width: fill-parent-flow( 1.0 );
-	height: 34px;
-	margin-left: 6px;
-	border-radius: 10px;
-	background-color: #ffffff12;
-	transition-property: background-color;
-	transition-duration: 0.1s;
-}
-
-#Pick_none
-{
-	margin-left: 0px;
-}
-
-.FooterButton:hover
-{
-	background-color: #ffffff30;
-}
-
-.FooterButton.Current
-{
-	background-color: #ffffff22;
-}
-
-.FooterButtonText
-{
-	width: 100%;
-	horizontal-align: center;
-	vertical-align: center;
-	text-align: center;
-	font-size: 14px;
-	color: #f2f4f7;
-	text-transform: uppercase;
-	letter-spacing: 1px;
 }
 
 .Bar
@@ -807,4 +783,238 @@
 .PayloadBar.Delivered .PayloadFill
 {
 	background-color: #f0d080;
+}
+
+.BuildingPanel
+{
+	visibility: collapse;
+	horizontal-align: right;
+	vertical-align: top;
+	margin-top: 300px;
+	width: 300px;
+	flow-children: down;
+	border-radius: 22px 0px 0px 22px;
+	background-color: gradient( linear, 0% 0%, 0% 100%, from( #4a5360 ), color-stop( 0.025, #4a5360 ), color-stop( 0.04, #1a2029 ), to( #0b0f14 ) );
+}
+
+.HudCards.Team_t .BuildingPanel
+{
+	background-color: gradient( linear, 0% 0%, 0% 100%, from( #ee5a5a ), color-stop( 0.025, #ee5a5a ), color-stop( 0.04, #6b2024 ), to( #300c0f ) );
+}
+
+.HudCards.Team_ct .BuildingPanel
+{
+	background-color: gradient( linear, 0% 0%, 0% 100%, from( #7fd4ff ), color-stop( 0.025, #7fd4ff ), color-stop( 0.04, #1d4a73 ), to( #0b2034 ) );
+}
+
+.BuildingPanel.Shown
+{
+	visibility: visible;
+}
+
+.BuildingRow
+{
+	visibility: collapse;
+	width: 100%;
+	margin-top: 8px;
+	margin-bottom: 4px;
+	flow-children: down;
+}
+
+.BuildingRow.Shown
+{
+	visibility: visible;
+}
+
+.BuildingRowTop
+{
+	width: 100%;
+}
+
+.BuildingName
+{
+	horizontal-align: left;
+	margin-left: 22px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 20px;
+	color: #ffffff;
+	text-transform: uppercase;
+	letter-spacing: 1.2px;
+	text-shadow: 0px 2px 4px 1.0 #00000080;
+}
+
+.BuildingStatus
+{
+	horizontal-align: right;
+	vertical-align: center;
+	margin-right: 18px;
+	font-size: 13px;
+	color: #ffffffa0;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+}
+
+.BuildingRowHealth
+{
+	margin-left: 22px;
+	margin-top: 2px;
+	flow-children: right;
+}
+
+.BuildingHealthBar
+{
+	vertical-align: center;
+}
+
+.BuildingHealthBar .BarFill
+{
+	height: 6px;
+	background-color: #7ddc8c;
+}
+
+.BuildingHealthBar .BarEmpty
+{
+	height: 6px;
+	background-color: #ffffff30;
+}
+
+.BuildingRow.Hurt .BuildingHealthBar .BarFill
+{
+	background-color: #f0d080;
+}
+
+.BuildingRow.Critical .BuildingHealthBar .BarFill
+{
+	background-color: #ee5a5a;
+}
+
+.BuildingHealthText
+{
+	vertical-align: center;
+	margin-left: 10px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 16px;
+	color: #f2f4f7;
+}
+
+.BuildHints
+{
+	vertical-align: center;
+	width: 100%;
+	height: 90px;
+	flow-children: right;
+}
+
+.BuildHintHalf
+{
+	width: 50%;
+	height: 100%;
+}
+
+.BuildHint
+{
+	visibility: collapse;
+	vertical-align: center;
+	flow-children: down;
+	opacity: 0.85;
+	transition-property: opacity;
+	transition-duration: 0.12s;
+}
+
+.BuildHint.Shown
+{
+	visibility: visible;
+}
+
+.BuildHintLeft
+{
+	horizontal-align: right;
+	margin-right: 60px;
+}
+
+.BuildHintRight
+{
+	horizontal-align: left;
+	margin-left: 60px;
+}
+
+.BuildHintWord
+{
+	font-family: Stratum2 Medium Condensed;
+	font-size: 15px;
+	color: #ffffff;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	text-shadow: 0px 1px 3px 1.0 #000000c0;
+	transition-property: color;
+	transition-duration: 0.12s;
+}
+
+.BuildHintDetail
+{
+	visibility: collapse;
+	margin-top: 1px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 12px;
+	color: #ffffffb0;
+	text-shadow: 0px 1px 3px 1.0 #000000c0;
+}
+
+.BuildHintWord1
+{
+	visibility: collapse;
+}
+
+.BuildHint.HasWord1 .BuildHintWord1
+{
+	visibility: visible;
+}
+
+.BuildHint.HasDetail .BuildHintDetail
+{
+	visibility: visible;
+}
+
+.BuildHintLeft .BuildHintWord
+{
+	horizontal-align: right;
+	text-align: right;
+}
+
+.BuildHintLeft .BuildHintDetail
+{
+	horizontal-align: right;
+	text-align: right;
+}
+
+.BuildHintRight .BuildHintWord
+{
+	horizontal-align: left;
+	text-align: left;
+}
+
+.BuildHintRight .BuildHintDetail
+{
+	horizontal-align: left;
+	text-align: left;
+}
+
+.BuildHint.Placing .BuildHintWord
+{
+	color: #5ae678;
+}
+
+.BuildHint.Blocked .BuildHintWord
+{
+	color: #ffbe28;
+}
+
+.BuildHint.Full
+{
+	opacity: 0.35;
+}
+
+.BuildHint.Cooldown
+{
+	opacity: 0.35;
 }

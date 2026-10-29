@@ -3,6 +3,7 @@ import type { CSPlayerPawn } from "cs_script/point_script";
 import { LogPrefix, VectorMath, GetPawnName, IsTeammate } from "../bm_core";
 import { EProjectileShape, LaunchProjectile, MovePiercingProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve, ApplyKnockback } from "../bm_combat";
 import type { FProjectile, FPiercingProjectile, FPiercingStep, FDamageCurve, FHitscanHit } from "../bm_combat";
+import { DamageTracedBuilding } from "../bm_buildings";
 import { SpawnBloodSplatter } from "../bm_effects";
 import { BeamerShotgunFalloff, PlayerClass, FireHitscanWeapon, DealShockDamage } from "../bm_classes";
 import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
@@ -13,7 +14,6 @@ export interface FBoxerSettings extends FClassSettings
 {
 	readonly CubeSpeed: number;
 	readonly CubeGravityScale: number;
-	// Half the cube's width, from its centre to each face
 	readonly CubeRadius: number;
 	readonly CubeDamage: number;
 	readonly CubeFalloff: FDamageCurve;
@@ -31,18 +31,18 @@ export interface FCube extends FPiercingProjectile
 const BoxerCubeFalloff: FDamageCurve =
 [
 	{ Distance: 0, Scale: 1.0 },
-	{ Distance: 512, Scale: 1.0 },
+	{ Distance: 512, Scale: 0.75 },
 	{ Distance: 2048, Scale: 0.5 },
 ];
 
 export const BoxerSettings: FBoxerSettings =
 {
-	DisplayName: "Boxer",
+	DisplayName: "Cuber",
 	PickFxTemplate: "boxer_pick_template",
 	Primary: "weapon_m249",
 	Secondary: "weapon_deagle",
 	Melee: "",
-	Health: 150,
+	Health: 180,
 	SizeScale: 1.25,
 	PrimaryLauncher:
 	{
@@ -67,10 +67,10 @@ export const BoxerSettings: FBoxerSettings =
 		ReloadFxTemplate: "boxer_shot_reload_template",
 	},
 
-	CubeSpeed: 1400,
+	CubeSpeed: 800,
 	CubeGravityScale: 0,
 	CubeRadius: 12,
-	CubeDamage: 100,
+	CubeDamage: 150,
 	CubeFalloff: BoxerCubeFalloff,
 	CubeKnockback: 300,
 	CubeLifetime: 5,
@@ -148,6 +148,8 @@ export class BoxerClass extends PlayerClass<FBoxerSettings>
 		}
 		if (Step.WorldHit)
 		{
+			const Distance: number = VectorMath.Size(VectorMath.Subtract(Cube.Position, Cube.Start));
+			DamageTracedBuilding(Step.WorldHit, this.Settings.CubeDamage * EvaluateDamageCurve(this.Settings.CubeFalloff, Distance), Cube.Owner);
 			DestroyProjectile(Cube);
 			return false;
 		}

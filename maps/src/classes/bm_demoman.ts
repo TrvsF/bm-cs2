@@ -61,7 +61,7 @@ export const DemoSettings: FDemoSettings =
 	Secondary: "weapon_deagle",
 	Melee: "",
 	Health: 130,
-	SizeScale: 1.0,
+	SizeScale: 1.2,
 	PrimaryLauncher:
 	{
 		FireInterval: 0.6,
@@ -92,7 +92,7 @@ export const DemoSettings: FDemoSettings =
 	StickyLaunchUp: 150,
 	StickyRadius: 160,
 	StickyDamage: 90,
-	StickyKnockback: 600,
+	StickyKnockback: 450,
 	StickyFalloff: TF2StickyFalloff,
 	StickyFalloffTime: 5,
 	PipeLaunchSpeed: 1337,
@@ -100,7 +100,7 @@ export const DemoSettings: FDemoSettings =
 	PipeRadius: 160,
 	PipeDamage: 75,
 	PipeRolledDamageScale: 0.6,
-	PipeKnockback: 1000,
+	PipeKnockback: 500,
 	PipeFalloff: TF2RocketFalloff,
 	PipeFuseTime: 1.6,
 	PipeBounce:

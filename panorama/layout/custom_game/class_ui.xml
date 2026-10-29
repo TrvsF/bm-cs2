@@ -11,6 +11,23 @@
 			</Panel>
 		</Panel>
 
+		<Panel class="BuildHints" hittest="false">
+			<Panel class="BuildHintHalf" hittest="false">
+				<Panel id="BuildHintLeft" class="BuildHint BuildHintLeft" hittest="false">
+					<Label id="BuildHintLeftWord0" class="BuildHintWord" text="{s:word}" hittest="false" />
+					<Label id="BuildHintLeftWord1" class="BuildHintWord BuildHintWord1" text="{s:word}" hittest="false" />
+					<Label id="BuildHintLeftDetail" class="BuildHintDetail" text="{s:detail}" hittest="false" />
+				</Panel>
+			</Panel>
+			<Panel class="BuildHintHalf" hittest="false">
+				<Panel id="BuildHintRight" class="BuildHint BuildHintRight" hittest="false">
+					<Label id="BuildHintRightWord0" class="BuildHintWord" text="{s:word}" hittest="false" />
+					<Label id="BuildHintRightWord1" class="BuildHintWord BuildHintWord1" text="{s:word}" hittest="false" />
+					<Label id="BuildHintRightDetail" class="BuildHintDetail" text="{s:detail}" hittest="false" />
+				</Panel>
+			</Panel>
+		</Panel>
+
 		<Panel id="PayloadBar" class="PayloadBar" hittest="false">
 			<Panel class="PayloadSide" hittest="false" />
 			<Label id="PayloadSection0Fill" class="PayloadFill" text="{s:fill}" hittest="false" />
@@ -38,45 +55,67 @@
 				<Label class="MenuTitle" text="Select a Class" hittest="false" />
 				<Panel class="ClassList">
 					<Button id="Pick_soldier" class="ClassRow SoldierRow">
-						<Label class="ClassRowName" text="Soldier" hittest="false" />
+						<Panel class="ClassRowHead" hittest="false">
+							<Label class="ClassRowName" text="Soldier" hittest="false" />
+							<Label id="PickStats_soldier" class="ClassRowStats" text="{s:stats}" hittest="false" />
+						</Panel>
 						<Label class="ClassRowInfo" text="RPG &amp; Knife. Use the knife mid-air for massive damage!" hittest="false" />
 					</Button>
 					<Button id="Pick_demo" class="ClassRow DemoRow">
-						<Label class="ClassRowName" text="Demoman" hittest="false" />
+						<Panel class="ClassRowHead" hittest="false">
+							<Label class="ClassRowName" text="Demoman" hittest="false" />
+							<Label id="PickStats_demo" class="ClassRowStats" text="{s:stats}" hittest="false" />
+						</Panel>
 						<Label class="ClassRowInfo" text="Stickies &amp; Pipes. Right-click to detonate the footballs!" hittest="false" />
 					</Button>
 					<Button id="Pick_medic" class="ClassRow MedicRow">
-						<Label class="ClassRowName" text="Medic" hittest="false" />
+						<Panel class="ClassRowHead" hittest="false">
+							<Label class="ClassRowName" text="Medic" hittest="false" />
+							<Label id="PickStats_medic" class="ClassRowStats" text="{s:stats}" hittest="false" />
+						</Panel>
 						<Label class="ClassRowInfo" text="Medic!" hittest="false" />
 					</Button>
 					<Button id="Pick_railer" class="ClassRow RailerRow">
-						<Label class="ClassRowName" text="Railer" hittest="false" />
+						<Panel class="ClassRowHead" hittest="false">
+							<Label class="ClassRowName" text="Railer" hittest="false" />
+							<Label id="PickStats_railer" class="ClassRowStats" text="{s:stats}" hittest="false" />
+						</Panel>
 						<Label class="ClassRowInfo" text="Pea Shooter &amp; Beam Cannon. Try jumping with the beam!" hittest="false" />
 					</Button>
 					<Button id="Pick_beamer" class="ClassRow BeamerRow">
-						<Label class="ClassRowName" text="Beamer" hittest="false" />
+						<Panel class="ClassRowHead" hittest="false">
+							<Label class="ClassRowName" text="Beamer" hittest="false" />
+							<Label id="PickStats_beamer" class="ClassRowStats" text="{s:stats}" hittest="false" />
+						</Panel>
 						<Label class="ClassRowInfo" text="Minigun &amp; Shotguns. You're so big owo!" hittest="false" />
 					</Button>
 					<Button id="Pick_boxer" class="ClassRow BoxerRow">
-						<Label class="ClassRowName" text="Boxer" hittest="false" />
+						<Panel class="ClassRowHead" hittest="false">
+							<Label class="ClassRowName" text="Cuber" hittest="false" />
+							<Label id="PickStats_boxer" class="ClassRowStats" text="{s:stats}" hittest="false" />
+						</Panel>
 						<Label class="ClassRowInfo" text="Cubes &amp; Crap. The cubes feast on all!" hittest="false" />
 					</Button>
 					<Button id="Pick_shocker" class="ClassRow ShockerRow">
-						<Label class="ClassRowName" text="Shocker" hittest="false" />
+						<Panel class="ClassRowHead" hittest="false">
+							<Label class="ClassRowName" text="Shocker" hittest="false" />
+							<Label id="PickStats_shocker" class="ClassRowStats" text="{s:stats}" hittest="false" />
+						</Panel>
 						<Label class="ClassRowInfo" text="Ball &amp; Beam." hittest="false" />
 					</Button>
 					<Button id="Pick_shrinker" class="ClassRow ShrinkerRow">
-						<Label class="ClassRowName" text="Shrinker" hittest="false" />
-						<Label class="ClassRowInfo" text="Glock &amp; Knife. Right-click the knife to go small." hittest="false" />
+						<Panel class="ClassRowHead" hittest="false">
+							<Label class="ClassRowName" text="Shrinker" hittest="false" />
+							<Label id="PickStats_shrinker" class="ClassRowStats" text="{s:stats}" hittest="false" />
+						</Panel>
+						<Label class="ClassRowInfo" text="Trapper. Left-click to lay a trap, Right-click to setup teleporters &amp; Knife. Right-click to toggle shrink" hittest="false" />
 					</Button>
-					<Button id="Pick_gunner" class="ClassRow GunnerRow">
-						<Label class="ClassRowName" text="Gunner" hittest="false" />
-						<Label class="ClassRowInfo" text="Mag-7 &amp; Knife." hittest="false" />
-					</Button>
-				</Panel>
-				<Panel class="MenuFooter">
-					<Button id="CloseMenu" class="FooterButton">
-						<Label class="FooterButtonText" text="Close" hittest="false" />
+					<Button id="Pick_builder" class="ClassRow BuilderRow">
+						<Panel class="ClassRowHead" hittest="false">
+							<Label class="ClassRowName" text="Builder" hittest="false" />
+							<Label id="PickStats_builder" class="ClassRowStats" text="{s:stats}" hittest="false" />
+						</Panel>
+						<Label class="ClassRowInfo" text="SHotgun &amp; Wrench. Left-click sniper turret, Right-click ppsh turret" hittest="false" />
 					</Button>
 				</Panel>
 			</Panel>
@@ -86,6 +125,61 @@
 					<Label id="ClassName" class="ClassName" text="{s:classname}" hittest="false" />
 					<Label class="ClassHint HintClosed" text="E : Switch" hittest="false" />
 					<Label class="ClassHint HintOpen" text="E : Close" hittest="false" />
+				</Panel>
+			</Panel>
+
+			<Panel id="BuildingPanel" class="BuildingPanel" hittest="false">
+				<Panel id="BuildingRow0" class="BuildingRow" hittest="false">
+					<Panel class="BuildingRowTop" hittest="false">
+						<Label id="BuildingName0" class="BuildingName" text="{s:name}" hittest="false" />
+						<Label id="BuildingStatus0" class="BuildingStatus" text="{s:status}" hittest="false" />
+					</Panel>
+					<Panel class="BuildingRowHealth" hittest="false">
+						<Panel id="BuildingHealth0" class="Bar BuildingHealthBar" hittest="false">
+							<Label id="BuildingHealth0Fill" class="BarFill" text="{s:fill}" hittest="false" />
+							<Label id="BuildingHealth0Empty" class="BarEmpty" text="{s:empty}" hittest="false" />
+						</Panel>
+						<Label id="BuildingHealthText0" class="BuildingHealthText" text="{s:health}" hittest="false" />
+					</Panel>
+				</Panel>
+				<Panel id="BuildingRow1" class="BuildingRow" hittest="false">
+					<Panel class="BuildingRowTop" hittest="false">
+						<Label id="BuildingName1" class="BuildingName" text="{s:name}" hittest="false" />
+						<Label id="BuildingStatus1" class="BuildingStatus" text="{s:status}" hittest="false" />
+					</Panel>
+					<Panel class="BuildingRowHealth" hittest="false">
+						<Panel id="BuildingHealth1" class="Bar BuildingHealthBar" hittest="false">
+							<Label id="BuildingHealth1Fill" class="BarFill" text="{s:fill}" hittest="false" />
+							<Label id="BuildingHealth1Empty" class="BarEmpty" text="{s:empty}" hittest="false" />
+						</Panel>
+						<Label id="BuildingHealthText1" class="BuildingHealthText" text="{s:health}" hittest="false" />
+					</Panel>
+				</Panel>
+				<Panel id="BuildingRow2" class="BuildingRow" hittest="false">
+					<Panel class="BuildingRowTop" hittest="false">
+						<Label id="BuildingName2" class="BuildingName" text="{s:name}" hittest="false" />
+						<Label id="BuildingStatus2" class="BuildingStatus" text="{s:status}" hittest="false" />
+					</Panel>
+					<Panel class="BuildingRowHealth" hittest="false">
+						<Panel id="BuildingHealth2" class="Bar BuildingHealthBar" hittest="false">
+							<Label id="BuildingHealth2Fill" class="BarFill" text="{s:fill}" hittest="false" />
+							<Label id="BuildingHealth2Empty" class="BarEmpty" text="{s:empty}" hittest="false" />
+						</Panel>
+						<Label id="BuildingHealthText2" class="BuildingHealthText" text="{s:health}" hittest="false" />
+					</Panel>
+				</Panel>
+				<Panel id="BuildingRow3" class="BuildingRow" hittest="false">
+					<Panel class="BuildingRowTop" hittest="false">
+						<Label id="BuildingName3" class="BuildingName" text="{s:name}" hittest="false" />
+						<Label id="BuildingStatus3" class="BuildingStatus" text="{s:status}" hittest="false" />
+					</Panel>
+					<Panel class="BuildingRowHealth" hittest="false">
+						<Panel id="BuildingHealth3" class="Bar BuildingHealthBar" hittest="false">
+							<Label id="BuildingHealth3Fill" class="BarFill" text="{s:fill}" hittest="false" />
+							<Label id="BuildingHealth3Empty" class="BarEmpty" text="{s:empty}" hittest="false" />
+						</Panel>
+						<Label id="BuildingHealthText3" class="BuildingHealthText" text="{s:health}" hittest="false" />
+					</Panel>
 				</Panel>
 			</Panel>
 

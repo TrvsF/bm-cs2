@@ -1,11 +1,13 @@
 import { CSGearSlot, CSDamageTypes, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { VectorMath, GetTeamColor, GetPlayerSlot, IsWeapon } from "./bm_core";
+import { VectorMath, GetTeamColor, GetPlayerSlot, IsWeapon, IsKnife } from "./bm_core";
 import type { FVector, FRotator, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
 import type { FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
 import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
+import { DamageBuilding } from "./bm_buildings";
+import type { FBuildKeys } from "./bm_buildings";
 import type { FLauncherSettings, FLauncherShot } from "./bm_launcher";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -21,7 +23,7 @@ export enum EPlayerClass
 	Boxer = "boxer",
 	Shocker = "shocker",
 	Shrinker = "shrinker",
-	Gunner = "gunner",
+	Gunner = "builder",
 }
 
 export type EPlayableClass = Exclude<EPlayerClass, EPlayerClass.None>;
@@ -38,6 +40,9 @@ export interface FClassSettings
 	readonly PrimaryLauncher: FLauncherSettings | undefined;
 	readonly SecondaryLauncher: FLauncherSettings | undefined;
 	readonly bStartWithMelee?: boolean;
+	readonly bStartWithSecondary?: boolean;
+	readonly MeleeDamage?: number;
+	readonly RepairPerHit?: number;
 }
 
 export interface FHudCounter
@@ -89,6 +94,7 @@ const DefaultSizeScale: number = 1.0;
 const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
 const NoClassStrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.GRENADES];
 const NoClassMelee: string = "weapon_knife";
+const FallbackMelee: string = "weapon_knife";
 const PickFxLifetime: number = 3;
 
 export const BeamStartDrop: FVector = { x: 0, y: 0, z: 12 };
@@ -147,6 +153,10 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 		if (this.Settings.Melee !== "")
 		{
 			Pawn.GiveNamedItem(this.Settings.Melee);
+			if (!Pawn.FindWeaponBySlot(CSGearSlot.KNIFE))
+			{
+				Pawn.GiveNamedItem(FallbackMelee);
+			}
 		}
 
 		const bHasSecondary: boolean = this.Settings.Secondary !== "" && this.Settings.Secondary !== this.Settings.Primary;
@@ -166,10 +176,12 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 			EquipLauncher(Pawn, Slot, this.Settings.Secondary, this.Settings.SecondaryLauncher);
 		}
 
-		const Melee: CSWeaponBase | undefined = this.Settings.bStartWithMelee ? Pawn.FindWeaponBySlot(CSGearSlot.KNIFE) : undefined;
-		if (Melee)
+		const StartWeapon: CSWeaponBase | undefined = this.Settings.bStartWithMelee
+			? Pawn.FindWeaponBySlot(CSGearSlot.KNIFE)
+			: this.Settings.bStartWithSecondary && bHasSecondary ? Pawn.FindWeapon(this.Settings.Secondary) : undefined;
+		if (StartWeapon)
 		{
-			Pawn.SwitchToWeapon(Melee);
+			Pawn.SwitchToWeapon(StartWeapon);
 		}
 
 		this.OnLoadoutApplied(Pawn);
@@ -261,6 +273,10 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 	// Override to change or block damage dealt by this class
 	public ModifyOutgoingDamage(Event: FModifyDamageEvent): FModifyDamageResult
 	{
+		if (this.Settings.MeleeDamage !== undefined && IsKnife(Event.weapon))
+		{
+			return this.Settings.MeleeDamage > 0 ? { damage: this.Settings.MeleeDamage } : { abort: true };
+		}
 		if (this.IsPrimaryBulletDamage(Event) || this.IsSecondaryBulletDamage(Event))
 		{
 			return { abort: true };
@@ -271,6 +287,12 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 	public ModifyAnyDamage(Event: FModifyDamageEvent): FModifyDamageResult
 	{
 		return;
+	}
+
+	// Override for a class that builds: what each mouse button builds right now, or undefined while its build tool isn't out
+	public GetBuildKeys(Pawn: CSPlayerPawn): FBuildKeys | undefined
+	{
+		return undefined;
 	}
 
 	// Override to put a counter on this class's HUD. undefined = none.
@@ -298,10 +320,19 @@ export function FireHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeapo
 {
 	const Start: FVector = Shooter.GetEyePosition();
 	const Aim: FRotator = Shooter.GetEyeAngles();
+	FireHitscan(Shooter, Settings, Weapon, Start, Aim, VectorMath.Subtract(Start, BeamStartDrop), Intercept);
+
+	const Backwards: FVector = VectorMath.Scale(VectorMath.GetForwardVector(Aim), -1);
+	ApplyKnockback(Shooter, Backwards, Settings.Damage * Settings.Pellets, Settings.SelfKnockback, true);
+}
+
+export function FireHitscan(Attacker: CSPlayerPawn, Settings: FHitscanWeaponSettings, Weapon: CSWeaponBase | undefined, Start: FVector, Aim: FRotator, BeamStart: FVector, Intercept?: (Start: FVector, End: FVector) => FVector | undefined): number
+{
+	let DamageTotal: number = 0;
 	for (let Pellet: number = 0; Pellet < Settings.Pellets; Pellet++)
 	{
 		const Direction: FVector = GetSpreadDirection(Aim, Settings.Spread);
-		const Result: FHitscanResult = TraceHitscanWeapon(Shooter, Settings, Start, Direction);
+		const Result: FHitscanResult = TraceHitscanWeapon(Attacker, Settings, Start, Direction);
 		const End: FVector = (Intercept ? Intercept(Start, Result.End) : undefined) ?? Result.End;
 		const MaxDistance: number = VectorMath.Size(VectorMath.Subtract(End, Start));
 		for (const Hit of Result.Hits)
@@ -316,24 +347,29 @@ export function FireHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeapo
 			const Damage: number = Settings.Damage * RangeScale * (bHeadshot ? Settings.HeadshotMultiplier : 1);
 
 			ApplyKnockback(Hit.Victim, Direction, Damage, Settings.Knockback, false);
-			if (DealShockDamage(Shooter, Hit.Victim, Damage, Weapon) > 0 && Settings.bBloodSplatter)
+			const DamageDealt: number = DealShockDamage(Attacker, Hit.Victim, Damage, Weapon);
+			DamageTotal += DamageDealt;
+			if (DamageDealt > 0 && Settings.bBloodSplatter)
 			{
 				SpawnBloodSplatter(Start, Hit.Victim);
 			}
 		}
+		const BuildingDistance: number = VectorMath.Size(VectorMath.Subtract(Result.End, Start));
+		if (Result.HitBuilding && BuildingDistance <= MaxDistance)
+		{
+			DamageBuilding(Result.HitBuilding, Settings.Damage * EvaluateDamageCurve(Settings.Falloff, BuildingDistance), Attacker);
+		}
 
 		if (!Settings.bHeldBeam)
 		{
-			SpawnBeam(Settings.BeamTemplate, Settings.BeamEndName, VectorMath.Subtract(Start, BeamStartDrop), End, Settings.BeamLifetime, GetTeamColor(Shooter));
+			SpawnBeam(Settings.BeamTemplate, Settings.BeamEndName, BeamStart, End, Settings.BeamLifetime, GetTeamColor(Attacker));
 		}
 		if (Settings.ImpactTemplate !== "")
 		{
 			SpawnTemporaryTemplate(Settings.ImpactTemplate, End, Settings.ImpactLifetime);
 		}
 	}
-
-	const Backwards: FVector = VectorMath.Scale(VectorMath.GetForwardVector(Aim), -1);
-	ApplyKnockback(Shooter, Backwards, Settings.Damage * Settings.Pellets, Settings.SelfKnockback, true);
+	return DamageTotal;
 }
 
 export function TraceHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeaponSettings, Start: FVector, Direction: FVector): FHitscanResult

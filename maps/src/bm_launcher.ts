@@ -1,4 +1,4 @@
-import { Instance, GameRules, CSInputs } from "cs_script/point_script";
+import { Instance, GameRules, CSInputs, CSGearSlot } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
 import { TickInterval } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
@@ -12,11 +12,9 @@ export interface FLauncherSettings
 	readonly ReloadFirstTime: number;
 	readonly ReloadEachTime: number;
 	readonly ChargeTime: number;
-	// Seconds after the weapon is pulled out before it can fire or reload
 	readonly DeployTime: number;
 	readonly FireFxTemplate: string;
 	readonly ReloadFxTemplate: string;
-	// Set to give the weapon a second fire mode on ATTACK2, drawing from the same clip
 	readonly AltFireInterval?: number;
 	readonly AltFireFxTemplate?: string;
 }
@@ -53,6 +51,7 @@ interface FLauncherState
 
 const FireFxLifetime: number = 3;
 const ReloadFxLifetime: number = 3;
+const RealGunSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL];
 
 const GLaunchers: Map<number, FLauncherState[]> = new Map<number, FLauncherState[]>();
 
@@ -190,7 +189,6 @@ function GetChargeFraction(State: FLauncherState): number
 	return Math.min(1, (Instance.GetGameTime() - State.ChargeStartTime) / State.Settings.ChargeTime);
 }
 
-// How far through loading the next round (or the whole clip) the reload is
 function GetReloadFraction(State: FLauncherState): number
 {
 	if (State.NextReloadTime === undefined)
@@ -243,13 +241,30 @@ function CanReload(State: FLauncherState): boolean
 	return State.Clip < State.Settings.ClipSize;
 }
 
+export function EmptyRealGuns(Pawn: CSPlayerPawn): void
+{
+	for (const GearSlot of RealGunSlots)
+	{
+		const Weapon: CSWeaponBase | undefined = Pawn.FindWeaponBySlot(GearSlot);
+		if (Weapon)
+		{
+			EmptyGun(Weapon);
+		}
+	}
+}
+
 function EmptyRealGun(Pawn: CSPlayerPawn, WeaponName: string): CSWeaponBase | undefined
 {
 	const Weapon: CSWeaponBase | undefined = Pawn.FindWeapon(WeaponName);
-	if (!Weapon)
+	if (Weapon)
 	{
-		return undefined;
+		EmptyGun(Weapon);
 	}
+	return Weapon;
+}
+
+function EmptyGun(Weapon: CSWeaponBase): void
+{
 	if (Weapon.GetClipAmmo() !== 0)
 	{
 		Weapon.SetClipAmmo(0);
@@ -258,7 +273,6 @@ function EmptyRealGun(Pawn: CSPlayerPawn, WeaponName: string): CSWeaponBase | un
 	{
 		Weapon.SetReserveAmmo(0);
 	}
-	return Weapon;
 }
 
 function SpawnFireFx(Pawn: CSPlayerPawn, TemplateName: string): void

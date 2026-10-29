@@ -34,9 +34,10 @@ export const SpawnZoneSettings: FSpawnZoneSettings =
 };
 
 const RescanInterval: number = 1;
+const TouchRefreshDelay: number = 0.05;
 const SafeHistoryTicks: number = 8;
 
-const GZones: FSpawnZone[] = [];
+let GZones: FSpawnZone[] = [];
 const GVisitors: Map<number, FZoneVisitor> = new Map<number, FZoneVisitor>();
 let GNextScanTime: number = 0;
 let GLastScanReport: string = "";
@@ -93,6 +94,14 @@ export function ForgetSpawnZoneHistory(Slot: number): void
 	GVisitors.delete(Slot);
 }
 
+export function RefreshSpawnZoneTouches(): void
+{
+	for (const Zone of GZones)
+	{
+		RefreshTouches(Zone);
+	}
+}
+
 export function IsInFriendlySpawnZone(Pawn: CSPlayerPawn, Slot: number): boolean
 {
 	const Team: number = Pawn.GetTeamNumber();
@@ -104,6 +113,10 @@ export function IsInFriendlySpawnZone(Pawn: CSPlayerPawn, Slot: number): boolean
 
 function ScanSpawnZones(): void
 {
+	GZones = GZones.filter((Zone: FSpawnZone): boolean =>
+	{
+		return Zone.Entity.IsValid();
+	});
 	AddZones(SpawnZoneSettings.TerroristZoneName, ETeam.Terrorist);
 	AddZones(SpawnZoneSettings.CounterTerroristZoneName, ETeam.CounterTerrorist);
 
@@ -146,7 +159,18 @@ function AddZones(Name: string, Team: ETeam): void
 		{
 			Zone.Touching.delete(GetToucherSlot(InputData.activator));
 		});
+		RefreshTouches(Zone);
 	}
+}
+
+function RefreshTouches(Zone: FSpawnZone): void
+{
+	if (!Zone.Entity.IsValid())
+	{
+		return;
+	}
+	Instance.EntFireAtTarget({ target: Zone.Entity, input: "Disable" });
+	Instance.EntFireAtTarget({ target: Zone.Entity, input: "Enable", delay: TouchRefreshDelay });
 }
 
 function CountZones(Team: ETeam): number

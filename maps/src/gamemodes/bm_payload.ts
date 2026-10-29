@@ -87,7 +87,6 @@ const CartClasses: readonly string[] = ["prop_dynamic", "prop_dynamic_override"]
 const RescanInterval: number = 1;
 const TrackDebugColor: FColor = { r: 240, g: 200, b: 60 };
 const CheckpointDebugColor: FColor = { r: 120, g: 230, b: 120 };
-const CartDebugColor: FColor = { r: 220, g: 60, b: 50 };
 
 let GTrack: FPayloadTrack | undefined = undefined;
 let GCart: FPayloadCart | undefined = undefined;
@@ -491,10 +490,33 @@ function BuildTrack(PointEntities: Entity[]): FPayloadTrack
 
 function MakeCart(CartEntity: Entity, Track: FPayloadTrack): FPayloadCart
 {
-	const FirstDirection: FVector = Track.Directions[0] ?? { x: 1, y: 0, z: 0 };
-	const TrackRotation: FRotationMatrix = RotationMath.FromRotator(VectorMath.GetRotation(FirstDirection));
+	const Here: number = FindNearestTrackDistance(Track, CartEntity.GetAbsOrigin());
+	const TrackRotation: FRotationMatrix = RotationMath.FromRotator(VectorMath.GetRotation(GetTrackDirection(Track, Here)));
 	const PlacedRotation: FRotationMatrix = RotationMath.FromRotator(CartEntity.GetAbsAngles());
 	return { Entity: CartEntity, LocalRotation: RotationMath.Multiply(RotationMath.Inverse(TrackRotation), PlacedRotation) };
+}
+
+function FindNearestTrackDistance(Track: FPayloadTrack, Position: FVector): number
+{
+	let Best: number = 0;
+	let BestGap: number = Infinity;
+	for (let Index: number = 0; Index < Track.Directions.length; Index++)
+	{
+		const Start: FVector | undefined = Track.Points[Index];
+		const End: FVector | undefined = Track.Points[Index + 1];
+		if (!Start || !End)
+		{
+			continue;
+		}
+		const Nearest: FVector = VectorMath.ClosestPointOnSegment(Position, Start, End);
+		const Gap: number = VectorMath.Size(VectorMath.Subtract(Position, Nearest));
+		if (Gap < BestGap)
+		{
+			BestGap = Gap;
+			Best = (Track.Distances[Index] ?? 0) + VectorMath.Size(VectorMath.Subtract(Nearest, Start));
+		}
+	}
+	return Best;
 }
 
 function GetSegmentIndex(Track: FPayloadTrack, Distance: number): number
@@ -587,5 +609,4 @@ function DrawTrack(Track: FPayloadTrack): void
 	{
 		Instance.DebugSphere({ center: GetTrackPosition(Track, CheckpointDistance), radius: 16, duration: TickInterval * 2, color: CheckpointDebugColor });
 	}
-	Instance.DebugSphere({ center: GetTrackPosition(Track, GDistance), radius: PayloadSettings.PushRadius, duration: TickInterval * 2, color: CartDebugColor });
 }
