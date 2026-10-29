@@ -40,6 +40,7 @@ export interface FClassSettings
 	readonly PrimaryLauncher: FLauncherSettings | undefined;
 	readonly SecondaryLauncher: FLauncherSettings | undefined;
 	readonly bStartWithMelee?: boolean;
+	readonly bStartWithSecondary?: boolean;
 	readonly MeleeDamage?: number;
 	readonly RepairPerHit?: number;
 }
@@ -175,10 +176,12 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 			EquipLauncher(Pawn, Slot, this.Settings.Secondary, this.Settings.SecondaryLauncher);
 		}
 
-		const Melee: CSWeaponBase | undefined = this.Settings.bStartWithMelee ? Pawn.FindWeaponBySlot(CSGearSlot.KNIFE) : undefined;
-		if (Melee)
+		const StartWeapon: CSWeaponBase | undefined = this.Settings.bStartWithMelee
+			? Pawn.FindWeaponBySlot(CSGearSlot.KNIFE)
+			: this.Settings.bStartWithSecondary && bHasSecondary ? Pawn.FindWeapon(this.Settings.Secondary) : undefined;
+		if (StartWeapon)
 		{
-			Pawn.SwitchToWeapon(Melee);
+			Pawn.SwitchToWeapon(StartWeapon);
 		}
 
 		this.OnLoadoutApplied(Pawn);

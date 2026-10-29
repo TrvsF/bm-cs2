@@ -1769,9 +1769,9 @@ var PlayerClass = class {
     if (bHasSecondary && this.Settings.SecondaryLauncher) {
       EquipLauncher(Pawn, Slot, this.Settings.Secondary, this.Settings.SecondaryLauncher);
     }
-    const Melee = this.Settings.bStartWithMelee ? Pawn.FindWeaponBySlot(CSGearSlot2.KNIFE) : void 0;
-    if (Melee) {
-      Pawn.SwitchToWeapon(Melee);
+    const StartWeapon = this.Settings.bStartWithMelee ? Pawn.FindWeaponBySlot(CSGearSlot2.KNIFE) : this.Settings.bStartWithSecondary && bHasSecondary ? Pawn.FindWeapon(this.Settings.Secondary) : void 0;
+    if (StartWeapon) {
+      Pawn.SwitchToWeapon(StartWeapon);
     }
     this.OnLoadoutApplied(Pawn);
   }
@@ -2023,7 +2023,7 @@ var DemoSettings = {
   StickyLaunchUp: 150,
   StickyRadius: 160,
   StickyDamage: 90,
-  StickyKnockback: 600,
+  StickyKnockback: 450,
   StickyFalloff: TF2StickyFalloff,
   StickyFalloffTime: 5,
   PipeLaunchSpeed: 1337,
@@ -2031,7 +2031,7 @@ var DemoSettings = {
   PipeRadius: 160,
   PipeDamage: 75,
   PipeRolledDamageScale: 0.6,
-  PipeKnockback: 1e3,
+  PipeKnockback: 500,
   PipeFalloff: TF2RocketFalloff,
   PipeFuseTime: 1.6,
   PipeBounce: {
@@ -2440,6 +2440,7 @@ var RailerSettings = {
   Primary: "weapon_famas",
   Secondary: "weapon_revolver",
   Melee: "",
+  bStartWithSecondary: true,
   Health: 110,
   SizeScale: 0.85,
   PrimaryLauncher: {
@@ -2497,9 +2498,12 @@ var RailerSettings = {
     BeamLifetime: 0.4,
     ImpactTemplate: "rail_impact_template",
     ImpactLifetime: 2
-  }
+  },
+  ChargeBeamTemplate: "rail_charge_beam_template",
+  ChargeBeamEndName: "rail_charge_beam_end"
 };
 var RailerClass = class extends PlayerClass {
+  ChargeBeams = /* @__PURE__ */ new Map();
   constructor() {
     super(RailerSettings);
   }
@@ -2508,6 +2512,38 @@ var RailerClass = class extends PlayerClass {
   }
   OnSecondaryFire(Pawn, Slot, Now) {
     FireHitscanWeapon(Pawn, this.Settings.Railgun, Pawn.FindWeapon(this.Settings.Secondary));
+  }
+  TickPlayer(Pawn, Slot, Now, DeltaTime) {
+    const Ammo = GetLauncherAmmo(Pawn, Slot);
+    const bCharging = Ammo !== void 0 && Ammo.ChargeFraction > 0 && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Secondary);
+    if (!bCharging) {
+      this.StopChargeBeam(Slot);
+      return;
+    }
+    const Start = Pawn.GetEyePosition();
+    const End = TraceHitscanWeapon(Pawn, this.Settings.Railgun, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
+    const BeamStart = VectorMath.Subtract(Start, BeamStartDrop);
+    const Beam = this.ChargeBeams.get(Slot);
+    if (Beam) {
+      MoveHeldBeam(Beam, BeamStart, End);
+    } else {
+      this.ChargeBeams.set(Slot, SpawnHeldBeam(this.Settings.ChargeBeamTemplate, this.Settings.ChargeBeamEndName, BeamStart, End, GetTeamColor(Pawn)));
+    }
+  }
+  OnRoundStart() {
+    for (const Slot of [...this.ChargeBeams.keys()]) {
+      this.StopChargeBeam(Slot);
+    }
+  }
+  ClearPlayer(Slot) {
+    this.StopChargeBeam(Slot);
+  }
+  StopChargeBeam(Slot) {
+    const Beam = this.ChargeBeams.get(Slot);
+    if (Beam) {
+      RemoveHeldBeam(Beam);
+      this.ChargeBeams.delete(Slot);
+    }
   }
 };
 
@@ -3158,7 +3194,7 @@ var GunnerSettings = {
     bPierces: false,
     Falloff: BeamerShotgunFalloff,
     Knockback: 250,
-    SelfKnockback: 120,
+    SelfKnockback: 150,
     bBloodSplatter: true,
     bHeldBeam: false,
     BeamTemplate: "gunner_shot_tracer_template",
@@ -3925,6 +3961,7 @@ var SpawnZoneSettings = {
   PushOutSpeed: 250
 };
 var RescanInterval2 = 1;
+var TouchRefreshDelay = 0.05;
 var SafeHistoryTicks = 8;
 var GZones = [];
 var GVisitors = /* @__PURE__ */ new Map();
@@ -3964,6 +4001,11 @@ function ForgetSpawnZonePlayer(Slot) {
 function ForgetSpawnZoneHistory(Slot) {
   GVisitors.delete(Slot);
 }
+function RefreshSpawnZoneTouches() {
+  for (const Zone of GZones) {
+    RefreshTouches(Zone);
+  }
+}
 function IsInFriendlySpawnZone(Pawn, Slot) {
   const Team = Pawn.GetTeamNumber();
   return GZones.some((Zone) => {
@@ -3971,6 +4013,9 @@ function IsInFriendlySpawnZone(Pawn, Slot) {
   });
 }
 function ScanSpawnZones() {
+  GZones = GZones.filter((Zone) => {
+    return Zone.Entity.IsValid();
+  });
   AddZones(SpawnZoneSettings.TerroristZoneName, 2 /* Terrorist */);
   AddZones(SpawnZoneSettings.CounterTerroristZoneName, 3 /* CounterTerrorist */);
   const TerroristZones = CountZones(2 /* Terrorist */);
@@ -4000,7 +4045,15 @@ function AddZones(Name, Team) {
     Instance13.ConnectOutput(Ent, "OnEndTouch", (InputData) => {
       Zone.Touching.delete(GetToucherSlot(InputData.activator));
     });
+    RefreshTouches(Zone);
   }
+}
+function RefreshTouches(Zone) {
+  if (!Zone.Entity.IsValid()) {
+    return;
+  }
+  Instance13.EntFireAtTarget({ target: Zone.Entity, input: "Disable" });
+  Instance13.EntFireAtTarget({ target: Zone.Entity, input: "Enable", delay: TouchRefreshDelay });
 }
 function CountZones(Team) {
   return GZones.filter((Zone) => {
@@ -4696,6 +4749,7 @@ function HandlePlayerReset(Event) {
   }
   ClearPlayer(Slot);
   ForgetSpawnZoneHistory(Slot);
+  RefreshSpawnZoneTouches();
   GActiveMode.OnPlayerSpawn(Pawn, Slot);
   AssignRandomBotClass(Pawn, Slot);
   const bHadClass = GClassBySlot.has(Slot);
@@ -4703,7 +4757,7 @@ function HandlePlayerReset(Event) {
   RefreshClassUi(Pawn, Slot);
   const PlayerClass3 = GClassBySlot.get(Slot);
   SetTimer(0.1, () => {
-    if (!Pawn.IsValid() || !Pawn.IsAlive()) {
+    if (!Pawn.IsValid() || !Pawn.IsAlive() || GClassBySlot.get(Slot) !== PlayerClass3) {
       return;
     }
     if (PlayerClass3 === void 0) {

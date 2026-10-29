@@ -1,6 +1,12 @@
 import type { CSPlayerPawn } from "cs_script/point_script";
+import { VectorMath, GetTeamColor, IsWeapon } from "../bm_core";
+import type { FVector } from "../bm_core";
 import type { FDamageCurve } from "../bm_combat";
-import { PlayerClass, FireHitscanWeapon } from "../bm_classes";
+import { SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam } from "../bm_effects";
+import type { FHeldBeam } from "../bm_effects";
+import { GetLauncherAmmo } from "../bm_launcher";
+import type { FLauncherAmmo } from "../bm_launcher";
+import { BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon } from "../bm_classes";
 import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -9,6 +15,8 @@ export interface FRailerSettings extends FClassSettings
 {
 	readonly PPsh: FHitscanWeaponSettings;
 	readonly Railgun: FHitscanWeaponSettings;
+	readonly ChargeBeamTemplate: string;
+	readonly ChargeBeamEndName: string;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,6 +42,7 @@ export const RailerSettings: FRailerSettings =
 	Primary: "weapon_famas",
 	Secondary: "weapon_revolver",
 	Melee: "",
+	bStartWithSecondary: true,
 	Health: 110,
 	SizeScale: 0.85,
 	PrimaryLauncher:
@@ -98,12 +107,17 @@ export const RailerSettings: FRailerSettings =
 		ImpactTemplate: "rail_impact_template",
 		ImpactLifetime: 2,
 	},
+
+	ChargeBeamTemplate: "rail_charge_beam_template",
+	ChargeBeamEndName: "rail_charge_beam_end",
 };
 
 // Railer //////////////////////////////////////////////////////////////////////////////////////////
 
 export class RailerClass extends PlayerClass<FRailerSettings>
 {
+	private ChargeBeams: Map<number, FHeldBeam> = new Map<number, FHeldBeam>();
+
 	constructor()
 	{
 		super(RailerSettings);
@@ -117,5 +131,52 @@ export class RailerClass extends PlayerClass<FRailerSettings>
 	public override OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
 		FireHitscanWeapon(Pawn, this.Settings.Railgun, Pawn.FindWeapon(this.Settings.Secondary));
+	}
+
+	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
+	{
+		const Ammo: FLauncherAmmo | undefined = GetLauncherAmmo(Pawn, Slot);
+		const bCharging: boolean = Ammo !== undefined && Ammo.ChargeFraction > 0 && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Secondary);
+		if (!bCharging)
+		{
+			this.StopChargeBeam(Slot);
+			return;
+		}
+
+		const Start: FVector = Pawn.GetEyePosition();
+		const End: FVector = TraceHitscanWeapon(Pawn, this.Settings.Railgun, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
+		const BeamStart: FVector = VectorMath.Subtract(Start, BeamStartDrop);
+		const Beam: FHeldBeam | undefined = this.ChargeBeams.get(Slot);
+		if (Beam)
+		{
+			MoveHeldBeam(Beam, BeamStart, End);
+		}
+		else
+		{
+			this.ChargeBeams.set(Slot, SpawnHeldBeam(this.Settings.ChargeBeamTemplate, this.Settings.ChargeBeamEndName, BeamStart, End, GetTeamColor(Pawn)));
+		}
+	}
+
+	public override OnRoundStart(): void
+	{
+		for (const Slot of [...this.ChargeBeams.keys()])
+		{
+			this.StopChargeBeam(Slot);
+		}
+	}
+
+	public override ClearPlayer(Slot: number): void
+	{
+		this.StopChargeBeam(Slot);
+	}
+
+	private StopChargeBeam(Slot: number): void
+	{
+		const Beam: FHeldBeam | undefined = this.ChargeBeams.get(Slot);
+		if (Beam)
+		{
+			RemoveHeldBeam(Beam);
+			this.ChargeBeams.delete(Slot);
+		}
 	}
 }

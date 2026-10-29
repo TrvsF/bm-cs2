@@ -26,7 +26,7 @@ import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadCl
 import { TickLauncher, ClearLauncher, GetLauncherAmmo, EmptyRealGuns } from "./bm_launcher";
 import type { FLauncherShot } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
-import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone } from "./bm_spawnzones";
+import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone, RefreshSpawnZoneTouches } from "./bm_spawnzones";
 import { TickBuildings, ClearBuildings, RemoveBuildings, GetBuildingHudRows, GetBuildHints, RepairBuildingInReach } from "./bm_buildings";
 import type { FBuildKeys } from "./bm_buildings";
 import { GameMode } from "./bm_gamemode";
@@ -170,6 +170,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 
 	ClearPlayer(Slot);
 	ForgetSpawnZoneHistory(Slot);
+	RefreshSpawnZoneTouches();
 	GActiveMode.OnPlayerSpawn(Pawn, Slot);
 	AssignRandomBotClass(Pawn, Slot);
 	const bHadClass: boolean = GClassBySlot.has(Slot);
@@ -179,7 +180,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 
 	SetTimer(0.1, (): void =>
 	{
-		if (!Pawn.IsValid() || !Pawn.IsAlive())
+		if (!Pawn.IsValid() || !Pawn.IsAlive() || GClassBySlot.get(Slot) !== PlayerClass)
 		{
 			return;
 		}

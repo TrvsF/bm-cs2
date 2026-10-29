@@ -72,7 +72,7 @@ export const GunnerSettings: FGunnerSettings =
 		bPierces: false,
 		Falloff: BeamerShotgunFalloff,
 		Knockback: 250,
-		SelfKnockback: 120,
+		SelfKnockback: 150,
 		bBloodSplatter: true,
 		bHeldBeam: false,
 		BeamTemplate: "gunner_shot_tracer_template",
