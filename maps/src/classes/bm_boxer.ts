@@ -44,6 +44,7 @@ export const BoxerSettings: FBoxerSettings =
 	Melee: "",
 	Health: 180,
 	SizeScale: 1.25,
+	Model: "agents/models/otakku/joker_arkham/joker_arkham.vmdl",
 	PrimaryLauncher:
 	{
 		FireInterval: 0.8,

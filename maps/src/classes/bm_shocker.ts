@@ -40,6 +40,7 @@ export const ShockerSettings: FShockerSettings =
 	Melee: "weapon_knife",
 	Health: 125,
 	SizeScale: 1.1,
+	Model: "agents/models/otakku/agent_smith/agent_smith.vmdl",
 	PrimaryLauncher:
 	{
 		FireInterval: 0.5,

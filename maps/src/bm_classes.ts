@@ -1,6 +1,6 @@
-import { CSGearSlot, CSDamageTypes, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
+import { Console, CSGearSlot, CSDamageTypes, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { VectorMath, GetTeamColor, GetPlayerSlot, IsWeapon, IsKnife } from "./bm_core";
+import { LogPrefix, VectorMath, GetTeamColor, GetPlayerSlot, GetOrCreate, IsWeapon, IsKnife } from "./bm_core";
 import type { FVector, FRotator, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
 import type { FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
@@ -37,6 +37,8 @@ export interface FClassSettings
 	readonly Melee: string;
 	readonly Health: number;
 	readonly SizeScale: number;
+	// "" keeps the player's own model. The map has to load it: a prop_dynamic using it, somewhere out of sight.
+	readonly Model: string;
 	readonly PrimaryLauncher: FLauncherSettings | undefined;
 	readonly SecondaryLauncher: FLauncherSettings | undefined;
 	readonly bStartWithMelee?: boolean;
@@ -97,20 +99,65 @@ const NoClassMelee: string = "weapon_knife";
 const FallbackMelee: string = "weapon_knife";
 const PickFxLifetime: number = 3;
 
+const GOwnModels: Map<number, Map<number, string>> = new Map<number, Map<number, string>>();
+const GClassModels: Set<string> = new Set<string>();
+const GWarnedModels: Set<string> = new Set<string>();
+
 export const BeamStartDrop: FVector = { x: 0, y: 0, z: 12 };
 
 // Body ////////////////////////////////////////////////////////////////////////////////////////////
 
-export function ApplyBody(Pawn: CSPlayerPawn, Health: number, SizeScale: number): void
+export function ApplyBody(Pawn: CSPlayerPawn, Health: number, SizeScale: number, Model: string): void
 {
 	Pawn.SetMaxHealth(Health);
 	Pawn.SetHealth(Health);
+	ApplyModel(Pawn, Model);
 	Pawn.SetModelScale(SizeScale);
 }
 
 export function RestoreDefaultBody(Pawn: CSPlayerPawn): void
 {
-	ApplyBody(Pawn, DefaultHealth, DefaultSizeScale);
+	ApplyBody(Pawn, DefaultHealth, DefaultSizeScale, "");
+}
+
+export function ForgetPlayerModel(Slot: number): void
+{
+	GOwnModels.delete(Slot);
+}
+
+function ApplyModel(Pawn: CSPlayerPawn, Model: string): void
+{
+	const OwnModels: Map<number, string> = GetOrCreate(GOwnModels, GetPlayerSlot(Pawn), (): Map<number, string> =>
+	{
+		return new Map<number, string>();
+	});
+	const Team: number = Pawn.GetTeamNumber();
+	const Current: string = Pawn.GetModelName();
+	if (Current !== "" && !GClassModels.has(NormalizeModelName(Current)))
+	{
+		OwnModels.set(Team, Current);
+	}
+
+	const Wanted: string | undefined = Model !== "" ? Model : OwnModels.get(Team);
+	if (Wanted === undefined || NormalizeModelName(Wanted) === NormalizeModelName(Current))
+	{
+		return;
+	}
+	if (Model !== "")
+	{
+		GClassModels.add(NormalizeModelName(Model));
+	}
+	Pawn.SetModel(Wanted);
+	if (NormalizeModelName(Pawn.GetModelName()) !== NormalizeModelName(Wanted) && !GWarnedModels.has(Wanted))
+	{
+		GWarnedModels.add(Wanted);
+		Console.Log(`${LogPrefix} couldn't put on model "${Wanted}": is it in the map? Add a prop_dynamic using it somewhere out of sight so it's loaded.`);
+	}
+}
+
+function NormalizeModelName(Name: string): string
+{
+	return Name.toLowerCase().replace(/\\/g, "/").replace(/_c$/, "");
 }
 
 function IsBulletDamage(Event: FModifyDamageEvent): boolean
@@ -148,7 +195,7 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 	public ApplyLoadout(Pawn: CSPlayerPawn): void
 	{
 		StripGearSlots(Pawn, StrippedGearSlots);
-		ApplyBody(Pawn, this.Settings.Health, this.Settings.SizeScale);
+		ApplyBody(Pawn, this.Settings.Health, this.Settings.SizeScale, this.Settings.Model);
 
 		if (this.Settings.Melee !== "")
 		{

@@ -31,6 +31,7 @@ export const SoldierSettings: FSoliderSettings =
 	Melee: "weapon_knife",
 	Health: 150,
 	SizeScale: 1.15,
+	Model: "agents/models/otakku/wesker_playermodel/wesker_playermodel.vmdl",
 	PrimaryLauncher:
 	{
 		FireInterval: 0.8,

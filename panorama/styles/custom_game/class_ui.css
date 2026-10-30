@@ -232,12 +232,22 @@
 
 .CrossEmpty .CrossBar
 {
-	background-color: #ffffff30;
+	background-color: #78797a;
+}
+
+.HudCards.Team_t .CrossEmpty .CrossBar
+{
+	background-color: #887879;
+}
+
+.HudCards.Team_ct .CrossEmpty .CrossBar
+{
+	background-color: #787f8b;
 }
 
 .CrossArm
 {
-	width: 15px;
+	width: 17px;
 	height: 16px;
 	vertical-align: center;
 }

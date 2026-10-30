@@ -63,7 +63,7 @@
 					</Button>
 					<Button id="Pick_demo" class="ClassRow DemoRow">
 						<Panel class="ClassRowHead" hittest="false">
-							<Label class="ClassRowName" text="Demoman" hittest="false" />
+							<Label class="ClassRowName" text="Exploder" hittest="false" />
 							<Label id="PickStats_demo" class="ClassRowStats" text="{s:stats}" hittest="false" />
 						</Panel>
 						<Label class="ClassRowInfo" text="Stickies &amp; Pipes. Right-click to detonate the footballs!" hittest="false" />

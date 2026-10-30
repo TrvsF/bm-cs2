@@ -45,6 +45,7 @@ export const RailerSettings: FRailerSettings =
 	bStartWithSecondary: true,
 	Health: 110,
 	SizeScale: 0.85,
+	Model: "agents/models/otakku/kakashi_hatake/kakashi_hatake.vmdl",
 	PrimaryLauncher:
 	{
 		FireInterval: 0.06,

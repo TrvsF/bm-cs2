@@ -16,7 +16,7 @@ import type
 	FModifyDamageEvent,
 	FModifyDamageResult,
 } from "./bm_core";
-import { EPlayerClass, GiveNoClassLoadout, RestoreDefaultBody, PickRandomClass } from "./bm_classes";
+import { EPlayerClass, GiveNoClassLoadout, RestoreDefaultBody, ForgetPlayerModel, PickRandomClass } from "./bm_classes";
 import type { EPlayableClass } from "./bm_classes";
 import { ClassDefinitions, GiveLoadout, IsWeaponAllowed } from "./classes/bm_classlist";
 import { ClearDecals } from "./bm_effects";
@@ -221,6 +221,7 @@ function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 	}
 	ResetDamageNumbers(Event.playerSlot);
 	ResetClassUi(Event.playerSlot);
+	ForgetPlayerModel(Event.playerSlot);
 	GClassBySlot.delete(Event.playerSlot);
 	GPendingClassBySlot.delete(Event.playerSlot);
 }

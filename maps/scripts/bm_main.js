@@ -1,5 +1,5 @@
 // src/bm_main.ts
-import { Instance as Instance16, Console as Console12, GameRules as GameRules3, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2, CSGearSlot as CSGearSlot4 } from "cs_script/point_script";
+import { Instance as Instance16, Console as Console13, GameRules as GameRules3, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2, CSGearSlot as CSGearSlot4 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance, CSWeaponType } from "cs_script/point_script";
@@ -222,7 +222,7 @@ function ForEachLivePawn(Visitor) {
 }
 
 // src/bm_classes.ts
-import { CSGearSlot as CSGearSlot2, CSDamageTypes as CSDamageTypes2, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
+import { Console as Console4, CSGearSlot as CSGearSlot2, CSDamageTypes as CSDamageTypes2, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
 
 // src/bm_combat.ts
 import { Instance as Instance5, Console as Console3, CSDamageTypes, CSWeaponType as CSWeaponType2 } from "cs_script/point_script";
@@ -1339,7 +1339,7 @@ function PlaceProjectileModels(Projectile, bTeleport) {
     }
   }
 }
-function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff, FxTemplate = ExplosionTemplateName, SelfBlast = void 0) {
+function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff, FxTemplate = ExplosionTemplateName) {
   const Origin = VectorMath.Add(Position, ExplosionOffset);
   const Fx = SpawnTemporaryTemplate(FxTemplate, Origin, ExplosionFxLifetime) ?? SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime);
   if (!Fx) {
@@ -1370,9 +1370,8 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff, Fx
     const RangeScale = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
     const BlastDamage = Damage * Falloff * RangeScale;
     const Away = Distance > 1 ? Offset : UpVector;
-    const SelfOverride = bIsSelf ? SelfBlast : void 0;
-    const Push = SelfOverride ? ApplyKnockback(Victim, Away, SelfOverride.Damage, SelfOverride.Knockback, true) : ApplyKnockback(Victim, Away, BlastDamage, Knockback, bIsSelf);
-    const DamageTaken = SelfOverride ? SelfOverride.Damage : bIsSelf ? BlastDamage * SelfBlastDamageScale : BlastDamage;
+    const Push = ApplyKnockback(Victim, Away, BlastDamage, Knockback, bIsSelf);
+    const DamageTaken = bIsSelf ? BlastDamage * SelfBlastDamageScale : BlastDamage;
     const DamageDealt = Victim.TakeDamage(
       {
         damage: DamageTaken,
@@ -1720,14 +1719,46 @@ var NoClassStrippedGearSlots = [CSGearSlot2.RIFLE, CSGearSlot2.PISTOL, CSGearSlo
 var NoClassMelee = "weapon_knife";
 var FallbackMelee = "weapon_knife";
 var PickFxLifetime = 3;
+var GOwnModels = /* @__PURE__ */ new Map();
+var GClassModels = /* @__PURE__ */ new Set();
+var GWarnedModels = /* @__PURE__ */ new Set();
 var BeamStartDrop = { x: 0, y: 0, z: 12 };
-function ApplyBody(Pawn, Health, SizeScale) {
+function ApplyBody(Pawn, Health, SizeScale, Model) {
   Pawn.SetMaxHealth(Health);
   Pawn.SetHealth(Health);
+  ApplyModel(Pawn, Model);
   Pawn.SetModelScale(SizeScale);
 }
 function RestoreDefaultBody(Pawn) {
-  ApplyBody(Pawn, DefaultHealth, DefaultSizeScale);
+  ApplyBody(Pawn, DefaultHealth, DefaultSizeScale, "");
+}
+function ForgetPlayerModel(Slot) {
+  GOwnModels.delete(Slot);
+}
+function ApplyModel(Pawn, Model) {
+  const OwnModels = GetOrCreate(GOwnModels, GetPlayerSlot(Pawn), () => {
+    return /* @__PURE__ */ new Map();
+  });
+  const Team = Pawn.GetTeamNumber();
+  const Current = Pawn.GetModelName();
+  if (Current !== "" && !GClassModels.has(NormalizeModelName(Current))) {
+    OwnModels.set(Team, Current);
+  }
+  const Wanted = Model !== "" ? Model : OwnModels.get(Team);
+  if (Wanted === void 0 || NormalizeModelName(Wanted) === NormalizeModelName(Current)) {
+    return;
+  }
+  if (Model !== "") {
+    GClassModels.add(NormalizeModelName(Model));
+  }
+  Pawn.SetModel(Wanted);
+  if (NormalizeModelName(Pawn.GetModelName()) !== NormalizeModelName(Wanted) && !GWarnedModels.has(Wanted)) {
+    GWarnedModels.add(Wanted);
+    Console4.Log(`${LogPrefix} couldn't put on model "${Wanted}": is it in the map? Add a prop_dynamic using it somewhere out of sight so it's loaded.`);
+  }
+}
+function NormalizeModelName(Name) {
+  return Name.toLowerCase().replace(/\\/g, "/").replace(/_c$/, "");
 }
 function IsBulletDamage(Event) {
   return (Event.damageTypes & (CSDamageTypes2.BULLET | CSDamageTypes2.BUCKSHOT)) !== 0;
@@ -1750,7 +1781,7 @@ var PlayerClass = class {
   }
   ApplyLoadout(Pawn) {
     StripGearSlots(Pawn, StrippedGearSlots);
-    ApplyBody(Pawn, this.Settings.Health, this.Settings.SizeScale);
+    ApplyBody(Pawn, this.Settings.Health, this.Settings.SizeScale, this.Settings.Model);
     if (this.Settings.Melee !== "") {
       Pawn.GiveNamedItem(this.Settings.Melee);
       if (!Pawn.FindWeaponBySlot(CSGearSlot2.KNIFE)) {
@@ -1941,6 +1972,7 @@ var SoldierSettings = {
   Melee: "weapon_knife",
   Health: 150,
   SizeScale: 1.15,
+  Model: "agents/models/otakku/wesker_playermodel/wesker_playermodel.vmdl",
   PrimaryLauncher: {
     FireInterval: 0.8,
     ClipSize: 4,
@@ -1996,6 +2028,7 @@ var DemoSettings = {
   Melee: "",
   Health: 130,
   SizeScale: 1.2,
+  Model: "agents/models/otakku/homer_simpson/homer_simpson.vmdl",
   PrimaryLauncher: {
     FireInterval: 0.6,
     ClipSize: 6,
@@ -2161,7 +2194,7 @@ var DemomanClass = class extends PlayerClass {
 };
 
 // src/classes/bm_medic.ts
-import { Instance as Instance8, Console as Console4, CSInputs as CSInputs3 } from "cs_script/point_script";
+import { Instance as Instance8, Console as Console5, CSInputs as CSInputs3 } from "cs_script/point_script";
 var CrossbowRampUp = [
   { Distance: 0, Scale: 0.5 },
   { Distance: 256, Scale: 0.5 },
@@ -2175,6 +2208,7 @@ var MedicSettings = {
   Melee: "weapon_knife",
   Health: 150,
   SizeScale: 0.9,
+  Model: "agents/models/otakku/burnice/burnice.vmdl",
   bStartWithMelee: true,
   MeleeDamage: 20,
   PrimaryLauncher: {
@@ -2358,12 +2392,12 @@ var MedicClass = class extends PlayerClass {
       if (Healed > Health) {
         Victim.SetHealth(Healed);
       }
-      Console4.Log(`${LogPrefix} ${MedicName} Healed (bolt) ${VictimName} : +${Math.max(0, Healed - Health)}h : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
+      Console5.Log(`${LogPrefix} ${MedicName} Healed (bolt) ${VictimName} : +${Math.max(0, Healed - Health)}h : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
       return;
     }
     const Damage = this.Settings.BoltDamage * RangeScale;
     DealShockDamage(Medic, Victim, Damage, Medic.FindWeapon(this.Settings.Primary));
-    Console4.Log(`${LogPrefix} ${MedicName} Damaged (bolt) ${VictimName} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
+    Console5.Log(`${LogPrefix} ${MedicName} Damaged (bolt) ${VictimName} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
   }
   GetPlayerState(Slot) {
     return GetOrCreate(this.PlayerStates, Slot, () => {
@@ -2443,6 +2477,7 @@ var RailerSettings = {
   bStartWithSecondary: true,
   Health: 110,
   SizeScale: 0.85,
+  Model: "agents/models/otakku/kakashi_hatake/kakashi_hatake.vmdl",
   PrimaryLauncher: {
     FireInterval: 0.06,
     ClipSize: 20,
@@ -2562,6 +2597,7 @@ var BeamerSettings = {
   Melee: "",
   Health: 200,
   SizeScale: 1.3,
+  Model: "agents/models/otakku/coach/coach.vmdl",
   PrimaryLauncher: {
     FireInterval: 0.05,
     ClipSize: 111,
@@ -2681,7 +2717,7 @@ var BeamerClass = class extends PlayerClass {
 };
 
 // src/classes/bm_boxer.ts
-import { Console as Console5 } from "cs_script/point_script";
+import { Console as Console6 } from "cs_script/point_script";
 var BoxerCubeFalloff = [
   { Distance: 0, Scale: 1 },
   { Distance: 512, Scale: 0.75 },
@@ -2695,6 +2731,7 @@ var BoxerSettings = {
   Melee: "",
   Health: 180,
   SizeScale: 1.25,
+  Model: "agents/models/otakku/joker_arkham/joker_arkham.vmdl",
   PrimaryLauncher: {
     FireInterval: 0.8,
     ClipSize: 1,
@@ -2793,12 +2830,12 @@ var BoxerClass = class extends PlayerClass {
     if (DealShockDamage(Boxer, Victim, Damage, Boxer.FindWeapon(this.Settings.Primary)) > 0) {
       SpawnBloodSplatter(Hit.Trace.end, Victim);
     }
-    Console5.Log(`${LogPrefix} ${GetPawnName(Boxer)} Damaged (cube) ${GetPawnName(Victim)} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
+    Console6.Log(`${LogPrefix} ${GetPawnName(Boxer)} Damaged (cube) ${GetPawnName(Victim)} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
   }
 };
 
 // src/classes/bm_shocker.ts
-import { Console as Console6 } from "cs_script/point_script";
+import { Console as Console7 } from "cs_script/point_script";
 var ShockerSettings = {
   DisplayName: "Shocker",
   PickFxTemplate: "shocker_pick_template",
@@ -2807,6 +2844,7 @@ var ShockerSettings = {
   Melee: "weapon_knife",
   Health: 125,
   SizeScale: 1.1,
+  Model: "agents/models/otakku/agent_smith/agent_smith.vmdl",
   PrimaryLauncher: {
     FireInterval: 0.5,
     ClipSize: 3,
@@ -2902,13 +2940,13 @@ var ShockerClass = class extends PlayerClass {
     });
     DestroyProjectile(Detonated);
     Explode(Detonated.Position, Shooter, this.Settings.ComboRadius, this.Settings.ComboDamage, this.Settings.ComboKnockback, void 0, this.Settings.ComboFxTemplate);
-    Console6.Log(`${LogPrefix} ${GetPawnName(Shooter)} shock combo, ${Math.round(VectorMath.Size(VectorMath.Subtract(Detonated.Position, Detonated.Start)))}u from where the ball was fired`);
+    Console7.Log(`${LogPrefix} ${GetPawnName(Shooter)} shock combo, ${Math.round(VectorMath.Size(VectorMath.Subtract(Detonated.Position, Detonated.Start)))}u from where the ball was fired`);
     return Detonated.Position;
   }
 };
 
 // src/classes/bm_shrinker.ts
-import { Instance as Instance9, Console as Console7, CSInputs as CSInputs5 } from "cs_script/point_script";
+import { Instance as Instance9, Console as Console8, CSInputs as CSInputs5 } from "cs_script/point_script";
 var ShrinkerSettings = {
   DisplayName: "Shrinker",
   PickFxTemplate: "shrinker_pick_template",
@@ -2917,6 +2955,7 @@ var ShrinkerSettings = {
   Melee: "weapon_knife",
   Health: 100,
   SizeScale: 1,
+  Model: "agents/models/otakku/perry_the_platypus/perry_the_platypus.vmdl",
   bStartWithMelee: true,
   RepairPerHit: 25,
   PrimaryLauncher: void 0,
@@ -2945,7 +2984,6 @@ var ShrinkerSettings = {
     BlastRadius: 120,
     BlastHeight: 24,
     Knockback: 300,
-    OwnBlast: { Damage: 75, Knockback: 400 },
     ExplodeFxTemplate: "shrinker_trap_explode_template"
   },
   TeleporterEntrance: {
@@ -2999,16 +3037,14 @@ var TrapKind = class extends BuildingKind {
       return;
     }
     const Origin = VectorMath.Add(Building.Position, { x: 0, y: 0, z: this.Settings.BlastHeight });
-    const bOwnTrap = Victim === Building.Owner;
-    Console7.Log(bOwnTrap ? `${LogPrefix} ${GetPawnName(Victim)} stepped on their own ${this.Settings.DisplayName}` : `${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
-    Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, void 0, this.Settings.ExplodeFxTemplate, bOwnTrap ? this.Settings.OwnBlast : void 0);
+    Console8.Log(`${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
+    Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, void 0, this.Settings.ExplodeFxTemplate);
     RemoveBuilding(Building);
   }
   GetStatus(Building, Now) {
     const State = this.States.get(Building);
     return State && Now < State.ArmedAt ? "Arming" : "Armed";
   }
-  // Enemies first; failing that, its owner
   FindVictim(Building) {
     let Victim = void 0;
     ForEachLivePawn((Pawn) => {
@@ -3016,10 +3052,6 @@ var TrapKind = class extends BuildingKind {
         Victim = Pawn;
       }
     });
-    const Owner = Building.Owner;
-    if (!Victim && Owner.IsValid() && Owner.IsAlive() && IsStandingOn(Building, Owner, this.Settings.TriggerReach, this.Settings.TriggerHeight)) {
-      Victim = Owner;
-    }
     return Victim;
   }
 };
@@ -3093,7 +3125,7 @@ var TeleporterKind = class extends BuildingKind {
     SpawnTemporaryTemplate(this.Settings.TeleportFxTemplate, Arrival, TeleportFxLifetime);
     Traveller.Teleport({ position: Arrival, angles: { pitch: 0, yaw: Exit.Yaw, roll: 0 }, velocity: ZeroVector });
     Traveller.SetEyeAngles({ pitch: Traveller.GetEyeAngles().pitch, yaw: Exit.Yaw, roll: 0 });
-    Console7.Log(`${LogPrefix} ${GetPawnName(Traveller)} took ${GetPawnName(Entrance.Owner)}'s teleporter`);
+    Console8.Log(`${LogPrefix} ${GetPawnName(Traveller)} took ${GetPawnName(Entrance.Owner)}'s teleporter`);
   }
 };
 var ShrinkerClass = class extends PlayerClass {
@@ -3171,6 +3203,7 @@ var GunnerSettings = {
   Melee: "weapon_spanner",
   Health: 125,
   SizeScale: 1.1,
+  Model: "agents/models/otakku/rochelle/rochelle.vmdl",
   bStartWithMelee: true,
   MeleeDamage: 0,
   RepairPerHit: 25,
@@ -3395,7 +3428,7 @@ function IsWeaponAllowed(PlayerClass3, Weapon) {
 }
 
 // src/bm_ui.ts
-import { Instance as Instance11, Console as Console8, CSInputs as CSInputs7 } from "cs_script/point_script";
+import { Instance as Instance11, Console as Console9, CSInputs as CSInputs7 } from "cs_script/point_script";
 var ClassUiName = "class_hud";
 var MenuPanelId = "ClassMenu";
 var HudCardsId = "HudCards";
@@ -3818,7 +3851,7 @@ function FindClassUi() {
   if (!GbWarnedNoClassUi) {
     GbWarnedNoClassUi = true;
     const Problem = Ui ? "exists but isn't a custom_hud_layout" : "wasn't found";
-    Console8.Log(`${LogPrefix} problem finding "${ClassUiName}" ${Problem}. check custom_hud_layout entity`);
+    Console9.Log(`${LogPrefix} problem finding "${ClassUiName}" ${Problem}. check custom_hud_layout entity`);
   }
   return void 0;
 }
@@ -3827,7 +3860,7 @@ function IsCustomHudLayout2(Ent) {
 }
 
 // src/bm_pickups.ts
-import { Instance as Instance12, Console as Console9 } from "cs_script/point_script";
+import { Instance as Instance12, Console as Console10 } from "cs_script/point_script";
 var HealthKitSettings = {
   Name: "healthkit",
   HealFraction: 0.5,
@@ -3931,7 +3964,7 @@ function TakeKit(Kit, Taker, Now) {
   SpawnKitFx(HealthKitSettings.PickupFxTemplate, Kit);
   if (bDebug) {
     const Name = Taker.GetPlayerController()?.GetPlayerName() ?? "someone";
-    Console9.Log(`${LogPrefix} ${Name} picked up a healthkit ${OldHealth} -> ${NewHealth}`);
+    Console10.Log(`${LogPrefix} ${Name} picked up a healthkit ${OldHealth} -> ${NewHealth}`);
   }
 }
 function RespawnKit(Kit) {
@@ -3954,7 +3987,7 @@ function IsModelEntity2(Ent) {
 }
 
 // src/bm_spawnzones.ts
-import { Instance as Instance13, Console as Console10 } from "cs_script/point_script";
+import { Instance as Instance13, Console as Console11 } from "cs_script/point_script";
 var SpawnZoneSettings = {
   TerroristZoneName: "spawnzone_t",
   CounterTerroristZoneName: "spawnzone_ct",
@@ -4022,7 +4055,7 @@ function ScanSpawnZones() {
   const CounterTerroristZones = CountZones(3 /* CounterTerrorist */);
   const Report = TerroristZones + CounterTerroristZones > 0 ? `spawn zones: ${TerroristZones} for Ts ("${SpawnZoneSettings.TerroristZoneName}"), ${CounterTerroristZones} for CTs ("${SpawnZoneSettings.CounterTerroristZoneName}")` : "";
   if (Report !== "" && Report !== GLastScanReport) {
-    Console10.Log(`${LogPrefix} ${Report}`);
+    Console11.Log(`${LogPrefix} ${Report}`);
   }
   GLastScanReport = Report;
 }
@@ -4250,7 +4283,7 @@ var FreeForAllMode = class extends GameMode {
 };
 
 // src/gamemodes/bm_payload.ts
-import { Instance as Instance15, Console as Console11, GameRules as GameRules2, CSRoundEndReason } from "cs_script/point_script";
+import { Instance as Instance15, Console as Console12, GameRules as GameRules2, CSRoundEndReason } from "cs_script/point_script";
 var PayloadSettings = {
   CartName: "payload_cart",
   PathPrefix: "payload_path_",
@@ -4446,7 +4479,7 @@ function ReachCheckpoints(Track, Now) {
     GCheckpointsReached++;
     GSavedDistance = CheckpointDistance;
     GameRules2.SetRoundRemainingTime(Math.max(0, GameRules2.GetRoundRemainingTime()) + PayloadSettings.CheckpointBonusTime);
-    Console11.Log(`${LogPrefix} payload checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached. adding ${PayloadSettings.CheckpointBonusTime} seconds to match timer`);
+    Console12.Log(`${LogPrefix} payload checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached. adding ${PayloadSettings.CheckpointBonusTime} seconds to match timer`);
   }
 }
 function EndRound(Winner) {
@@ -4456,7 +4489,7 @@ function EndRound(Winner) {
   GbRoundOver = true;
   GameRules2.AddTeamScore(Winner, 1);
   GameRules2.TerminateRound(Winner === 2 /* Terrorist */ ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
-  Console11.Log(`${LogPrefix} payload round finished. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}`);
+  Console12.Log(`${LogPrefix} payload round finished. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}`);
 }
 function MakeStatus(Track, Pushers, bBlocked, bRollingBack, bOvertime, Now) {
   const Status = {
@@ -4487,7 +4520,7 @@ function ScanPayload() {
   }
   const Report = IsPayloadReady() && GTrack ? `payload on: ${GTrack.Points.length} track points, ${Math.round(GTrack.Length)}u long, ${GTrack.Checkpoints.length} checkpoints` : CartEntity || Points.length > 0 ? `payload off: found ${CartEntity ? "a cart" : "no cart"} ("${PayloadSettings.CartName}") and ${Points.length} track points ("${PayloadSettings.PathPrefix}1" ...). It needs a cart and at least 2 points.` : "";
   if (Report !== "" && Report !== GLastScanReport2) {
-    Console11.Log(`${LogPrefix} ${Report}`);
+    Console12.Log(`${LogPrefix} ${Report}`);
   }
   GLastScanReport2 = Report;
 }
@@ -4696,7 +4729,7 @@ function Tick() {
     TickNoBuying();
     TickBotClasses();
   } catch (Exception) {
-    Console12.Log(`${LogPrefix} error: ${String(Exception)}`);
+    Console13.Log(`${LogPrefix} error: ${String(Exception)}`);
   }
 }
 function BeginPlay() {
@@ -4716,7 +4749,7 @@ function BeginPlay() {
   Instance16.OnCustomHudClicked(HandleCustomHudClicked);
   Instance16.SetThink(Tick);
   Instance16.SetNextThink(Instance16.GetGameTime());
-  Console12.Log(`${LogPrefix} loaded${bDebug ? " DEBUG mode!" : ""}`);
+  Console13.Log(`${LogPrefix} loaded${bDebug ? " DEBUG mode!" : ""}`);
 }
 BeginPlay();
 function HandlePlayerChat(Event) {
@@ -4738,7 +4771,7 @@ function HandlePlayerChat(Event) {
   } else if (PlayerClass3 !== void 0) {
     RequestPlayerClass(Player, PlayerClass3);
   } else {
-    Console12.Log(`${LogPrefix} ${Player.GetPlayerName()} typed unknown command "${ChatCommandPrefix}${Command}"`);
+    Console13.Log(`${LogPrefix} ${Player.GetPlayerName()} typed unknown command "${ChatCommandPrefix}${Command}"`);
   }
 }
 function HandlePlayerReset(Event) {
@@ -4787,6 +4820,7 @@ function HandlePlayerDisconnect(Event) {
   }
   ResetDamageNumbers(Event.playerSlot);
   ResetClassUi(Event.playerSlot);
+  ForgetPlayerModel(Event.playerSlot);
   GClassBySlot.delete(Event.playerSlot);
   GPendingClassBySlot.delete(Event.playerSlot);
 }
@@ -4801,7 +4835,7 @@ function HandleRoundStart() {
   SelectGameMode();
   GActiveMode.OnRoundStart();
   ApplyMatchSettings();
-  Console12.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
+  Console13.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
 }
 function HandleRoundEnd() {
   GActiveMode.OnRoundEnd();
@@ -4897,7 +4931,7 @@ function SelectGameMode() {
     GActiveMode.OnDeactivated();
     GActiveMode = Mode;
     Mode.OnActivated();
-    Console12.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
+    Console13.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
   }
   SetFriendlyFire(Mode.IsFriendlyFire());
 }
@@ -4911,20 +4945,20 @@ function ApplyMatchSettings() {
   }
   Commands.push(...GActiveMode.GetMatchCommands());
   for (const Command of Commands) {
-    Console12.ServerCommand(Command);
+    Console13.ServerCommand(Command);
   }
 }
 function EndWarmupNow(Player) {
   if (!GameRules3.IsWarmupPeriod()) {
-    Console12.Log(`${LogPrefix} ${Player.GetPlayerName()} typed ${ChatCommandPrefix}start, but warmup is already over`);
+    Console13.Log(`${LogPrefix} ${Player.GetPlayerName()} typed ${ChatCommandPrefix}start, but warmup is already over`);
     return;
   }
-  Console12.Log(`${LogPrefix} ${Player.GetPlayerName()} ended warmup`);
+  Console13.Log(`${LogPrefix} ${Player.GetPlayerName()} ended warmup`);
   GameRules3.EndWarmup();
 }
 function TickMatch(Now) {
   if (bDebug && GameRules3.IsWarmupPeriod()) {
-    Console12.ServerCommand("mp_warmup_end");
+    Console13.ServerCommand("mp_warmup_end");
   }
 }
 function RequestPlayerClass(Player, PlayerClass3) {
@@ -4947,7 +4981,7 @@ function RequestPlayerClass(Player, PlayerClass3) {
     GPendingClassBySlot.set(Slot, PlayerClass3);
   }
   ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
-  Console12.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass3}`);
+  Console13.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass3}`);
 }
 function TickSpawnClassSwaps() {
   ForEachLivePawn((Pawn, Slot) => {
@@ -4996,7 +5030,7 @@ function SetPlayerClass(Player, PlayerClass3) {
   }
   ShowClassIndicator(Slot, PlayerClass3, Pawn?.GetTeamNumber() === 2);
   const ClassLabel = PlayerClass3 === "none" /* None */ ? "normal" : PlayerClass3;
-  Console12.Log(`${LogPrefix} ${Player.GetPlayerName()} set class to ${ClassLabel}`);
+  Console13.Log(`${LogPrefix} ${Player.GetPlayerName()} set class to ${ClassLabel}`);
 }
 function AssignRandomBotClass(Pawn, Slot) {
   const Controller = Pawn.GetPlayerController();

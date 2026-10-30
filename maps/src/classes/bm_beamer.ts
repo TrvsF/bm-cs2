@@ -40,6 +40,7 @@ export const BeamerSettings: FBeamerSettings =
 	Melee: "",
 	Health: 200,
 	SizeScale: 1.3,
+	Model: "agents/models/otakku/coach/coach.vmdl",
 	PrimaryLauncher:
 	{
 		FireInterval: 0.05,

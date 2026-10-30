@@ -59,6 +59,7 @@ export const MedicSettings: FMedicSettings =
 	Melee: "weapon_knife",
 	Health: 150,
 	SizeScale: 0.9,
+	Model: "agents/models/otakku/burnice/burnice.vmdl",
 	bStartWithMelee: true,
 	MeleeDamage: 20,
 	PrimaryLauncher:

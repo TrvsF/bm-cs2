@@ -3,7 +3,6 @@ import type { CSPlayerPawn } from "cs_script/point_script";
 import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, ForEachLivePawn } from "../bm_core";
 import type { FVector, FColor, FHeldInputs } from "../bm_core";
 import { Explode } from "../bm_combat";
-import type { FSelfBlast } from "../bm_combat";
 import { SpawnTemporaryTemplate } from "../bm_effects";
 import { BuildingKind, FindOwnedBuilding, IsBuildingEnemy, IsStandingOn, GetBuildingCenter, TickBuildTool, CancelPlacement, RemoveBuilding, DestroyBuilding } from "../bm_buildings";
 import type { FBuilding, FBuildingSettings, FBuildKeys } from "../bm_buildings";
@@ -21,7 +20,6 @@ export interface FTrapSettings extends FBuildingSettings
 	readonly BlastRadius: number;
 	readonly BlastHeight: number;
 	readonly Knockback: number;
-	readonly OwnBlast: FSelfBlast;
 	readonly ExplodeFxTemplate: string;
 }
 
@@ -75,6 +73,7 @@ export const ShrinkerSettings: FShrinkerSettings =
 	Melee: "weapon_knife",
 	Health: 100,
 	SizeScale: 1.0,
+	Model: "agents/models/otakku/perry_the_platypus/perry_the_platypus.vmdl",
 	bStartWithMelee: true,
 	RepairPerHit: 25,
 	PrimaryLauncher: undefined,
@@ -106,7 +105,6 @@ export const ShrinkerSettings: FShrinkerSettings =
 		BlastRadius: 120,
 		BlastHeight: 24,
 		Knockback: 300,
-		OwnBlast: { Damage: 75, Knockback: 400 },
 		ExplodeFxTemplate: "shrinker_trap_explode_template",
 	},
 
@@ -176,9 +174,8 @@ export class TrapKind extends BuildingKind<FTrapSettings>
 			return;
 		}
 		const Origin: FVector = VectorMath.Add(Building.Position, { x: 0, y: 0, z: this.Settings.BlastHeight });
-		const bOwnTrap: boolean = Victim === Building.Owner;
-		Console.Log(bOwnTrap ? `${LogPrefix} ${GetPawnName(Victim)} stepped on their own ${this.Settings.DisplayName}` : `${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
-		Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, undefined, this.Settings.ExplodeFxTemplate, bOwnTrap ? this.Settings.OwnBlast : undefined);
+		Console.Log(`${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
+		Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, undefined, this.Settings.ExplodeFxTemplate);
 		RemoveBuilding(Building);
 	}
 
@@ -188,7 +185,6 @@ export class TrapKind extends BuildingKind<FTrapSettings>
 		return State && Now < State.ArmedAt ? "Arming" : "Armed";
 	}
 
-	// Enemies first; failing that, its owner
 	private FindVictim(Building: FBuilding): CSPlayerPawn | undefined
 	{
 		let Victim: CSPlayerPawn | undefined = undefined;
@@ -199,11 +195,6 @@ export class TrapKind extends BuildingKind<FTrapSettings>
 				Victim = Pawn;
 			}
 		});
-		const Owner: CSPlayerPawn = Building.Owner;
-		if (!Victim && Owner.IsValid() && Owner.IsAlive() && IsStandingOn(Building, Owner, this.Settings.TriggerReach, this.Settings.TriggerHeight))
-		{
-			Victim = Owner;
-		}
 		return Victim;
 	}
 }

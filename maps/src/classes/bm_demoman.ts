@@ -62,6 +62,7 @@ export const DemoSettings: FDemoSettings =
 	Melee: "",
 	Health: 130,
 	SizeScale: 1.2,
+	Model: "agents/models/otakku/homer_simpson/homer_simpson.vmdl",
 	PrimaryLauncher:
 	{
 		FireInterval: 0.6,

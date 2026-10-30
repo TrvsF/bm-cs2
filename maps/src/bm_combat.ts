@@ -65,12 +65,6 @@ export interface FDamageFalloff
 	readonly OptimalDistance: number;
 }
 
-export interface FSelfBlast
-{
-	readonly Damage: number;
-	readonly Knockback: number;
-}
-
 export interface FDamageCurveKey
 {
 	readonly Distance: number;
@@ -424,7 +418,7 @@ function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): voi
 	}
 }
 
-export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined, FxTemplate: string = ExplosionTemplateName, SelfBlast: FSelfBlast | undefined = undefined): number
+export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined, FxTemplate: string = ExplosionTemplateName): number
 {
 	const Origin: FVector = VectorMath.Add(Position, ExplosionOffset);
 
@@ -467,10 +461,9 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		const RangeScale: number = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
 		const BlastDamage: number = Damage * Falloff * RangeScale;
 		const Away: FVector = Distance > 1 ? Offset : UpVector;
-		const SelfOverride: FSelfBlast | undefined = bIsSelf ? SelfBlast : undefined;
-		const Push: FVector = SelfOverride ? ApplyKnockback(Victim, Away, SelfOverride.Damage, SelfOverride.Knockback, true) : ApplyKnockback(Victim, Away, BlastDamage, Knockback, bIsSelf);
+		const Push: FVector = ApplyKnockback(Victim, Away, BlastDamage, Knockback, bIsSelf);
 
-		const DamageTaken: number = SelfOverride ? SelfOverride.Damage : bIsSelf ? BlastDamage * SelfBlastDamageScale : BlastDamage;
+		const DamageTaken: number = bIsSelf ? BlastDamage * SelfBlastDamageScale : BlastDamage;
 		const DamageDealt: number = Victim.TakeDamage(
 		{
 			damage: DamageTaken,
