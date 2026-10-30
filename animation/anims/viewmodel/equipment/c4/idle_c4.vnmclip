@@ -1,0 +1,259 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/viewmodel/equipment/c4/idle_c4.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/viewmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_secondaryAnimationSkeletonNames = 
+	[
+		"animation/skeletons/weapons/c4.vnmskel",
+	]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Particle"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Particle"
+					m_flStartTime = 0.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_type = "Create"
+					m_target = "Self"
+					m_particleSystem = resource:"particles/explosions_fx/c4_light_pulse_single_light.vpcf"
+					m_tags = ""
+					m_bStopImmediately = false
+					m_bDetachFromOwner = false
+					m_bPlayEndCap = false
+					m_attachmentPoint0 = "led_viewmodel"
+					m_attachmentType0 = "PATTACH_POINT_FOLLOW"
+					m_attachmentPoint1 = ""
+					m_attachmentType1 = "PATTACH_INVALID"
+					m_config = ""
+					m_effectForConfig = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_MaterialAttribute"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_MaterialAttribute"
+					m_flStartTime = 0.0
+					m_flDuration = 30.0
+					m_syncID = ""
+					m_target = "Weapon"
+					m_attributeName = "c4_light"
+					m_attributeNameToken = ""
+					m_x = 
+					{
+						m_spline = 
+						[
+							{
+								x = 0.0
+								y = 1.0
+								m_flSlopeIncoming = -0.136728
+								m_flSlopeOutgoing = -0.136728
+							},
+							{
+								x = 0.111111
+								y = 0.984808
+								m_flSlopeIncoming = -0.271382
+								m_flSlopeOutgoing = -0.271382
+							},
+							{
+								x = 0.222222
+								y = 0.939693
+								m_flSlopeIncoming = -0.534524
+								m_flSlopeOutgoing = -0.534524
+							},
+							{
+								x = 0.333333
+								y = 0.866025
+								m_flSlopeIncoming = -0.781421
+								m_flSlopeOutgoing = -0.781421
+							},
+							{
+								x = 0.444444
+								y = 0.766044
+								m_flSlopeIncoming = -1.004563
+								m_flSlopeOutgoing = -1.004563
+							},
+							{
+								x = 0.555556
+								y = 0.642788
+								m_flSlopeIncoming = -1.197194
+								m_flSlopeOutgoing = -1.197194
+							},
+							{
+								x = 0.666667
+								y = 0.5
+								m_flSlopeIncoming = -1.353457
+								m_flSlopeOutgoing = -1.353457
+							},
+							{
+								x = 0.777778
+								y = 0.34202
+								m_flSlopeIncoming = -1.468585
+								m_flSlopeOutgoing = -1.468585
+							},
+							{
+								x = 0.888889
+								y = 0.173648
+								m_flSlopeIncoming = -1.539092
+								m_flSlopeOutgoing = -1.539092
+							},
+							{
+								x = 1.0
+								y = 0.0
+								m_flSlopeIncoming = -1.562834
+								m_flSlopeOutgoing = -1.562834
+							},
+						]
+						m_tangents = 
+						[
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+						]
+						m_vDomainMins = [ 0.0, 0.0 ]
+						m_vDomainMaxs = [ 1.0, 1.0 ]
+					}
+					m_y = 
+					{
+						m_spline = [  ]
+						m_tangents = [  ]
+						m_vDomainMins = [ 0.0, 0.0 ]
+						m_vDomainMaxs = [ 0.0, 0.0 ]
+					}
+					m_z = 
+					{
+						m_spline = [  ]
+						m_tangents = [  ]
+						m_vDomainMins = [ 0.0, 0.0 ]
+						m_vDomainMaxs = [ 0.0, 0.0 ]
+					}
+					m_w = 
+					{
+						m_spline = [  ]
+						m_tangents = [  ]
+						m_vDomainMins = [ 0.0, 0.0 ]
+						m_vDomainMaxs = [ 0.0, 0.0 ]
+					}
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_MaterialAttribute"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_MaterialAttribute"
+					m_flStartTime = 0.0
+					m_flDuration = 30.0
+					m_syncID = ""
+					m_target = "Weapon"
+					m_attributeName = "c4_digits"
+					m_attributeNameToken = ""
+					m_x = 
+					{
+						m_spline = 
+						[
+							{
+								x = 0.0
+								y = 0.0
+								m_flSlopeIncoming = 0.0
+								m_flSlopeOutgoing = 0.0
+							},
+							{
+								x = 0.0001
+								y = 0.0
+								m_flSlopeIncoming = 0.0
+								m_flSlopeOutgoing = 0.0
+							},
+						]
+						m_tangents = 
+						[
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+							{
+								m_nIncomingTangent = "CURVE_TANGENT_SPLINE"
+								m_nOutgoingTangent = "CURVE_TANGENT_SPLINE"
+							},
+						]
+						m_vDomainMins = [ 0.0, 0.0 ]
+						m_vDomainMaxs = [ 0.0, 0.0 ]
+					}
+					m_y = 
+					{
+						m_spline = [  ]
+						m_tangents = [  ]
+						m_vDomainMins = [ 0.0, 0.0 ]
+						m_vDomainMaxs = [ 0.0, 0.0 ]
+					}
+					m_z = 
+					{
+						m_spline = [  ]
+						m_tangents = [  ]
+						m_vDomainMins = [ 0.0, 0.0 ]
+						m_vDomainMaxs = [ 0.0, 0.0 ]
+					}
+					m_w = 
+					{
+						m_spline = [  ]
+						m_tangents = [  ]
+						m_vDomainMins = [ 0.0, 0.0 ]
+						m_vDomainMaxs = [ 0.0, 0.0 ]
+					}
+				},
+			]
+		},
+	]
+}

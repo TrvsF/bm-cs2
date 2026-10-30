@@ -1,0 +1,787 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	_class = "CNmGraphDocument"
+	m_nVersion = 0
+	m_pRootGraph = 
+	{
+		_class = "CNmGraphDocFlowGraph"
+		m_ID = "c247713a-8e45-4051-913e-973fda982db8"
+		m_nodes = 
+		[
+			{
+				_class = "CNmGraphDocIDControlParameterNode"
+				m_ID = "ac3c4d18-082c-468a-bc67-9bf2adf94bc9"
+				m_name = "character_mode"
+				m_floatingComment = ""
+				m_position = [ 0.0, 528.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "87176472-2914-4b74-9c12-13913323771f"
+						m_name = "Value"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = ""
+				m_expectedValues = [  ]
+			},
+			{
+				_class = "CNmGraphDocFloatControlParameterNode"
+				m_ID = "c5da8581-b328-4545-855c-ee23a328ee0a"
+				m_name = "team_preview_variant"
+				m_floatingComment = ""
+				m_position = [ 350.0, 528.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "5baf5616-76a7-491f-8549-6423853cb1d2"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = 0.0
+				m_previewMin = 0.0
+				m_previewMax = 1.0
+			},
+			{
+				_class = "CNmGraphDocFloatControlParameterNode"
+				m_ID = "712a773a-e7c9-4b23-bf33-5a391dd76ff9"
+				m_name = "team_preview_position"
+				m_floatingComment = ""
+				m_position = [ 700.0, 528.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "a56c0959-9abb-4beb-9a3c-d137ed30614c"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = 0.0
+				m_previewMin = 0.0
+				m_previewMax = 1.0
+			},
+			{
+				_class = "CNmGraphDocIDControlParameterNode"
+				m_ID = "3bf60758-9028-48d4-9e6d-bb6db5e3e3a6"
+				m_name = "end_of_match_celebration_ID"
+				m_floatingComment = ""
+				m_position = [ 1050.0, 528.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "db46e7b4-75c3-45a2-af9b-8a641b816f0e"
+						m_name = "Value"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = ""
+				m_expectedValues = [  ]
+			},
+			{
+				_class = "CNmGraphDocBoolControlParameterNode"
+				m_ID = "bf7ddfdc-2b8c-4591-8832-b8ed9dd8e888"
+				m_name = "is_CT"
+				m_floatingComment = ""
+				m_position = [ 1400.0, 528.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "72fce642-fe48-46be-84d1-043f89ed6750"
+						m_name = "Value"
+						m_type = "Bool"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = false
+			},
+			{
+				_class = "CNmGraphDocIDControlParameterNode"
+				m_ID = "1a4fc721-788a-4a38-858f-66efb8d02868"
+				m_name = "weapon_type"
+				m_floatingComment = ""
+				m_position = [ 1750.0, 528.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "adc33ba9-a37b-4163-954d-3c0097020c73"
+						m_name = "Value"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = ""
+				m_expectedValues = [  ]
+			},
+			{
+				_class = "CNmGraphDocIDControlParameterNode"
+				m_ID = "52fe4cd2-eae8-40ab-bab9-987fcdec3859"
+				m_name = "weapon_category"
+				m_floatingComment = ""
+				m_position = [ 0.0, 758.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "fb51313f-79bd-4f7e-b5d8-747164ff73c6"
+						m_name = "Value"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = ""
+				m_expectedValues = [  ]
+			},
+			{
+				_class = "CNmGraphDocIDControlParameterNode"
+				m_ID = "c8bd05ce-9b57-4716-a0b0-f94fbed74b65"
+				m_name = "banner_animation"
+				m_floatingComment = ""
+				m_position = [ 350.0, 758.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "e78a91c0-61f3-44d1-8603-6e13c7fc2481"
+						m_name = "Value"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = ""
+				m_expectedValues = [  ]
+			},
+			{
+				_class = "CNmGraphDocIDControlParameterNode"
+				m_ID = "a42009c7-5fc0-4d0e-a28b-faf21c1d4414"
+				m_name = "weapon_state"
+				m_floatingComment = ""
+				m_position = [ 700.0, 758.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "3518137e-afb2-4f5b-9b41-8fb26a2103e5"
+						m_name = "Value"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = ""
+				m_expectedValues = [  ]
+			},
+			{
+				_class = "CNmGraphDocFloatControlParameterNode"
+				m_ID = "95d5f19e-6c25-45e8-96b4-94c30e857f9d"
+				m_name = "animation_seed"
+				m_floatingComment = ""
+				m_position = [ 1050.0, 758.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "836e3bc2-6a70-49cd-a3c7-f956e13ba1ef"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = 0.0
+				m_previewMin = 0.0
+				m_previewMax = 1.0
+			},
+			{
+				_class = "CNmGraphDocFloatControlParameterNode"
+				m_ID = "136c0573-f268-4dd4-b44e-7d3def3521cd"
+				m_name = "team_preview_random"
+				m_floatingComment = ""
+				m_position = [ 1400.0, 758.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "3e70e979-39ac-452e-9525-0f4cc6ff62c4"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = 0.0
+				m_previewMin = 0.0
+				m_previewMax = 1.0
+			},
+			{
+				_class = "CNmGraphDocFloatControlParameterNode"
+				m_ID = "d7ddd686-2cc8-43b0-9854-22d2b77173a0"
+				m_name = "inspect_turn_angle"
+				m_floatingComment = ""
+				m_position = [ 1750.0, 758.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "d0fcd1f4-c1d7-47b8-af88-731b4eea9092"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = 0.0
+				m_previewMin = 0.0
+				m_previewMax = 1.0
+			},
+			{
+				_class = "CNmGraphDocIDControlParameterNode"
+				m_ID = "96c30e56-c19e-4bdc-8c10-38df8b978ab7"
+				m_name = "action"
+				m_floatingComment = ""
+				m_position = [ 0.0, 988.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "c77f92d3-e324-4b21-b0e2-c0bbd2e14530"
+						m_name = "Value"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = ""
+				m_expectedValues = [  ]
+			},
+			{
+				_class = "CNmGraphDocFloatControlParameterNode"
+				m_ID = "90c1bd79-84e3-41a2-b67f-cfed542f5af6"
+				m_name = "chick_snapshot_variant"
+				m_floatingComment = ""
+				m_position = [ 350.0, 988.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "e1d6c3e2-6429-42ae-8584-11c6df8bde84"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = 0.0
+				m_previewMin = 0.0
+				m_previewMax = 1.0
+			},
+			{
+				_class = "CNmGraphDocBoolControlParameterNode"
+				m_ID = "b8e08032-613d-42ed-abea-4532e062f521"
+				m_name = "character_mode_reset"
+				m_floatingComment = ""
+				m_position = [ 700.0, 988.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "7f42b3ce-b13b-444a-926d-338acb5dd095"
+						m_name = "Value"
+						m_type = "Bool"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = false
+			},
+			{
+				_class = "CNmGraphDocFloatControlParameterNode"
+				m_ID = "18625513-4ae8-4ae7-a4c4-058a9e58716b"
+				m_name = "chick_life_stage"
+				m_floatingComment = ""
+				m_position = [ 1050.0, 988.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "09bf84e4-e7d9-4c30-a772-ba5df0607f5b"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = 0.0
+				m_previewMin = 0.0
+				m_previewMax = 1.0
+			},
+			{
+				_class = "CNmGraphDocFloatControlParameterNode"
+				m_ID = "9789b82a-25e8-4b0f-8381-364af8822c26"
+				m_name = "action_variation"
+				m_floatingComment = ""
+				m_position = [ 1400.0, 988.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "a1766123-c52b-4f6f-830e-8aa0c7098d2a"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = 0.0
+				m_previewMin = 0.0
+				m_previewMax = 1.0
+			},
+			{
+				_class = "CNmGraphDocFloatControlParameterNode"
+				m_ID = "c8638830-e9a5-4a47-a123-bb5d9ecfdb7c"
+				m_name = "life_stage"
+				m_floatingComment = ""
+				m_position = [ 1750.0, 988.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "90898289-f7e0-4a5f-83bb-a7f5b33d7a86"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_groupName = ""
+				m_dictionaryParameterBinding = "00000000-0000-0000-0000-000000000000"
+				m_previewStartValue = 0.0
+				m_previewMin = 0.0
+				m_previewMax = 1.0
+			},
+			{
+				_class = "CnmGraphDocSnapWeaponNode"
+				m_ID = "391d060d-8852-4de8-ab36-55f56f6da2a7"
+				m_name = "Snap Weapon After Proportions"
+				m_floatingComment = ""
+				m_position = [ 1560.0, 179.011627 ]
+				m_inputPins = 
+				[
+					{
+						m_ID = "0069164b-4323-40bd-9730-ac53dfd17bc3"
+						m_name = "Input"
+						m_type = "Pose"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+					{
+						m_ID = "9d2401ca-40f8-4008-8048-bc6a06439452"
+						m_name = "Flashed Amount"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+					{
+						m_ID = "cb1bb7b9-5c98-4f48-a830-51c58513b417"
+						m_name = "Weapon Category"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+					{
+						m_ID = "37f6fe4a-5312-41c8-a67e-e7cf76bb649b"
+						m_name = "Weapon Type"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_outputPins = 
+				[
+					{
+						m_ID = "032c98aa-511d-4b5f-9464-a39f14f3ce74"
+						m_name = "Result"
+						m_type = "Pose"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+			},
+			{
+				_class = "CNmGraphDocLayerBlendNode"
+				m_ID = "5ea7e045-b074-4368-9b1c-ecfd148130bd"
+				m_name = "Layer Blend"
+				m_floatingComment = ""
+				m_position = [ 1040.0, 18.629211 ]
+				m_inputPins = 
+				[
+					{
+						m_ID = "00766b59-45a7-4ea4-be0f-6890f82e4ca3"
+						m_name = "Base Node"
+						m_type = "Pose"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+					{
+						m_ID = "837e30d3-1eb0-4c60-9202-b01826659af0"
+						m_name = "Layer 0"
+						m_type = "Special"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_outputPins = 
+				[
+					{
+						m_ID = "344f4bc3-77b5-446a-8e0b-1099181766dc"
+						m_name = "Pose"
+						m_type = "Pose"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_onlySampleBaseRootMotion = true
+			},
+			{
+				_class = "CNmGraphDocReferencedGraphNode"
+				m_ID = "4d62e65a-112f-4878-aae9-8f50ce596243"
+				m_name = "ValvePlayerGraph"
+				m_floatingComment = ""
+				m_position = [ 520.0, 0.0 ]
+				m_inputPins = 
+				[
+					{
+						m_ID = "32879802-28fe-4bb7-bc39-103087cca63e"
+						m_name = "Fallback"
+						m_type = "Pose"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_outputPins = 
+				[
+					{
+						m_ID = "3bc35ca5-a54f-4944-bbbd-8a64877f6345"
+						m_name = "Pose"
+						m_type = "Pose"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_pDefaultVariationData = 
+				{
+					_class = "CNmGraphDocReferencedGraphNode::CData"
+					m_variation = "animation/graphs/ui/uimodel.vnmgraph"
+				}
+				m_overrides = [  ]
+				m_defaultResourceName = ""
+			},
+			{
+				_class = "CNmGraphDocLocalLayerNode"
+				m_ID = "5650f7f5-e1b7-4b34-b16b-3475dc051cbc"
+				m_name = "Layer 0"
+				m_floatingComment = ""
+				m_position = [ 520.0, 140.0 ]
+				m_inputPins = 
+				[
+					{
+						m_ID = "9b339563-e249-4d93-b2e7-fb69b236a943"
+						m_name = "Input"
+						m_type = "Pose"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+					{
+						m_ID = "37bdf530-afef-4c7f-9a5f-6c46dff5ebe5"
+						m_name = "Weight"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+					{
+						m_ID = "07adebf8-7295-4534-beeb-dcd6130e517d"
+						m_name = "Root Motion Weight"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+					{
+						m_ID = "bbff5ecf-2a02-47fc-b796-86087cabba22"
+						m_name = "BoneMask"
+						m_type = "BoneMask"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_outputPins = 
+				[
+					{
+						m_ID = "24e20bf0-4c21-4008-8e51-ad4df130f087"
+						m_name = "Layer"
+						m_type = "Special"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_isSynchronized = false
+				m_ignoreEvents = true
+				m_blendMode = "Additive"
+			},
+			{
+				_class = "CNmGraphDocClipNode"
+				m_ID = "ec71228e-d4b4-442d-b31c-b9a13b162194"
+				m_name = "ProportionDelta"
+				m_floatingComment = ""
+				m_position = [ 0.0, 69.999985 ]
+				m_inputPins = 
+				[
+					{
+						m_ID = "2b94d5d2-4cac-4e6b-bacc-7f0945653395"
+						m_name = "Play In Reverse"
+						m_type = "Bool"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+					{
+						m_ID = "0e64dde2-5f35-48d9-8564-c2c36290e0dd"
+						m_name = "Reset Time"
+						m_type = "Bool"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_outputPins = 
+				[
+					{
+						m_ID = "390a08f8-eb8e-4fc3-919e-15b6bc3e60e7"
+						m_name = "Pose"
+						m_type = "Pose"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_pDefaultVariationData = 
+				{
+					_class = "CNmGraphDocClipNode::CData"
+					m_clip = "agents/models/otakku/burnice/burnice/anims/proportions.vnmclip"
+					m_flSpeedMultiplier = 1.0
+					m_nStartSyncEventOffset = 0
+				}
+				m_overrides = [  ]
+				m_defaultResourceName = ""
+				m_bSampleRootMotion = false
+				m_bAllowLooping = true
+				m_graphEvents = [  ]
+			},
+			{
+				_class = "CnmGraphDocConstFloatNode"
+				m_ID = "ee8849cc-e990-4004-9891-5a45d2395d12"
+				m_name = "FullWeight"
+				m_floatingComment = ""
+				m_position = [ 0.0, 210.0 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "18f24b02-3cee-4e4a-aa17-0cc65e138e13"
+						m_name = "Value"
+						m_type = "Float"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_flValue = 1.0
+			},
+			{
+				_class = "CNmGraphDocIDParameterReferenceNode"
+				m_ID = "92865cf4-74ff-427f-9b78-c42903412bfd"
+				m_name = "weapon_category"
+				m_floatingComment = ""
+				m_position = [ 1040.0, 158.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "6e0af726-af3d-4318-868c-fc75b7b0ef53"
+						m_name = "Value"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_parameterUUID = "52fe4cd2-eae8-40ab-bab9-987fcdec3859"
+				m_parameterValueType = "ID"
+				m_parameterName = "weapon_category"
+				m_parameterGroupName = ""
+			},
+			{
+				_class = "CNmGraphDocIDParameterReferenceNode"
+				m_ID = "990c205d-8227-438c-9190-ad335c93457d"
+				m_name = "weapon_type"
+				m_floatingComment = ""
+				m_position = [ 1040.0, 298.629211 ]
+				m_inputPins = [  ]
+				m_outputPins = 
+				[
+					{
+						m_ID = "6abff7a3-2e35-4846-8d6c-7bca27235a8c"
+						m_name = "Value"
+						m_type = "ID"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = true
+					},
+				]
+				m_parameterUUID = "1a4fc721-788a-4a38-858f-66efb8d02868"
+				m_parameterValueType = "ID"
+				m_parameterName = "weapon_type"
+				m_parameterGroupName = ""
+			},
+			{
+				_class = "CNmGraphDocPoseResultNode"
+				m_ID = "611896f4-cc09-469c-9ae6-2e2e363b3332"
+				m_name = ""
+				m_floatingComment = ""
+				m_position = [ 2080.0, 184.720856 ]
+				m_inputPins = 
+				[
+					{
+						m_ID = "db012937-bf31-41c1-9b47-e274bb0ce8f4"
+						m_name = "Out"
+						m_type = "Pose"
+						m_bIsDynamicPin = false
+						m_bAllowMultipleOutConnections = false
+					},
+				]
+				m_outputPins = [  ]
+				m_resultType = "Pose"
+			},
+		]
+		m_graphType = "BlendTree"
+		m_viewOffset = [ 0.0, 0.0 ]
+		m_flViewZoom = 1.0
+		m_connections = 
+		[
+			{
+				m_ID = "de9ab268-4b15-4b72-9662-02ca5d63d214"
+				m_fromNodeID = "4d62e65a-112f-4878-aae9-8f50ce596243"
+				m_outputPinID = "3bc35ca5-a54f-4944-bbbd-8a64877f6345"
+				m_toNodeID = "5ea7e045-b074-4368-9b1c-ecfd148130bd"
+				m_inputPinID = "00766b59-45a7-4ea4-be0f-6890f82e4ca3"
+			},
+			{
+				m_ID = "f181005e-7853-48f4-b261-70f4680a31da"
+				m_fromNodeID = "5650f7f5-e1b7-4b34-b16b-3475dc051cbc"
+				m_outputPinID = "24e20bf0-4c21-4008-8e51-ad4df130f087"
+				m_toNodeID = "5ea7e045-b074-4368-9b1c-ecfd148130bd"
+				m_inputPinID = "837e30d3-1eb0-4c60-9202-b01826659af0"
+			},
+			{
+				m_ID = "7e91b7b7-a7da-454a-bebf-4492a054c5d5"
+				m_fromNodeID = "ec71228e-d4b4-442d-b31c-b9a13b162194"
+				m_outputPinID = "390a08f8-eb8e-4fc3-919e-15b6bc3e60e7"
+				m_toNodeID = "5650f7f5-e1b7-4b34-b16b-3475dc051cbc"
+				m_inputPinID = "9b339563-e249-4d93-b2e7-fb69b236a943"
+			},
+			{
+				m_ID = "a64a0c47-f360-4d9c-8c15-e33204225d26"
+				m_fromNodeID = "ee8849cc-e990-4004-9891-5a45d2395d12"
+				m_outputPinID = "18f24b02-3cee-4e4a-aa17-0cc65e138e13"
+				m_toNodeID = "5650f7f5-e1b7-4b34-b16b-3475dc051cbc"
+				m_inputPinID = "37bdf530-afef-4c7f-9a5f-6c46dff5ebe5"
+			},
+			{
+				m_ID = "051eae71-2314-4311-8ae0-95e10508e8b2"
+				m_fromNodeID = "5ea7e045-b074-4368-9b1c-ecfd148130bd"
+				m_outputPinID = "344f4bc3-77b5-446a-8e0b-1099181766dc"
+				m_toNodeID = "391d060d-8852-4de8-ab36-55f56f6da2a7"
+				m_inputPinID = "0069164b-4323-40bd-9730-ac53dfd17bc3"
+			},
+			{
+				m_ID = "6113753b-233b-4192-a4ce-e22dfb71e0c2"
+				m_fromNodeID = "92865cf4-74ff-427f-9b78-c42903412bfd"
+				m_outputPinID = "6e0af726-af3d-4318-868c-fc75b7b0ef53"
+				m_toNodeID = "391d060d-8852-4de8-ab36-55f56f6da2a7"
+				m_inputPinID = "cb1bb7b9-5c98-4f48-a830-51c58513b417"
+			},
+			{
+				m_ID = "d9a5c913-1a28-4727-8651-d4a5d85f2d8a"
+				m_fromNodeID = "990c205d-8227-438c-9190-ad335c93457d"
+				m_outputPinID = "6abff7a3-2e35-4846-8d6c-7bca27235a8c"
+				m_toNodeID = "391d060d-8852-4de8-ab36-55f56f6da2a7"
+				m_inputPinID = "37f6fe4a-5312-41c8-a67e-e7cf76bb649b"
+			},
+			{
+				m_ID = "c52ce7d1-721d-4a82-bfb6-81766884584e"
+				m_fromNodeID = "391d060d-8852-4de8-ab36-55f56f6da2a7"
+				m_outputPinID = "032c98aa-511d-4b5f-9464-a39f14f3ce74"
+				m_toNodeID = "611896f4-cc09-469c-9ae6-2e2e363b3332"
+				m_inputPinID = "db012937-bf31-41c1-9b47-e274bb0ce8f4"
+			},
+		]
+	}
+	m_variationHierarchy = 
+	{
+		m_variations = 
+		[
+			{
+				m_ID = "Default"
+				m_parentID = ""
+				m_skeleton = "animation/skeletons/characters/worldmodel.vnmskel"
+			},
+		]
+	}
+	m_debugParameterSets = [  ]
+	m_dictionaryIDSetIDs = [  ]
+}

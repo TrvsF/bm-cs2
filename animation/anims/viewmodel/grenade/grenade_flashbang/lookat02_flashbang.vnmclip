@@ -1,0 +1,397 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/viewmodel/grenade/grenade_flashbang/lookat02_flashbang.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/viewmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_secondaryAnimationSkeletonNames = 
+	[
+		"animation/skeletons/weapons/flashbang.vnmskel",
+	]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 0.0
+					m_flDuration = 39.0
+					m_syncID = "WPN_INSPECT_INTRO"
+					m_ID = "WPN_INSPECT_INTRO"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 2.0
+					m_flDuration = 30.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Inspect.Gear.GrenadeSpin"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 5.0
+					m_flDuration = 15.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Flashbang.Inspect.Spins"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 18.0
+					m_flDuration = 30.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Inspect.Gear.GrenadeSpin"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 21.0
+					m_flDuration = 15.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Flashbang.Inspect.Spins"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 39.0
+					m_flDuration = 66.0
+					m_syncID = "WPN_INSPECT_LOOP"
+					m_ID = "WPN_INSPECT_LOOP"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 39.0
+					m_flDuration = 30.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Inspect.Gear.GrenadeSpin"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 40.0
+					m_flDuration = 12.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Flashbang.Inspect.Spins"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 49.0
+					m_flDuration = 30.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Inspect.Gear.GrenadeSpin"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 56.0
+					m_flDuration = 12.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Flashbang.Inspect.Spins"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 70.0
+					m_flDuration = 11.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Flashbang.Inspect.Spins"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 71.0
+					m_flDuration = 30.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Inspect.Gear.GrenadeSpin"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 82.0
+					m_flDuration = 30.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Inspect.Gear.GrenadeSpin"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 83.0
+					m_flDuration = 15.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Flashbang.Inspect.Spins"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 105.0
+					m_flDuration = 11.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Flashbang.Inspect.Spins"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 105.0
+					m_flDuration = 28.0
+					m_syncID = "WPN_INSPECT_OUTRO"
+					m_ID = "WPN_INSPECT_OUTRO"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 106.0
+					m_flDuration = 16.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Inspect.Gear.GrenadeSpin"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = true
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 116.0
+					m_flDuration = 7.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Flashbang.Inspect.Spins"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = true
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 119.0
+					m_flDuration = 13.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Inspect.Gear.GrenadeSpin"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = true
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+	]
+}

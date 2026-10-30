@@ -1,0 +1,29 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/world/rifle/rifle_mag7/reload_crouch_mag7_silent.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/worldmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_secondaryAnimationSkeletonNames = 
+	[
+		"animation/skeletons/weapons/mag7.vnmskel",
+	]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 66.0
+					m_flDuration = 8.0
+					m_syncID = "WPN_IK_ACTION_ENDING"
+					m_ID = "WPN_IK_ACTION_ENDING"
+					m_secondaryID = ""
+				},
+			]
+		},
+	]
+}

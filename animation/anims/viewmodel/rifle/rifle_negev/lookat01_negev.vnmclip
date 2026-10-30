@@ -1,0 +1,77 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/viewmodel/rifle/rifle_negev/lookat01_negev.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/viewmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_secondaryAnimationSkeletonNames = 
+	[
+		"animation/skeletons/weapons/negev.vnmskel",
+	]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 0.0
+					m_flDuration = 56.0
+					m_syncID = "WPN_INSPECT_INTRO"
+					m_ID = "WPN_INSPECT_INTRO"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Legacy"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Legacy"
+					m_flStartTime = 0.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_eventClass = "AE_CL_BODYGROUP_SET_TO_CLIP"
+					m_KV = null
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 56.0
+					m_flDuration = 64.0
+					m_syncID = "WPN_INSPECT_LOOP"
+					m_ID = "WPN_INSPECT_LOOP"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 120.0
+					m_flDuration = 86.0
+					m_syncID = "WPN_INSPECT_OUTRO"
+					m_ID = "WPN_INSPECT_OUTRO"
+					m_secondaryID = ""
+				},
+			]
+		},
+	]
+}

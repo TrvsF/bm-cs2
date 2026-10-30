@@ -1,0 +1,85 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/viewmodel/pistol/pistol_tec9/shoot1_tec9.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/viewmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_secondaryAnimationSkeletonNames = 
+	[
+		"animation/skeletons/weapons/tec9.vnmskel",
+	]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Particle"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Particle"
+					m_flStartTime = 0.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_type = "Create_CFG"
+					m_target = "Self"
+					m_particleSystem = resource:"particles/weapons/cs_weapon_fx/weapon_shell_casing_9mm.vpcf"
+					m_tags = ""
+					m_bStopImmediately = false
+					m_bDetachFromOwner = false
+					m_bPlayEndCap = false
+					m_attachmentPoint0 = ""
+					m_attachmentType0 = "PATTACH_INVALID"
+					m_attachmentPoint1 = ""
+					m_attachmentType1 = "PATTACH_INVALID"
+					m_config = "shell_eject"
+					m_effectForConfig = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 0.0
+					m_flDuration = 6.0
+					m_syncID = "WPN_BLOCK_INSPECT"
+					m_ID = "WPN_BLOCK_INSPECT"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Particle"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Particle"
+					m_flStartTime = 0.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_type = "Create_CFG"
+					m_target = "Self"
+					m_particleSystem = resource:"particles/unified_weapon_fx/uweapon_muzzleflash_pist_fps.vpcf"
+					m_tags = "muzzleflash"
+					m_bStopImmediately = false
+					m_bDetachFromOwner = false
+					m_bPlayEndCap = false
+					m_attachmentPoint0 = ""
+					m_attachmentType0 = "PATTACH_INVALID"
+					m_attachmentPoint1 = ""
+					m_attachmentType1 = "PATTACH_INVALID"
+					m_config = "primary_fps"
+					m_effectForConfig = ""
+				},
+			]
+		},
+	]
+}

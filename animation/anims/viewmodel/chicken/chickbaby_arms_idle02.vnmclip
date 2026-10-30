@@ -1,0 +1,240 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/viewmodel/chicken/chickbaby_arms_idle02.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/worldmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 15.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 45.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 75.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 100.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 127.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 162.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 214.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 244.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 297.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 342.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 387.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Chicken.Inspect.Gear"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+	]
+}

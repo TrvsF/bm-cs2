@@ -1,0 +1,213 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/viewmodel/pistol/_default_pistol/silencer_attach_pistol.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/viewmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_secondaryAnimationSkeletonNames = 
+	[
+		"animation/skeletons/weapons/usp_silencer.vnmskel",
+	]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 2.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_USP.SilencerWeaponMove1"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 12.0
+					m_flDuration = 93.0
+					m_syncID = "WPN_SHOW_SILENCER"
+					m_ID = "WPN_SHOW_SILENCER"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 32.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_USP.SilencerScrewOnStart"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 55.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_USP.SilencerScrew1"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 69.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_USP.SilencerScrew2"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 80.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_USP.SilencerScrew3"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 91.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_USP.SilencerScrew4"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 99.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_USP.SilencerScrew5"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 101.0
+					m_flDuration = 0.0
+					m_syncID = "WPN_SILENCER_ATTACH"
+					m_ID = "WPN_SILENCER_ATTACH"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 112.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_USP.SilencerWeaponMove3"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+	]
+}

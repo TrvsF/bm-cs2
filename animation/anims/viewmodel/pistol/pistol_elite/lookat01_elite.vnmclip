@@ -1,0 +1,187 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/viewmodel/pistol/pistol_elite/lookat01_elite.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/viewmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_secondaryAnimationSkeletonNames = 
+	[
+		"animation/skeletons/weapons/elite.vnmskel",
+	]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 0.0
+					m_flDuration = 42.0
+					m_syncID = "WPN_INSPECT_INTRO"
+					m_ID = "WPN_INSPECT_INTRO"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 2.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_ELITE.TauntLook1"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 25.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_ELITE.TauntLook2"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 42.0
+					m_flDuration = 37.0
+					m_syncID = "WPN_INSPECT_LOOP"
+					m_ID = "WPN_INSPECT_LOOP"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 79.0
+					m_flDuration = 59.0
+					m_syncID = "WPN_INSPECT_OUTRO"
+					m_ID = "WPN_INSPECT_OUTRO"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 82.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_ELITE.TauntStartTap"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 88.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_ELITE.TauntTap1"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 93.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_ELITE.TauntTap2"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 113.0
+					m_flDuration = 0.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Weapon_ELITE.TauntTwirl"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+	]
+}

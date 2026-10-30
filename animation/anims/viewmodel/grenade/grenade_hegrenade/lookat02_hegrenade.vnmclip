@@ -1,0 +1,208 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/viewmodel/grenade/grenade_hegrenade/lookat02_hegrenade.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/viewmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_secondaryAnimationSkeletonNames = 
+	[
+		"animation/skeletons/weapons/hegrenade.vnmskel",
+	]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 0.0
+					m_flDuration = 32.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "Inspect.Gear.GrenadeToss"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 0.0
+					m_flDuration = 19.0
+					m_syncID = "WPN_INSPECT_INTRO"
+					m_ID = "WPN_INSPECT_INTRO"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 10.0
+					m_flDuration = 18.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "HEGrenade.Inspect02.Toss1"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 19.0
+					m_flDuration = 40.0
+					m_syncID = "WPN_INSPECT_LOOP"
+					m_ID = "WPN_INSPECT_LOOP"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 24.0
+					m_flDuration = 12.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "HEGrenade.Inspect02.Catch"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 31.0
+					m_flDuration = 18.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "HEGrenade.Inspect02.Toss2"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 44.0
+					m_flDuration = 12.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "HEGrenade.Inspect02.Catch"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 52.0
+					m_flDuration = 18.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "HEGrenade.Inspect02.Toss2"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = true
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 59.0
+					m_flDuration = 31.0
+					m_syncID = "WPN_INSPECT_OUTRO"
+					m_ID = "WPN_INSPECT_OUTRO"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_Sound"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_Sound"
+					m_flStartTime = 65.0
+					m_flDuration = 12.0
+					m_syncID = ""
+					m_relevance = "ClientOnly"
+					m_name = "HEGrenade.Inspect02.Catch"
+					m_position = "EntityEyePos"
+					m_attachmentName = ""
+					m_tags = ""
+					m_bContinuePlayingSoundAtDurationEnd = false
+					m_flDurationInterruptionThreshold = 0.9
+				},
+			]
+		},
+	]
+}

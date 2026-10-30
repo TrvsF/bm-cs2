@@ -1,0 +1,41 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/world/rifle/_default_rifle/walk_w_rifle.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/worldmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_eventTracks = 
+	[
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 8.0
+					m_flDuration = 21.0
+					m_syncID = "USE_CROSSLEG"
+					m_ID = "USE_CROSSLEG"
+					m_secondaryID = ""
+				},
+			]
+		},
+		{
+			m_type = "Duration"
+			m_bIsSyncTrack = false
+			m_eventClassName = "CNmClipDocEvent_ID"
+			m_events = 
+			[
+				{
+					_class = "CNmClipDocEvent_ID"
+					m_flStartTime = 11.0
+					m_flDuration = 11.0
+					m_syncID = "RinFront"
+					m_ID = "RinFront"
+					m_secondaryID = ""
+				},
+			]
+		},
+	]
+}

@@ -1,0 +1,11 @@
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+	m_sourceFilename = "animation/anims/ui_anims/main_menu/t/t_main_menu_elite_idle.dmx"
+	m_animationSkeletonName = "animation/skeletons/characters/worldmodel.vnmskel"
+	m_bonesToSampleInModelSpace = [  ]
+	m_secondaryAnimationSkeletonNames = 
+	[
+		"animation/skeletons/weapons/elite.vnmskel",
+	]
+	m_eventTracks = [  ]
+}

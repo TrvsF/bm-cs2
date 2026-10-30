@@ -1,0 +1,21 @@
+"Layer0"
+{
+	"shader"	"csgo_unlitgeneric.vfx"
+	"g_bFogEnabled"	"1"
+	"g_nScaleTexCoordUByModelScaleAxis"	"0"
+	"g_nScaleTexCoordVByModelScaleAxis"	"0"
+	"g_nTextureAddressModeU"	"0"
+	"g_nTextureAddressModeV"	"0"
+	"g_flModelTintAmount"	"1"
+	"g_flTexCoordRotation"	"0"
+	"g_vColorTint"	"[1.000000 1.000000 1.000000 0.000000]"
+	"g_vTexCoordCenter"	"[0.500000 0.500000 0.000000 0.000000]"
+	"g_vTexCoordOffset"	"[0.000000 0.000000 0.000000 0.000000]"
+	"g_vTexCoordScale"	"[1.000000 1.000000 0.000000 0.000000]"
+	"g_vTexCoordScrollSpeed"	"[0.000000 0.000000 0.000000 0.000000]"
+	"TextureColor"	"[0.000000 0.000000 0.000000 1.000000]"
+	"Compiled Textures"
+	{
+		"g_tColor"	"agents/models/otakku/homer_simpson/materials/outline_vmat_g_tcolor_20638b28.vtex"
+	}
+}
