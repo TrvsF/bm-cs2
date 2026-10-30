@@ -1,7 +1,7 @@
 import { Instance, Console, CSInputs } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSPlayerController, TraceResult } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
 import { TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPawnName, GetOrCreate, IsPlayerPawn, IsTeammate, IsKnife, ForEachLivePawn } from "../bm_core";
-import type { FVector, FColor, FModifyDamageEvent, FModifyDamageResult } from "../bm_core";
+import type { FVector, FModifyDamageEvent, FModifyDamageResult } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve } from "../bm_combat";
 import type { FProjectile, FDamageCurve } from "../bm_combat";
 import { DamageTracedBuilding } from "../bm_buildings";
@@ -93,7 +93,6 @@ export const MedicSettings: FMedicSettings =
 };
 
 const BoltTemplateName: string = "crossbow_bolt_template";
-const UberReadyColor: FColor = { r: 255, g: 255, b: 255 };
 
 // Medic ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -106,7 +105,6 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 	private UberedPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 	private GlowingPawns: Set<CSPlayerPawn> = new Set<CSPlayerPawn>();
 	private Bolts: FBolt[] = [];
-	private HudLine: number = 0;
 
 	constructor()
 	{
@@ -123,7 +121,6 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 	{
 		this.HealedThisTick = new Set<CSPlayerPawn>();
 		this.UberedThisTick = new Set<CSPlayerPawn>();
-		this.HudLine = 0;
 		this.Bolts = this.Bolts.filter((Bolt: FBolt): boolean =>
 		{
 			return this.StepBolt(Bolt, Now, DeltaTime);
@@ -193,21 +190,6 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 				this.UberedThisTick.add(Target);
 			}
 		}
-
-		// Placeholder meter (tools mode only)
-		const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
-		const MedicName: string = Controller ? Controller.GetPlayerName() : "medic";
-		const ActiveText: string = bUberActive ? "  ACTIVE" : "";
-		const PatientText: string = Target ? `  | patient ${Target.GetHealth()} HP` : "";
-		Instance.DebugScreenText(
-		{
-			text: `${MedicName}  ÜBER ${Math.floor(State.UberCharge)}%${ActiveText}${PatientText}`,
-			x: 40,
-			y: 220 + this.HudLine * 18,
-			duration: TickInterval * 2,
-			color: State.UberCharge >= 100 ? UberReadyColor : GetTeamColor(Pawn),
-		});
-		this.HudLine++;
 	}
 
 	public override TickWorldLate(Now: number, DeltaTime: number): void
@@ -228,6 +210,12 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 	{
 		this.PlayerStates.delete(Slot);
 		this.DecayAccumulators.delete(Slot);
+	}
+
+	public override GetHealTarget(Slot: number): CSPlayerPawn | undefined
+	{
+		const Target: CSPlayerPawn | undefined = this.PlayerStates.get(Slot)?.HealTarget;
+		return Target && Target.IsValid() && Target.IsAlive() ? Target : undefined;
 	}
 
 	public override GetHudCounter(Slot: number): FHudCounter | undefined

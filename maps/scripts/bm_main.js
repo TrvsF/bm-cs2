@@ -1722,6 +1722,7 @@ var PickFxLifetime = 3;
 var GOwnModels = /* @__PURE__ */ new Map();
 var GClassModels = /* @__PURE__ */ new Set();
 var GWarnedModels = /* @__PURE__ */ new Set();
+var UntintedColor = { r: 255, g: 255, b: 255 };
 var BeamStartDrop = { x: 0, y: 0, z: 12 };
 function ApplyBody(Pawn, Health, SizeScale, Model) {
   Pawn.SetMaxHealth(Health);
@@ -1745,17 +1746,17 @@ function ApplyModel(Pawn, Model) {
     OwnModels.set(Team, Current);
   }
   const Wanted = Model !== "" ? Model : OwnModels.get(Team);
-  if (Wanted === void 0 || NormalizeModelName(Wanted) === NormalizeModelName(Current)) {
-    return;
+  if (Wanted !== void 0 && NormalizeModelName(Wanted) !== NormalizeModelName(Current)) {
+    if (Model !== "") {
+      GClassModels.add(NormalizeModelName(Model));
+    }
+    Pawn.SetModel(Wanted);
+    if (NormalizeModelName(Pawn.GetModelName()) !== NormalizeModelName(Wanted) && !GWarnedModels.has(Wanted)) {
+      GWarnedModels.add(Wanted);
+      Console4.Log(`${LogPrefix} couldn't put on model "${Wanted}": is it in the map? Add a prop_dynamic using it somewhere out of sight so it's loaded.`);
+    }
   }
-  if (Model !== "") {
-    GClassModels.add(NormalizeModelName(Model));
-  }
-  Pawn.SetModel(Wanted);
-  if (NormalizeModelName(Pawn.GetModelName()) !== NormalizeModelName(Wanted) && !GWarnedModels.has(Wanted)) {
-    GWarnedModels.add(Wanted);
-    Console4.Log(`${LogPrefix} couldn't put on model "${Wanted}": is it in the map? Add a prop_dynamic using it somewhere out of sight so it's loaded.`);
-  }
+  Pawn.SetColor(Model !== "" ? GetTeamColor(Pawn) : UntintedColor);
 }
 function NormalizeModelName(Name) {
   return Name.toLowerCase().replace(/\\/g, "/").replace(/_c$/, "");
@@ -1867,6 +1868,10 @@ var PlayerClass = class {
   // Called for every damage event, whoever deals it (e.g. über protecting a patient)
   ModifyAnyDamage(Event) {
     return;
+  }
+  // Override for a class that heals: who it's healing right now, so their health stays on its HUD
+  GetHealTarget(Slot) {
+    return void 0;
   }
   // Override for a class that builds: what each mouse button builds right now, or undefined while its build tool isn't out
   GetBuildKeys(Pawn) {
@@ -2238,7 +2243,6 @@ var MedicSettings = {
   UberDuration: 8
 };
 var BoltTemplateName = "crossbow_bolt_template";
-var UberReadyColor = { r: 255, g: 255, b: 255 };
 var MedicClass = class extends PlayerClass {
   PlayerStates = /* @__PURE__ */ new Map();
   DecayAccumulators = /* @__PURE__ */ new Map();
@@ -2248,7 +2252,6 @@ var MedicClass = class extends PlayerClass {
   UberedPawns = /* @__PURE__ */ new Set();
   GlowingPawns = /* @__PURE__ */ new Set();
   Bolts = [];
-  HudLine = 0;
   constructor() {
     super(MedicSettings);
   }
@@ -2259,7 +2262,6 @@ var MedicClass = class extends PlayerClass {
   TickWorld(Now, DeltaTime) {
     this.HealedThisTick = /* @__PURE__ */ new Set();
     this.UberedThisTick = /* @__PURE__ */ new Set();
-    this.HudLine = 0;
     this.Bolts = this.Bolts.filter((Bolt) => {
       return this.StepBolt(Bolt, Now, DeltaTime);
     });
@@ -2313,20 +2315,6 @@ var MedicClass = class extends PlayerClass {
         this.UberedThisTick.add(Target);
       }
     }
-    const Controller = Pawn.GetPlayerController();
-    const MedicName = Controller ? Controller.GetPlayerName() : "medic";
-    const ActiveText = bUberActive ? "  ACTIVE" : "";
-    const PatientText = Target ? `  | patient ${Target.GetHealth()} HP` : "";
-    Instance8.DebugScreenText(
-      {
-        text: `${MedicName}  \xDCBER ${Math.floor(State.UberCharge)}%${ActiveText}${PatientText}`,
-        x: 40,
-        y: 220 + this.HudLine * 18,
-        duration: TickInterval * 2,
-        color: State.UberCharge >= 100 ? UberReadyColor : GetTeamColor(Pawn)
-      }
-    );
-    this.HudLine++;
   }
   TickWorldLate(Now, DeltaTime) {
     this.TickOverhealDecay(DeltaTime);
@@ -2341,6 +2329,10 @@ var MedicClass = class extends PlayerClass {
   ClearPlayer(Slot) {
     this.PlayerStates.delete(Slot);
     this.DecayAccumulators.delete(Slot);
+  }
+  GetHealTarget(Slot) {
+    const Target = this.PlayerStates.get(Slot)?.HealTarget;
+    return Target && Target.IsValid() && Target.IsAlive() ? Target : void 0;
   }
   GetHudCounter(Slot) {
     const State = this.PlayerStates.get(Slot);
@@ -3487,6 +3479,12 @@ var GShownBars = /* @__PURE__ */ new Map();
 var GShownCounter = /* @__PURE__ */ new Map();
 var GSentPayload = /* @__PURE__ */ new Map();
 var GShownBuildings = /* @__PURE__ */ new Map();
+var TargetIdPanelId = "TargetId";
+var TargetIdNameId = "TargetIdName";
+var TargetIdHealthId = "TargetIdHealth";
+var TargetIdBarId = "TargetIdBar";
+var TargetIdOverhealBarId = "TargetIdOverhealBar";
+var GShownTargetIds = /* @__PURE__ */ new Map();
 var GShownBuildHints = /* @__PURE__ */ new Map();
 var GbWarnedNoClassUi = false;
 function OpenClassMenu(Slot) {
@@ -3701,6 +3699,32 @@ function ShowBuildHints(Slot, Hints) {
     Ui.SetHasClassForPlayer(Slot, PanelId, "Shown", true);
   }
 }
+function ShowTargetId(Slot, Target) {
+  const Key = Target ? `${Target.Name}|${Target.Health}|${Target.MaxHealth}|${Target.MaxOverheal}|${Target.bTerrorist}` : "";
+  if ((GShownTargetIds.get(Slot) ?? "") === Key) {
+    return;
+  }
+  const Ui = FindClassUi();
+  if (!Ui) {
+    return;
+  }
+  GShownTargetIds.set(Slot, Key);
+  if (!Target) {
+    Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Shown", false);
+    ShowBar(Slot, TargetIdBarId, void 0);
+    ShowBar(Slot, TargetIdOverhealBarId, void 0);
+    return;
+  }
+  Ui.SetDialogVariableStringForPlayer(Slot, TargetIdNameId, "name", Target.Name);
+  Ui.SetDialogVariableStringForPlayer(Slot, TargetIdHealthId, "health", `${Target.Health} / ${Target.MaxHealth}`);
+  Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Team_t", Target.bTerrorist);
+  Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Team_ct", !Target.bTerrorist);
+  ShowBar(Slot, TargetIdBarId, Target.Health / Math.max(1, Target.MaxHealth));
+  const bOverhealed = Target.Health > Target.MaxHealth;
+  ShowBar(Slot, TargetIdOverhealBarId, bOverhealed ? (Target.Health - Target.MaxHealth) / Math.max(1, Target.MaxOverheal - Target.MaxHealth) : void 0);
+  Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Overhealed", bOverhealed);
+  Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Shown", true);
+}
 function ShowCounter(Slot, Counter) {
   const Key = Counter ? `${Counter.Label}|${Counter.Count}|${Counter.Max}` : "";
   if ((GShownCounter.get(Slot) ?? "") === Key) {
@@ -3836,6 +3860,7 @@ function ResetClassUi(Slot) {
   GSentPayload.delete(Slot);
   GShownBuildings.delete(Slot);
   GShownBuildHints.delete(Slot);
+  GShownTargetIds.delete(Slot);
   const Ui = FindClassUi();
   if (!Ui) {
     return;
@@ -4921,6 +4946,7 @@ function HandleModifyPlayerDamage(Event) {
   return ClassDefinitions[AttackerClass].ModifyOutgoingDamage(Event);
 }
 var GClassBySlot = /* @__PURE__ */ new Map();
+var TargetIdRange = 3e3;
 var GPendingClassBySlot = /* @__PURE__ */ new Map();
 var GLastThinkTime = 0;
 function SelectGameMode() {
@@ -5072,6 +5098,7 @@ function ClearPlayer(Slot) {
   ShowCounter(Slot, void 0);
   ShowBuildings(Slot, []);
   ShowBuildHints(Slot, void 0);
+  ShowTargetId(Slot, void 0);
 }
 function TickPlayerHud() {
   ForEachLivePawn((Pawn, Slot) => {
@@ -5084,9 +5111,24 @@ function TickPlayerHud() {
       ShowBuildings(Slot, GetBuildingHudRows(Slot, Instance16.GetGameTime()));
       const BuildKeys = PlayerClass3 !== void 0 ? ClassDefinitions[PlayerClass3].GetBuildKeys(Pawn) : void 0;
       ShowBuildHints(Slot, BuildKeys ? GetBuildHints(Slot, BuildKeys, Instance16.GetGameTime()) : void 0);
+      ShowTargetId(Slot, FindTargetId(Pawn, Slot));
       GActiveMode.TickPlayerHud(Pawn, Slot);
     }
   });
+}
+function FindTargetId(Pawn, Slot) {
+  const ViewerClass = GClassBySlot.get(Slot);
+  const HealTarget = ViewerClass !== void 0 ? ClassDefinitions[ViewerClass].GetHealTarget(Slot) : void 0;
+  const Eye = Pawn.GetEyePosition();
+  const End = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), TargetIdRange));
+  const Target = HealTarget ?? Instance16.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn }).hitEntity;
+  if (!IsPlayerPawn(Target) || !Target.IsAlive() || !IsTeammate(Target, Pawn)) {
+    return void 0;
+  }
+  const TargetClass = GClassBySlot.get(GetPlayerSlot(Target));
+  const Name = TargetClass !== void 0 ? `${GetPawnName(Target)} (${ClassDefinitions[TargetClass].Settings.DisplayName})` : GetPawnName(Target);
+  const MaxHealth = Target.GetMaxHealth();
+  return { Name, Health: Target.GetHealth(), MaxHealth, MaxOverheal: Math.floor(MaxHealth * MedicSettings.OverhealMult), bTerrorist: Target.GetTeamNumber() === 2 /* Terrorist */ };
 }
 function RemoveIfNotAllowed(Weapon) {
   if (!Weapon.IsValid()) {

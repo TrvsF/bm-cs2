@@ -1028,3 +1028,91 @@
 {
 	opacity: 0.35;
 }
+
+.TargetId
+{
+	visibility: collapse;
+	horizontal-align: center;
+	vertical-align: center;
+	margin-top: 150px;
+	flow-children: down;
+	padding: 5px 12px 7px 12px;
+	border-radius: 8px;
+	background-color: #0b0f14b0;
+}
+
+.TargetId.Shown
+{
+	visibility: visible;
+}
+
+.TargetIdName
+{
+	horizontal-align: center;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 17px;
+	color: #f2f4f7;
+	letter-spacing: 0.5px;
+	text-shadow: 0px 1px 3px 1.0 #000000c0;
+}
+
+.TargetId.Team_t .TargetIdName
+{
+	color: #ee5a5a;
+}
+
+.TargetId.Team_ct .TargetIdName
+{
+	color: #7fd4ff;
+}
+
+.TargetIdRow
+{
+	horizontal-align: center;
+	margin-top: 3px;
+	flow-children: right;
+}
+
+.TargetIdBars
+{
+	vertical-align: center;
+}
+
+.TargetIdOverhealBar .BarFill
+{
+	background-color: #7cf0b0;
+}
+
+.TargetIdOverhealBar .BarEmpty
+{
+	background-color: #00000000;
+}
+
+.TargetId.Overhealed .TargetIdHealth
+{
+	color: #7cf0b0;
+}
+
+.TargetIdBar .BarFill
+{
+	background-color: #f2f4f7;
+}
+
+.TargetId.Team_t .TargetIdBar .BarFill
+{
+	background-color: #ee5a5a;
+}
+
+.TargetId.Team_ct .TargetIdBar .BarFill
+{
+	background-color: #7fd4ff;
+}
+
+.TargetIdHealth
+{
+	vertical-align: center;
+	margin-left: 8px;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 15px;
+	color: #f2f4f7;
+}

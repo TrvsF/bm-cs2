@@ -1,6 +1,6 @@
 import { Instance, Console, GameRules, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
-import type { CSPlayerPawn, CSPlayerController, CSWeaponBase } from "cs_script/point_script";
-import { bDebug, IsFriendlyFire, SetFriendlyFire, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, GetPlayerSlot, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
+import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase } from "cs_script/point_script";
+import { bDebug, IsFriendlyFire, SetFriendlyFire, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
 import type
 {
 	FPlayerChatEvent,
@@ -15,14 +15,16 @@ import type
 	FCustomHudClickedEvent,
 	FModifyDamageEvent,
 	FModifyDamageResult,
+	FVector,
 } from "./bm_core";
 import { EPlayerClass, GiveNoClassLoadout, RestoreDefaultBody, ForgetPlayerModel, PickRandomClass } from "./bm_classes";
 import type { EPlayableClass } from "./bm_classes";
 import { ClassDefinitions, GiveLoadout, IsWeaponAllowed } from "./classes/bm_classlist";
+import { MedicSettings } from "./classes/bm_medic";
 import { ClearDecals } from "./bm_effects";
 import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
-import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ShowBuildings, ShowBuildHints, ResetClassUi } from "./bm_ui";
+import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ShowBuildings, ShowBuildHints, ShowTargetId, ResetClassUi } from "./bm_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo, EmptyRealGuns } from "./bm_launcher";
 import type { FLauncherShot } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
@@ -32,7 +34,7 @@ import type { FBuildKeys } from "./bm_buildings";
 import { GameMode } from "./bm_gamemode";
 import { FreeForAllMode } from "./gamemodes/bm_freeforall";
 import { PayloadMode } from "./gamemodes/bm_payload";
-import type { FClassMenuChoice } from "./bm_ui";
+import type { FClassMenuChoice, FTargetId } from "./bm_ui";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -376,6 +378,7 @@ function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResul
 // Globals ////////////////////////////////////////////////////////////////////////////////////////
 
 const GClassBySlot: Map<number, EPlayableClass> = new Map<number, EPlayableClass>();
+const TargetIdRange: number = 3000;
 const GPendingClassBySlot: Map<number, EPlayerClass> = new Map<number, EPlayerClass>();
 let GLastThinkTime: number = 0;
 
@@ -598,6 +601,7 @@ function ClearPlayer(Slot: number): void
 	ShowCounter(Slot, undefined);
 	ShowBuildings(Slot, []);
 	ShowBuildHints(Slot, undefined);
+	ShowTargetId(Slot, undefined);
 }
 
 function TickPlayerHud(): void
@@ -614,9 +618,28 @@ function TickPlayerHud(): void
 			ShowBuildings(Slot, GetBuildingHudRows(Slot, Instance.GetGameTime()));
 			const BuildKeys: FBuildKeys | undefined = PlayerClass !== undefined ? ClassDefinitions[PlayerClass].GetBuildKeys(Pawn) : undefined;
 			ShowBuildHints(Slot, BuildKeys ? GetBuildHints(Slot, BuildKeys, Instance.GetGameTime()) : undefined);
+			ShowTargetId(Slot, FindTargetId(Pawn, Slot));
 			GActiveMode.TickPlayerHud(Pawn, Slot);
 		}
 	});
+}
+
+// Who they're healing, else the teammate under the crosshair right now, as "Name (Class)"
+function FindTargetId(Pawn: CSPlayerPawn, Slot: number): FTargetId | undefined
+{
+	const ViewerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
+	const HealTarget: CSPlayerPawn | undefined = ViewerClass !== undefined ? ClassDefinitions[ViewerClass].GetHealTarget(Slot) : undefined;
+	const Eye: FVector = Pawn.GetEyePosition();
+	const End: FVector = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), TargetIdRange));
+	const Target: Entity | undefined = HealTarget ?? Instance.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn }).hitEntity;
+	if (!IsPlayerPawn(Target) || !Target.IsAlive() || !IsTeammate(Target, Pawn))
+	{
+		return undefined;
+	}
+	const TargetClass: EPlayableClass | undefined = GClassBySlot.get(GetPlayerSlot(Target));
+	const Name: string = TargetClass !== undefined ? `${GetPawnName(Target)} (${ClassDefinitions[TargetClass].Settings.DisplayName})` : GetPawnName(Target);
+	const MaxHealth: number = Target.GetMaxHealth();
+	return { Name: Name, Health: Target.GetHealth(), MaxHealth: MaxHealth, MaxOverheal: Math.floor(MaxHealth * MedicSettings.OverhealMult), bTerrorist: Target.GetTeamNumber() === ETeam.Terrorist };
 }
 
 // Weapons /////////////////////////////////////////////////////////////////////////////////////////

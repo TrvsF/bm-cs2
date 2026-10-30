@@ -11,6 +11,15 @@ import type { FBuildingHudRow, FBuildHints, FBuildHint } from "./bm_buildings";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
+export interface FTargetId
+{
+	readonly Name: string;
+	readonly Health: number;
+	readonly MaxHealth: number;
+	readonly MaxOverheal: number;
+	readonly bTerrorist: boolean;
+}
+
 export type FClassMenuChoice = EPlayerClass | "close" | undefined;
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,6 +84,13 @@ const GShownBars: Map<number, Map<string, number>> = new Map<number, Map<string,
 const GShownCounter: Map<number, string> = new Map<number, string>();
 const GSentPayload: Map<number, Map<string, string>> = new Map<number, Map<string, string>>();
 const GShownBuildings: Map<number, string[]> = new Map<number, string[]>();
+const TargetIdPanelId: string = "TargetId";
+const TargetIdNameId: string = "TargetIdName";
+const TargetIdHealthId: string = "TargetIdHealth";
+const TargetIdBarId: string = "TargetIdBar";
+const TargetIdOverhealBarId: string = "TargetIdOverhealBar";
+
+const GShownTargetIds: Map<number, string> = new Map<number, string>();
 const GShownBuildHints: Map<number, string[]> = new Map<number, string[]>();
 let GbWarnedNoClassUi: boolean = false;
 
@@ -368,6 +384,39 @@ export function ShowBuildHints(Slot: number, Hints: FBuildHints | undefined): vo
 	}
 }
 
+// Under the crosshair while looking at (or healing) a teammate: their name, and their health as a bar and numbers.
+// Overheal fills a second bar over the full one, up to the most a medic can overheal them.
+export function ShowTargetId(Slot: number, Target: FTargetId | undefined): void
+{
+	const Key: string = Target ? `${Target.Name}|${Target.Health}|${Target.MaxHealth}|${Target.MaxOverheal}|${Target.bTerrorist}` : "";
+	if ((GShownTargetIds.get(Slot) ?? "") === Key)
+	{
+		return;
+	}
+	const Ui: CustomHudLayout | undefined = FindClassUi();
+	if (!Ui)
+	{
+		return;
+	}
+	GShownTargetIds.set(Slot, Key);
+	if (!Target)
+	{
+		Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Shown", false);
+		ShowBar(Slot, TargetIdBarId, undefined);
+		ShowBar(Slot, TargetIdOverhealBarId, undefined);
+		return;
+	}
+	Ui.SetDialogVariableStringForPlayer(Slot, TargetIdNameId, "name", Target.Name);
+	Ui.SetDialogVariableStringForPlayer(Slot, TargetIdHealthId, "health", `${Target.Health} / ${Target.MaxHealth}`);
+	Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Team_t", Target.bTerrorist);
+	Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Team_ct", !Target.bTerrorist);
+	ShowBar(Slot, TargetIdBarId, Target.Health / Math.max(1, Target.MaxHealth));
+	const bOverhealed: boolean = Target.Health > Target.MaxHealth;
+	ShowBar(Slot, TargetIdOverhealBarId, bOverhealed ? (Target.Health - Target.MaxHealth) / Math.max(1, Target.MaxOverheal - Target.MaxHealth) : undefined);
+	Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Overhealed", bOverhealed);
+	Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Shown", true);
+}
+
 export function ShowCounter(Slot: number, Counter: FHudCounter | undefined): void
 {
 	const Key: string = Counter ? `${Counter.Label}|${Counter.Count}|${Counter.Max}` : "";
@@ -544,6 +593,7 @@ export function ResetClassUi(Slot: number): void
 	GSentPayload.delete(Slot);
 	GShownBuildings.delete(Slot);
 	GShownBuildHints.delete(Slot);
+	GShownTargetIds.delete(Slot);
 	const Ui: CustomHudLayout | undefined = FindClassUi();
 	if (!Ui)
 	{

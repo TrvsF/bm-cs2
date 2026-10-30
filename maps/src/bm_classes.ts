@@ -1,7 +1,7 @@
 import { Console, CSGearSlot, CSDamageTypes, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
 import { LogPrefix, VectorMath, GetTeamColor, GetPlayerSlot, GetOrCreate, IsWeapon, IsKnife } from "./bm_core";
-import type { FVector, FRotator, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
+import type { FVector, FRotator, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
 import type { FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
 import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
@@ -102,6 +102,7 @@ const PickFxLifetime: number = 3;
 const GOwnModels: Map<number, Map<number, string>> = new Map<number, Map<number, string>>();
 const GClassModels: Set<string> = new Set<string>();
 const GWarnedModels: Set<string> = new Set<string>();
+const UntintedColor: FColor = { r: 255, g: 255, b: 255 };
 
 export const BeamStartDrop: FVector = { x: 0, y: 0, z: 12 };
 
@@ -139,20 +140,21 @@ function ApplyModel(Pawn: CSPlayerPawn, Model: string): void
 	}
 
 	const Wanted: string | undefined = Model !== "" ? Model : OwnModels.get(Team);
-	if (Wanted === undefined || NormalizeModelName(Wanted) === NormalizeModelName(Current))
+	if (Wanted !== undefined && NormalizeModelName(Wanted) !== NormalizeModelName(Current))
 	{
-		return;
+		if (Model !== "")
+		{
+			GClassModels.add(NormalizeModelName(Model));
+		}
+		Pawn.SetModel(Wanted);
+		if (NormalizeModelName(Pawn.GetModelName()) !== NormalizeModelName(Wanted) && !GWarnedModels.has(Wanted))
+		{
+			GWarnedModels.add(Wanted);
+			Console.Log(`${LogPrefix} couldn't put on model "${Wanted}": is it in the map? Add a prop_dynamic using it somewhere out of sight so it's loaded.`);
+		}
 	}
-	if (Model !== "")
-	{
-		GClassModels.add(NormalizeModelName(Model));
-	}
-	Pawn.SetModel(Wanted);
-	if (NormalizeModelName(Pawn.GetModelName()) !== NormalizeModelName(Wanted) && !GWarnedModels.has(Wanted))
-	{
-		GWarnedModels.add(Wanted);
-		Console.Log(`${LogPrefix} couldn't put on model "${Wanted}": is it in the map? Add a prop_dynamic using it somewhere out of sight so it's loaded.`);
-	}
+	// Class models are tinted their team's colour so which side they're on is obvious; the player's own model is left as is
+	Pawn.SetColor(Model !== "" ? GetTeamColor(Pawn) : UntintedColor);
 }
 
 function NormalizeModelName(Name: string): string
@@ -334,6 +336,12 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 	public ModifyAnyDamage(Event: FModifyDamageEvent): FModifyDamageResult
 	{
 		return;
+	}
+
+	// Override for a class that heals: who it's healing right now, so their health stays on its HUD
+	public GetHealTarget(Slot: number): CSPlayerPawn | undefined
+	{
+		return undefined;
 	}
 
 	// Override for a class that builds: what each mouse button builds right now, or undefined while its build tool isn't out
