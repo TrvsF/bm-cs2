@@ -1,0 +1,21 @@
+"Layer0"
+{
+	"shader"	"csgo_glass.vfx"
+	"g_bFogEnabled"	"1"
+	"g_nTextureAddressModeU"	"0"
+	"g_nTextureAddressModeV"	"0"
+	"g_flModelTintAmount"	"1"
+	"g_flTranslucencyRemap"	"[0.000000 0.131000 0.000000 0.000000]"
+	"GlassMaskTransmission"	"[1.000000 1.000000 1.000000 0.000000]"
+	"GlassTintColor"	"[1.000000 1.000000 1.000000 0.000000]"
+	"TextureNormal"	"[0.501961 0.501961 1.000000 0.000000]"
+	"TextureRoughness"	"[0.501961 0.501961 0.501961 0.000000]"
+	"GlassMaskColor"	"agents/models/otakku/gordon_freeman/materials/rense.png"
+	"GlassMaskTranslucency"	"agents/models/otakku/gordon_freeman/materials/rense_f836fd70_trans.png"
+	"Compiled Textures"
+	{
+		"g_tGlassDust"	"agents/models/otakku/gordon_freeman/materials/rense_png_f836fd70.vtex"
+		"g_tGlassTintColor"	"agents/models/otakku/gordon_freeman/materials/rense_vmat_g_tglasstintcolor_6923b5b7.vtex"
+		"g_tNormal"	"agents/models/otakku/gordon_freeman/materials/rense_vmat_g_tnormal_2984f4a9.vtex"
+	}
+}

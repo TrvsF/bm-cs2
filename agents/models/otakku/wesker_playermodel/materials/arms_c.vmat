@@ -3,13 +3,13 @@
 	"shader"	"csgo_character.vfx"
 	"F_RENDER_BACKFACES"	"1"
 	"g_bFogEnabled"	"1"
+	"g_flModelTintAmount"	"1"
+	"g_flTexCoordRotation"	"0"
 	"g_nScaleTexCoordUByModelScaleAxis"	"0"
 	"g_nScaleTexCoordVByModelScaleAxis"	"0"
 	"g_nTextureAddressModeU"	"0"
 	"g_nTextureAddressModeV"	"0"
 	"g_flAmbientOcclusionMasking"	"0.4"
-	"g_flModelTintAmount"	"1"
-	"g_flTexCoordRotation"	"0"
 	"g_vColorTint"	"[1.000000 1.000000 1.000000 0.000000]"
 	"g_vTexCoordCenter"	"[0.500000 0.500000 0.000000 0.000000]"
 	"g_vTexCoordOffset"	"[0.000000 0.000000 0.000000 0.000000]"
@@ -26,7 +26,7 @@
 	{
 		"g_tAmbientOcclusion"	"agents/models/otakku/wesker_playermodel/materials/arms_ao_png_828d30b3.vtex"
 		"g_tColor"	"agents/models/otakku/wesker_playermodel/materials/imagetostl_t_k29arms01_bc_png_b20532a1.vtex"
-		"g_tMetalness"	"agents/models/otakku/wesker_playermodel/materials/arms_c_vmat_g_tmetalness_b99de324.vtex"
-		"g_tNormal"	"agents/models/otakku/wesker_playermodel/materials/t_k29arms01_n_jpg_25b33331.vtex"
+		"g_tMetalness"	"agents/models/otakku/wesker_playermodel/materials/arms_c_vmat_g_tmetalness_b99de324_png_9a0d2bf7.vtex"
+		"g_tNormal"	"agents/models/otakku/wesker_playermodel/materials/t_k29arms01_n_png_c5ed6d2f.vtex"
 	}
 }

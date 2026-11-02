@@ -121,6 +121,22 @@ export function RestoreDefaultBody(Pawn: CSPlayerPawn): void
 	ApplyBody(Pawn, DefaultHealth, DefaultSizeScale, "");
 }
 
+export function HideBody(Pawn: CSPlayerPawn): void
+{
+	const OwnModels: Map<number, string> | undefined = GOwnModels.get(GetPlayerSlot(Pawn));
+	const Own: string | undefined = OwnModels ? OwnModels.get(Pawn.GetTeamNumber()) : undefined;
+	if (Own !== undefined)
+	{
+		Pawn.SetModel(Own);
+	}
+	Pawn.SetColor({ ...Pawn.GetColor(), a: 0 });
+}
+
+export function ShowBody(Pawn: CSPlayerPawn): void
+{
+	Pawn.SetColor({ ...Pawn.GetColor(), a: 255 });
+}
+
 export function ForgetPlayerModel(Slot: number): void
 {
 	GOwnModels.delete(Slot);

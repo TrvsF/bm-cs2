@@ -19,6 +19,10 @@ const BloodTemplateName: string = "blood_template";
 const MaxDecals: number = 48;
 const ScorchSearchDistance: number = 16;
 const BloodSplatterDistance: number = 128;
+const GibTemplateName: string = "gib_template";
+const GibFallbackTemplateName: string = "boom_template";
+const GibLifetime: number = 5;
+const GibFlingSpeed: number = 450;
 
 let GDecals: Entity[][] = [];
 
@@ -58,6 +62,26 @@ export function SpawnBloodSplatter(ExplosionOrigin: FVector, Victim: CSPlayerPaw
 	if (Below.didHit && !Below.startedInSolid)
 	{
 		SpawnDecal(BloodTemplateName, Below.end, Below.normal);
+	}
+}
+
+// Gibs ////////////////////////////////////////////////////////////////////////////////////////////
+
+export function SpawnGibs(Victim: CSPlayerPawn): void
+{
+	const Chest: FVector = GetChestPosition(Victim);
+	// From just above, so the splat lands on the floor under them
+	SpawnBloodSplatter(VectorMath.Add(Chest, UpVector), Victim);
+
+	const Spawned: Entity[] = SpawnTemporaryTemplate(GibTemplateName, Chest, GibLifetime) ?? SpawnTemporaryTemplate(GibFallbackTemplateName, Chest, GibLifetime) ?? [];
+	const Momentum: FVector = Victim.GetAbsVelocity();
+	for (const Ent of Spawned)
+	{
+		if (Ent.IsValid() && Ent.GetClassName().startsWith("prop_physics"))
+		{
+			const Direction: FVector = VectorMath.GetSafeNormal({ x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: 0.5 + Math.random() });
+			Ent.Teleport({ velocity: VectorMath.Add(Momentum, VectorMath.Scale(Direction, GibFlingSpeed)) });
+		}
 	}
 }
 

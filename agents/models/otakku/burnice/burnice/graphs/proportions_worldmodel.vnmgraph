@@ -5,12 +5,12 @@
 	m_pRootGraph = 
 	{
 		_class = "CNmGraphDocFlowGraph"
-		m_ID = "930e5a7f-06ed-4ea9-be6d-3efdf7246a15"
+		m_ID = "0331493d-8d33-4328-aff1-62babb28f119"
 		m_nodes = 
 		[
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "2c1556b4-8469-44eb-8f63-670d58009f90"
+				m_ID = "1c40ec2b-5c60-4ced-a617-331dfc519f12"
 				m_name = "action"
 				m_floatingComment = ""
 				m_position = [ 2430.0, 0.0 ]
@@ -18,7 +18,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "f46caaf7-e327-4695-bc8a-bac0c2dfd12d"
+						m_ID = "9386f97c-cbb6-4300-a200-26efc349c6d4"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -32,7 +32,7 @@
 			},
 			{
 				_class = "CNmGraphDocBoolControlParameterNode"
-				m_ID = "c8d03517-abf2-43c3-aafa-f390df95b36b"
+				m_ID = "c8b5c490-641a-4912-9a26-c46344083911"
 				m_name = "action_reset"
 				m_floatingComment = ""
 				m_position = [ 2780.0, 0.0 ]
@@ -40,7 +40,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "a16ec717-0be8-400f-967b-a32ff8a3df16"
+						m_ID = "53c9981e-b6d3-4f1c-8e0b-ac229a17dfab"
 						m_name = "Value"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -53,7 +53,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "5805561d-bf99-42bd-a2a9-6cb53c874562"
+				m_ID = "682c53cf-894b-4b25-8bfd-68c2a89998af"
 				m_name = "attack_type"
 				m_floatingComment = ""
 				m_position = [ 3130.0, 0.0 ]
@@ -61,7 +61,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "f419d4c9-a170-45f6-9cf3-bd8c4d343abd"
+						m_ID = "9af2777e-e0b9-4f93-b23d-09c9b08cfc72"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -75,7 +75,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "48e3b3d5-7c08-4154-87eb-08c005e67668"
+				m_ID = "03f5f4e2-487d-4a0c-a543-816be393f7f0"
 				m_name = "attack_variation"
 				m_floatingComment = ""
 				m_position = [ 0.0, 655.852173 ]
@@ -83,7 +83,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "590b84de-ac38-47bf-b99e-61ae136d9cb2"
+						m_ID = "3ee18c3b-24e4-4d07-8fb2-074fcf24f8c2"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -98,7 +98,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "03eb44ad-5c08-4273-83fb-10616fb70e95"
+				m_ID = "57c4b7b4-10bf-48d4-830a-02acfb328c19"
 				m_name = "deploy_variation"
 				m_floatingComment = ""
 				m_position = [ 350.0, 655.852173 ]
@@ -106,7 +106,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "d4d3dbc2-ba6b-4365-942c-9aff5ec0b066"
+						m_ID = "99119c61-13c8-43be-b52d-2f61cf8ae50a"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -121,7 +121,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "ad9fc8a6-c7d0-44dc-bf21-89c1fe5bfb48"
+				m_ID = "633ccccb-402e-42b6-a678-013fb1990da8"
 				m_name = "idle_variation"
 				m_floatingComment = ""
 				m_position = [ 700.0, 655.852173 ]
@@ -129,7 +129,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "4805892b-fb2a-41cb-ac8b-038e58805ef3"
+						m_ID = "a9cdf76a-97d1-408b-a550-8bd44134dbba"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -144,7 +144,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "9cf7d410-b3a8-4355-ba03-478db94c509b"
+				m_ID = "97f2dcbc-29ab-40b1-a295-135c0cbbff18"
 				m_name = "attack_throw_strength"
 				m_floatingComment = ""
 				m_position = [ 1050.0, 655.852173 ]
@@ -152,7 +152,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "d9639799-b9a1-4bd2-a7dc-e100767b9658"
+						m_ID = "d5e1e65a-bbec-40d8-9a11-8024526681ff"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -167,7 +167,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "9bfdf64a-d380-422b-974d-bc25fec76d1f"
+				m_ID = "0aa751a8-37e1-43c0-9d3c-e78d7a97a117"
 				m_name = "weapon_ammo"
 				m_floatingComment = ""
 				m_position = [ 1400.0, 655.852173 ]
@@ -175,7 +175,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "ff230b0a-5f27-471d-9146-a5978630a9d7"
+						m_ID = "37b99720-258f-4cea-ba3c-b89841176b04"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -190,7 +190,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "2ccca25e-302d-4cae-804d-8caba8e333c1"
+				m_ID = "7ab072ae-c6f5-4404-8231-e2beaa63e869"
 				m_name = "weapon_ammo_max"
 				m_floatingComment = ""
 				m_position = [ 1750.0, 655.852173 ]
@@ -198,7 +198,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "cb456e75-38b8-4840-b077-1c8e2071426f"
+						m_ID = "403fd411-8810-47ab-b109-c04f1165418c"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -213,7 +213,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "e10673f3-cf3d-43a7-a95c-de07967fd77a"
+				m_ID = "6bb1f852-36f3-488c-ab30-ff9ea8a38fae"
 				m_name = "weapon_ammo_reserve"
 				m_floatingComment = ""
 				m_position = [ 2100.0, 655.852173 ]
@@ -221,7 +221,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "cfcc4c5d-3a00-4c50-a92d-bf48f47dbfc8"
+						m_ID = "a2d60aa6-8b2b-4589-94dc-0ecb416eecd9"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -236,7 +236,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "ea9ba260-b6ec-4528-ae48-13383c2f4086"
+				m_ID = "300a5434-20ab-4954-8ca8-c02df019363c"
 				m_name = "weapon_category"
 				m_floatingComment = ""
 				m_position = [ 2450.0, 655.852173 ]
@@ -244,7 +244,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "0ca09f3e-e2fe-4cd2-a612-6c59c3bdcc4a"
+						m_ID = "dda7afea-ba7d-4924-9298-23542e531ade"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -258,7 +258,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "0bf5de33-a0cf-4d0f-854d-0edf2a6fed9c"
+				m_ID = "3536a999-8642-42d7-a378-2c6c950ed03a"
 				m_name = "weapon_extra_info"
 				m_floatingComment = ""
 				m_position = [ 2800.0, 655.852173 ]
@@ -266,7 +266,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "65b67ca9-a5c2-4342-82f2-266e2d753009"
+						m_ID = "b4e1e444-9764-432a-ada2-c88369db8806"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -280,7 +280,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "88e9a15a-a202-443d-b35e-b50c662017a8"
+				m_ID = "7fd53d8f-b7cc-4c94-9394-c61daf11bbe2"
 				m_name = "weapon_ironsight_amount"
 				m_floatingComment = ""
 				m_position = [ 3150.0, 655.852173 ]
@@ -288,7 +288,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "d3dcf81d-3c22-471d-9f0f-4d9fe3750cb9"
+						m_ID = "844bb316-e6dc-4521-a4de-261e0d505252"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -303,7 +303,7 @@
 			},
 			{
 				_class = "CNmGraphDocBoolControlParameterNode"
-				m_ID = "1fc0e801-f3c2-4c67-8d76-82f22bf777e2"
+				m_ID = "2e95d347-0b5e-4a3e-be90-8ec23932b123"
 				m_name = "weapon_is_silenced"
 				m_floatingComment = ""
 				m_position = [ 0.0, 885.852173 ]
@@ -311,7 +311,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "f49fb59e-857a-4f04-8922-8a1c17695e0f"
+						m_ID = "c6fdd261-8c44-466a-99bc-be4055b1d2b9"
 						m_name = "Value"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -324,7 +324,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "8b5f8252-3bc1-47e2-9e69-b3bb3fed9bfa"
+				m_ID = "701d0481-0f15-4910-a127-7c42bda1cc3f"
 				m_name = "weapon_type"
 				m_floatingComment = ""
 				m_position = [ 350.0, 885.852173 ]
@@ -332,7 +332,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "72c0d1c9-42c0-449f-b1b3-1eada76652da"
+						m_ID = "1fde2882-dfe2-4e92-a260-a2b5791eee64"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -346,7 +346,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "ecf75760-62a5-477f-8ee2-7bec2f14dfa8"
+				m_ID = "39d46f1d-42f0-4f20-abf6-237b6e565289"
 				m_name = "reload_stage"
 				m_floatingComment = ""
 				m_position = [ 700.0, 885.852173 ]
@@ -354,7 +354,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "d30f163a-fdd5-4a3a-9d6d-2639c6466e51"
+						m_ID = "d649e806-fae6-442f-81bb-935b27700ea1"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -368,7 +368,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "5432047b-f409-40b4-8df0-b7ef316490f8"
+				m_ID = "0cd70ffe-a506-4151-a048-79609dc7df2d"
 				m_name = "move_speed_horizontal"
 				m_floatingComment = ""
 				m_position = [ 1050.0, 885.852173 ]
@@ -376,7 +376,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "52115372-ca4c-4102-a68f-813891071f48"
+						m_ID = "ddba86b3-c5c6-4737-a37a-4b92f8d35125"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -391,7 +391,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "e0c80fc2-c3fe-4ea7-9746-b33bf05a3f7d"
+				m_ID = "699b0ca5-dd17-4aa1-8a2b-2ff60a938d95"
 				m_name = "move_crouch_amount"
 				m_floatingComment = ""
 				m_position = [ 1400.0, 885.852173 ]
@@ -399,7 +399,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "9b4f2139-ee5e-4df1-b587-91f6d319c207"
+						m_ID = "7f6fe8ff-ebf2-48f4-af75-a0ef2b0c95ad"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -414,7 +414,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "fbaa9021-511b-4d4c-9da1-0b928ff3dcd8"
+				m_ID = "9bb1fd44-928e-496d-aa57-1b04ae2d687c"
 				m_name = "move_type"
 				m_floatingComment = ""
 				m_position = [ 1750.0, 885.852173 ]
@@ -422,7 +422,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "42ac065a-7b35-4a4e-b870-9e5f8f929661"
+						m_ID = "1493581c-7d9d-45e7-9dfd-4cbdf99eb5b2"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -436,7 +436,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "da74ebe7-80e3-4548-8d2a-ad191210c3c5"
+				m_ID = "18766c31-011c-4343-bdcc-ac101d9f4b56"
 				m_name = "air_height_above_ground"
 				m_floatingComment = ""
 				m_position = [ 2100.0, 885.852173 ]
@@ -444,7 +444,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "d40d62a6-3d4b-4af9-99c7-6504dbae5163"
+						m_ID = "50f0f990-bac3-4554-a7c5-a74c86290ec0"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -459,7 +459,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "13318dcb-e035-40dc-a108-f0d50b6a61d1"
+				m_ID = "9f5b2594-0ecd-4c59-8cf3-9a53c827427c"
 				m_name = "flashed_amount"
 				m_floatingComment = ""
 				m_position = [ 2450.0, 885.852173 ]
@@ -467,7 +467,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "cbd3ca84-c5d5-4647-bae1-491c48aa136a"
+						m_ID = "9c323afd-0699-4069-81a5-8a55efd58f42"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -482,7 +482,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "27d488b3-3cc5-429c-985c-d2c496ca1b54"
+				m_ID = "a8cb3d39-a7f7-44f5-b4ac-9f32f4477466"
 				m_name = "flinch_head_type"
 				m_floatingComment = ""
 				m_position = [ 2800.0, 885.852173 ]
@@ -490,7 +490,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "f3bde3e4-0842-4c7d-9392-58f6f89cfd81"
+						m_ID = "b40e75d6-0dca-4731-ad2f-850ae30311d0"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -504,7 +504,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "f7c8da48-f4b5-4d0e-9af9-b6d989b90326"
+				m_ID = "561c9ffe-b238-4bec-a2c0-bdfe85b03a10"
 				m_name = "flinch_body_type"
 				m_floatingComment = ""
 				m_position = [ 3150.0, 885.852173 ]
@@ -512,7 +512,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "3c576f3f-03ca-4c2f-a371-924cb93fe17e"
+						m_ID = "e1851f9f-2040-4c27-b457-d157cf355abc"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -526,7 +526,7 @@
 			},
 			{
 				_class = "CNmGraphDocBoolControlParameterNode"
-				m_ID = "1e196b1b-f902-4fae-b3e9-c83bf14db2ab"
+				m_ID = "b2f72072-8ceb-400d-b66d-b2934bcbdc30"
 				m_name = "flinch_body_restart"
 				m_floatingComment = ""
 				m_position = [ 0.0, 1115.852173 ]
@@ -534,7 +534,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "66df7bdf-4609-4d2a-95fd-cd6409e8ef1f"
+						m_ID = "0c0a6a88-b77e-4ae1-83f2-7cbc994e1144"
 						m_name = "Value"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -547,7 +547,7 @@
 			},
 			{
 				_class = "CNmGraphDocBoolControlParameterNode"
-				m_ID = "f763f1f4-e773-4db4-874a-4ed331f7a4b8"
+				m_ID = "a105c8a5-a982-4eef-bd48-ef8b505b1374"
 				m_name = "flinch_head_restart"
 				m_floatingComment = ""
 				m_position = [ 350.0, 1115.852173 ]
@@ -555,7 +555,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "e7ccd403-6ad1-436b-be4a-18f1a3f0ea4e"
+						m_ID = "ebea99ac-fb2b-4ada-9363-eb1f4ede37f1"
 						m_name = "Value"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -568,7 +568,7 @@
 			},
 			{
 				_class = "CNmGraphDocBoolControlParameterNode"
-				m_ID = "49199bde-736d-4108-a8a2-6c705620afb6"
+				m_ID = "ab8e9bff-040a-4394-8e8b-64808894c8e0"
 				m_name = "flinch_is_on_fire"
 				m_floatingComment = ""
 				m_position = [ 700.0, 1115.852173 ]
@@ -576,7 +576,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "9277cbb1-063d-4484-aa22-cb2614645b01"
+						m_ID = "589f9c17-f0d5-4683-8d16-74e3c0dde87b"
 						m_name = "Value"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -589,7 +589,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "d69a6580-5029-4e5f-8794-457ab7ed2d72"
+				m_ID = "97b062f3-fa95-40ad-b5a1-90dc9f9444fb"
 				m_name = "aim_angle_pitch"
 				m_floatingComment = ""
 				m_position = [ 1050.0, 1115.852173 ]
@@ -597,7 +597,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "5034b7de-a1fa-4ea5-8813-ae6cd4f621fb"
+						m_ID = "9d60aab2-3248-460f-bad5-8eca7e1e45fa"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -612,7 +612,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "67947830-24c5-4706-b008-d6391c59ef57"
+				m_ID = "9f7ef4af-58da-4b4f-b28d-464a9d8e239a"
 				m_name = "aim_angle_yaw"
 				m_floatingComment = ""
 				m_position = [ 1400.0, 1115.852173 ]
@@ -620,7 +620,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "aab0c92a-2b1f-455e-87f6-53e78048094e"
+						m_ID = "bc2774e3-4bf8-4127-a755-01fb2fe7fed2"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -635,7 +635,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "8cb73c77-b153-4fdf-95dc-5467c462ddbd"
+				m_ID = "786ad71b-a7d5-4f4c-9f15-6a21d0852756"
 				m_name = "ladder_angle_yaw"
 				m_floatingComment = ""
 				m_position = [ 1750.0, 1115.852173 ]
@@ -643,7 +643,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "126699b7-88ba-4659-a575-0403c85e70ea"
+						m_ID = "53c1efa6-b359-4f3a-bfb5-d42b492b07ec"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -658,7 +658,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "3ba1aab1-3a63-4202-839d-0c1ff176ab73"
+				m_ID = "091abc80-0d17-4217-9eb1-390430671787"
 				m_name = "ladder_angle_yaw_backwards"
 				m_floatingComment = ""
 				m_position = [ 2100.0, 1115.852173 ]
@@ -666,7 +666,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "b3911d64-7425-4f35-8250-0bece0e314aa"
+						m_ID = "ca46f573-61fe-4b1d-b28b-fd022be80e60"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -681,7 +681,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "24de5297-0776-4c03-bbf1-52618a77aaa6"
+				m_ID = "74f3a89c-ea76-4317-896b-a7783eee6c93"
 				m_name = "ground_action_direction_id"
 				m_floatingComment = ""
 				m_position = [ 2450.0, 1115.852173 ]
@@ -689,7 +689,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "95f5722b-ba46-4012-85dd-f937f513348b"
+						m_ID = "a755d0c9-8401-4c19-84c0-146e9c4ebef3"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -703,7 +703,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "006f9794-f34c-4c42-a1bf-611bb37dd81f"
+				m_ID = "a5e87117-bd68-4d56-ada9-d31364c08b8d"
 				m_name = "move_direction_id"
 				m_floatingComment = ""
 				m_position = [ 2800.0, 1115.852173 ]
@@ -711,7 +711,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "53c6bdfa-a03f-498d-9b48-9a60fa26dcc5"
+						m_ID = "e78f2682-86a2-4c61-86e2-6ce270a554bd"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -725,7 +725,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "54cafdf8-9d72-41aa-b4bb-2aa64fbfa15f"
+				m_ID = "04053363-4a05-465b-a933-10d3f05c7fc1"
 				m_name = "ground_action"
 				m_floatingComment = ""
 				m_position = [ 3150.0, 1115.852173 ]
@@ -733,7 +733,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "9789eb77-54ee-48d1-8589-586c670f3ffd"
+						m_ID = "af1770e4-ed22-4326-9e56-5b23a5364d44"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -747,7 +747,7 @@
 			},
 			{
 				_class = "CNmGraphDocBoolControlParameterNode"
-				m_ID = "3ef3afa3-b56d-40ce-9c03-99b51fd1637a"
+				m_ID = "a87e01a5-4c5b-4efc-aa02-8f60e338153d"
 				m_name = "weapon_is_legacy_model"
 				m_floatingComment = ""
 				m_position = [ 0.0, 1345.852173 ]
@@ -755,7 +755,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "b8f269fb-12ee-4962-a52e-7a2844355885"
+						m_ID = "8ad866bd-b0de-4882-af48-db98cbe59897"
 						m_name = "Value"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -768,7 +768,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "9ed3561f-2ed0-47e7-83e6-36c415bd3e0d"
+				m_ID = "74837866-18fa-4049-83b6-baa97dedacb4"
 				m_name = "move_speed_x"
 				m_floatingComment = ""
 				m_position = [ 350.0, 1345.852173 ]
@@ -776,7 +776,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "addf0940-07a9-4e18-b0d8-072475b2318b"
+						m_ID = "fd93f6c5-73ac-42bc-9ac4-b490eecd4e8b"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -791,7 +791,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "47600ad5-d21e-4b23-9aaa-728d214adac2"
+				m_ID = "a0514587-56b2-4c80-8793-b3fa311f18ef"
 				m_name = "move_speed_y"
 				m_floatingComment = ""
 				m_position = [ 700.0, 1345.852173 ]
@@ -799,7 +799,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "b66f331d-e748-4d2d-bbe1-f604a9bb03ed"
+						m_ID = "e6ad0220-c5dc-44b3-a3fa-0c5eee6c9d10"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -814,7 +814,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "c9fa3f59-52b6-42cc-aeb8-6b3699bacc53"
+				m_ID = "562a95a2-0782-43ad-bd0a-edc41000fb31"
 				m_name = "ground_turn_angle_or_velocity"
 				m_floatingComment = ""
 				m_position = [ 1050.0, 1345.852173 ]
@@ -822,7 +822,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "d6aff60d-f9e0-4107-9e30-89446c440356"
+						m_ID = "cd1992c5-81ed-4c03-b852-8d583da65ce8"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -837,7 +837,7 @@
 			},
 			{
 				_class = "CNmGraphDocIDControlParameterNode"
-				m_ID = "4daf4147-a579-4abf-a154-141e45179a1f"
+				m_ID = "d58b7a4b-fc6d-4d55-8890-0aedc4c927bd"
 				m_name = "air_action"
 				m_floatingComment = ""
 				m_position = [ 1400.0, 1345.852173 ]
@@ -845,7 +845,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "7948d561-0d25-487f-b416-cdce2486d03d"
+						m_ID = "b34bb0ac-9c5f-404d-990b-e2a975e8f067"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -859,7 +859,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "19db5ce5-8747-4bf5-bce3-1f61b890a80a"
+				m_ID = "1add80dc-493f-4be5-887f-87b2c187eee7"
 				m_name = "weapon_drop_amount"
 				m_floatingComment = ""
 				m_position = [ 1750.0, 1345.852173 ]
@@ -867,7 +867,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "1adf6951-a8df-4122-b8a1-870dfc8bd00c"
+						m_ID = "6a20f5a6-7906-4be8-851c-e8c2b8b6a711"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -882,7 +882,7 @@
 			},
 			{
 				_class = "CNmGraphDocBoolControlParameterNode"
-				m_ID = "a01808da-00e3-45fa-b9de-1dce26598e7f"
+				m_ID = "da2d7989-c342-4781-bd12-c8517032ac51"
 				m_name = "attack_is_final_bullets"
 				m_floatingComment = ""
 				m_position = [ 2100.0, 1345.852173 ]
@@ -890,7 +890,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "bdf55232-2362-4b7a-ab2a-d9ee5b5e2568"
+						m_ID = "fd5fc49c-a6d3-461c-a7fc-3f0ad2985372"
 						m_name = "Value"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -903,7 +903,7 @@
 			},
 			{
 				_class = "CNmGraphDocBoolControlParameterNode"
-				m_ID = "61c627f9-f17f-4e46-ad47-6dabc6c8a022"
+				m_ID = "3c26f38e-fb84-496e-81bc-3817a9977209"
 				m_name = "is_defusing"
 				m_floatingComment = ""
 				m_position = [ 2450.0, 1345.852173 ]
@@ -911,7 +911,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "54182ca0-f38d-40da-be63-98ac766634e2"
+						m_ID = "35f98771-a194-4e8b-a0aa-d5bd97175817"
 						m_name = "Value"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -924,7 +924,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "dc20899c-8247-494f-a474-07052ba06076"
+				m_ID = "0fa331ea-0b5c-4d53-ae2f-35184dcf7acc"
 				m_name = "ladder_cycle"
 				m_floatingComment = ""
 				m_position = [ 2800.0, 1345.852173 ]
@@ -932,7 +932,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "fbd7b3c9-9f9d-4056-b101-768c6e9ab6d0"
+						m_ID = "62479204-d690-4d4b-ab18-0cd5568af9b4"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -947,7 +947,7 @@
 			},
 			{
 				_class = "CNmGraphDocBoolControlParameterNode"
-				m_ID = "c7bd9c5e-aab4-4d65-b339-ee9d5bac8c6a"
+				m_ID = "3b699fc6-6324-4f62-a365-cca03b549bd5"
 				m_name = "move_is_walking"
 				m_floatingComment = ""
 				m_position = [ 3150.0, 1345.852173 ]
@@ -955,7 +955,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "53e7d498-1a74-4c7c-a818-140e15f94a1f"
+						m_ID = "53f71855-723b-4615-9e2a-ad75e3f295b3"
 						m_name = "Value"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -968,7 +968,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "68d6daac-7478-48d6-a79a-de2a7395e24c"
+				m_ID = "205ae7ce-1246-405d-bfd1-c99694afd547"
 				m_name = "move_speed_horizontal_previous"
 				m_floatingComment = ""
 				m_position = [ 0.0, 1575.852173 ]
@@ -976,7 +976,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "aea0908f-2b45-4408-af51-5e8b2320b3b6"
+						m_ID = "c07a2b37-25cc-484b-be11-a709d0d90fcc"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -991,7 +991,7 @@
 			},
 			{
 				_class = "CNmGraphDocTargetControlParameterNode"
-				m_ID = "c753fc44-88a1-494c-90b9-bdeae7b79bf7"
+				m_ID = "d2733f3a-e49c-4b42-a903-c552d410de92"
 				m_name = "ik_left_foot"
 				m_floatingComment = ""
 				m_position = [ 350.0, 1575.852173 ]
@@ -999,7 +999,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "aff8c9cb-7150-4053-b41f-cb1d18fc24dc"
+						m_ID = "7cc50808-1774-4f88-a213-04558f8cd798"
 						m_name = "Value"
 						m_type = "Target"
 						m_bIsDynamicPin = false
@@ -1011,7 +1011,7 @@
 			},
 			{
 				_class = "CNmGraphDocTargetControlParameterNode"
-				m_ID = "435009c5-b36c-4b0e-9ba1-303e3b9754e1"
+				m_ID = "8debe880-d882-4842-b67e-2c2ffc6f438f"
 				m_name = "ik_right_foot"
 				m_floatingComment = ""
 				m_position = [ 700.0, 1575.852173 ]
@@ -1019,7 +1019,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "ae815877-dc1a-4d37-b92a-a9da428fe96c"
+						m_ID = "ab66a6f5-a8e5-4e4f-998f-194b6383f1ed"
 						m_name = "Value"
 						m_type = "Target"
 						m_bIsDynamicPin = false
@@ -1031,7 +1031,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatControlParameterNode"
-				m_ID = "a581e6ac-25e6-46d1-84cf-960e95005817"
+				m_ID = "353afa9c-923e-48f5-b53a-72e077c6ddf0"
 				m_name = "weapon_action_speedscale"
 				m_floatingComment = ""
 				m_position = [ 1050.0, 1575.852173 ]
@@ -1039,7 +1039,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "cf18fc26-adef-4e40-ae51-1c87ed8fda0d"
+						m_ID = "3fd3278d-ac5c-41a4-a7c7-dc34ab760bcc"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -1054,35 +1054,35 @@
 			},
 			{
 				_class = "CnmGraphDocSnapWeaponNode"
-				m_ID = "a5ead284-539e-497c-9951-abea03aaf52b"
+				m_ID = "f3ff945d-54f9-4a3c-9089-e6742d4b4e4d"
 				m_name = "Snap Weapon After Proportions"
 				m_floatingComment = ""
 				m_position = [ 1560.0, 240.869507 ]
 				m_inputPins = 
 				[
 					{
-						m_ID = "aaf6a680-c29e-49c4-b90c-9f68f7919cdb"
+						m_ID = "1fd782fe-eb47-4220-969c-d834b437322e"
 						m_name = "Input"
 						m_type = "Pose"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = false
 					},
 					{
-						m_ID = "1c3e0ad9-707e-4599-965f-b2ab7de880f1"
+						m_ID = "23823d2b-e073-440e-a690-1f197dfd486b"
 						m_name = "Flashed Amount"
 						m_type = "Float"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = false
 					},
 					{
-						m_ID = "529d6db6-6ad2-4bd3-8f25-143d6eff817b"
+						m_ID = "4d35b66f-d0e2-4226-a2d5-1f7403100e9b"
 						m_name = "Weapon Category"
 						m_type = "ID"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = false
 					},
 					{
-						m_ID = "2ff06e41-0e95-4879-843e-c6dddc934c7a"
+						m_ID = "0a1d8fdf-9574-482d-a9f5-b2509acb709b"
 						m_name = "Weapon Type"
 						m_type = "ID"
 						m_bIsDynamicPin = false
@@ -1092,7 +1092,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "cb1d593f-0ae8-45d5-8929-2646259dcdfd"
+						m_ID = "5f4d947f-907e-42dc-88c6-d43f0f232a9d"
 						m_name = "Result"
 						m_type = "Pose"
 						m_bIsDynamicPin = false
@@ -1102,21 +1102,21 @@
 			},
 			{
 				_class = "CNmGraphDocLayerBlendNode"
-				m_ID = "24d8c88c-69fb-405d-977f-3a9e3c4df3a2"
+				m_ID = "1e54926b-1b1b-4041-87bc-d2b8eab6096e"
 				m_name = "Layer Blend"
 				m_floatingComment = ""
 				m_position = [ 1040.0, 5.852203 ]
 				m_inputPins = 
 				[
 					{
-						m_ID = "f793225a-06c9-4751-9377-94914556b293"
+						m_ID = "a7756bc2-ee92-4c59-b92e-f206a98bd6c1"
 						m_name = "Base Node"
 						m_type = "Pose"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = false
 					},
 					{
-						m_ID = "8fd21036-4ef2-4ba8-ac94-9bccaba90350"
+						m_ID = "a6be3934-4cb5-4368-a81f-36cc3b12399d"
 						m_name = "Layer 0"
 						m_type = "Special"
 						m_bIsDynamicPin = false
@@ -1126,7 +1126,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "a0e7b28e-1c8f-4d42-84ee-57b0af7b471f"
+						m_ID = "913584cf-e822-490e-911e-e6617a9d87c4"
 						m_name = "Pose"
 						m_type = "Pose"
 						m_bIsDynamicPin = false
@@ -1137,14 +1137,14 @@
 			},
 			{
 				_class = "CNmGraphDocReferencedGraphNode"
-				m_ID = "8518b476-c24e-4d16-9cc7-a759a2bbdc23"
+				m_ID = "314aecfe-f865-4f90-bf7c-4c6b100369ce"
 				m_name = "ValvePlayerGraph"
 				m_floatingComment = ""
 				m_position = [ 520.0, 0.0 ]
 				m_inputPins = 
 				[
 					{
-						m_ID = "f7e1915c-176c-4c0e-b825-0d8ee7ef9923"
+						m_ID = "89f8b07e-9b53-4329-a539-7be287bb0209"
 						m_name = "Fallback"
 						m_type = "Pose"
 						m_bIsDynamicPin = false
@@ -1154,7 +1154,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "9353db40-1235-4518-80ba-70a3d0b6a7e2"
+						m_ID = "ddc670e2-a2b8-43c0-ae5c-6f43311fdcb0"
 						m_name = "Pose"
 						m_type = "Pose"
 						m_bIsDynamicPin = false
@@ -1171,35 +1171,35 @@
 			},
 			{
 				_class = "CNmGraphDocLocalLayerNode"
-				m_ID = "0ee97ad8-529f-4be8-8368-b544af82e33b"
+				m_ID = "e532fa16-986c-4542-8e6e-1edc38ca3879"
 				m_name = "Layer 0"
 				m_floatingComment = ""
 				m_position = [ 520.0, 140.0 ]
 				m_inputPins = 
 				[
 					{
-						m_ID = "96f5e61d-2616-41ff-97f5-654573fd1427"
+						m_ID = "31f87f16-d2e4-47f2-98ca-f316c8571fd5"
 						m_name = "Input"
 						m_type = "Pose"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = false
 					},
 					{
-						m_ID = "eace405b-6b8d-4fb3-8c71-3ad52d3ca3b8"
+						m_ID = "a0a473fd-2477-415a-902b-c3247bcfbdbf"
 						m_name = "Weight"
 						m_type = "Float"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = false
 					},
 					{
-						m_ID = "d9ab3cf6-4f2a-4364-95a6-e572e2924819"
+						m_ID = "1859a4aa-da4e-4a62-817e-226bf390b3ce"
 						m_name = "Root Motion Weight"
 						m_type = "Float"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = false
 					},
 					{
-						m_ID = "d1967794-4ce8-4c16-8016-6942ac583ba9"
+						m_ID = "f77cd3c8-59b3-4912-b4a8-45e6a37a9391"
 						m_name = "BoneMask"
 						m_type = "BoneMask"
 						m_bIsDynamicPin = false
@@ -1209,7 +1209,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "14af9290-465a-4c27-bd51-700bdca0eed8"
+						m_ID = "1af139cb-78b6-4564-a427-19b0d6254a9f"
 						m_name = "Layer"
 						m_type = "Special"
 						m_bIsDynamicPin = false
@@ -1222,21 +1222,21 @@
 			},
 			{
 				_class = "CNmGraphDocClipNode"
-				m_ID = "cb9f5dae-63e8-4f97-b5d7-f89ce06bed18"
+				m_ID = "5a2a8735-197e-4735-b428-9822ac5550dd"
 				m_name = "ProportionDelta"
 				m_floatingComment = ""
 				m_position = [ 0.0, 70.0 ]
 				m_inputPins = 
 				[
 					{
-						m_ID = "5eb657ec-157a-4a93-ba3e-a237d18209de"
+						m_ID = "37e65e08-d922-44fe-820a-b2febd6a2eaf"
 						m_name = "Play In Reverse"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = false
 					},
 					{
-						m_ID = "dd66b2f5-c60b-494b-8988-260ab6a50784"
+						m_ID = "82c9de3f-17a9-4417-bf14-370a87b3d138"
 						m_name = "Reset Time"
 						m_type = "Bool"
 						m_bIsDynamicPin = false
@@ -1246,7 +1246,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "14c82424-00db-49fd-9f18-88d381eabc06"
+						m_ID = "c2064c4b-3261-495c-bf52-6065be137dd9"
 						m_name = "Pose"
 						m_type = "Pose"
 						m_bIsDynamicPin = false
@@ -1268,7 +1268,7 @@
 			},
 			{
 				_class = "CnmGraphDocConstFloatNode"
-				m_ID = "a49b8e85-81ce-4a83-aa9f-ba6317837ccc"
+				m_ID = "f140ab5f-20e4-417d-b500-cc4261667aef"
 				m_name = "FullWeight"
 				m_floatingComment = ""
 				m_position = [ 0.0, 210.0 ]
@@ -1276,7 +1276,7 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "9ec74a5d-afee-4723-8842-996810b63a5c"
+						m_ID = "f789624a-c097-4f03-84ba-06034b73e6e0"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
@@ -1287,7 +1287,7 @@
 			},
 			{
 				_class = "CNmGraphDocFloatParameterReferenceNode"
-				m_ID = "0fcd3ff6-2e6a-47b5-8b6e-9cb4a016c5f3"
+				m_ID = "5a0893a0-4b58-4f8f-9e55-ca6f16edc622"
 				m_name = "flashed_amount"
 				m_floatingComment = ""
 				m_position = [ 1040.0, 145.852203 ]
@@ -1295,21 +1295,21 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "e8b5015e-ea62-48fd-b474-e16565c9f9d8"
+						m_ID = "bd50af25-4bf2-40ed-8c9f-76ff4231bb92"
 						m_name = "Value"
 						m_type = "Float"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = true
 					},
 				]
-				m_parameterUUID = "13318dcb-e035-40dc-a108-f0d50b6a61d1"
+				m_parameterUUID = "9f5b2594-0ecd-4c59-8cf3-9a53c827427c"
 				m_parameterValueType = "Float"
 				m_parameterName = "flashed_amount"
 				m_parameterGroupName = ""
 			},
 			{
 				_class = "CNmGraphDocIDParameterReferenceNode"
-				m_ID = "402aaa2b-9af3-4130-b01e-14e298cfd849"
+				m_ID = "b555961b-c15a-499c-849b-94e9c79d4120"
 				m_name = "weapon_category"
 				m_floatingComment = ""
 				m_position = [ 1040.0, 285.852203 ]
@@ -1317,21 +1317,21 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "d0f6249c-d425-46c5-9e8c-a45b75e30f83"
+						m_ID = "9c2334d6-5ae2-44a1-9bd8-95071d78b478"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = true
 					},
 				]
-				m_parameterUUID = "ea9ba260-b6ec-4528-ae48-13383c2f4086"
+				m_parameterUUID = "300a5434-20ab-4954-8ca8-c02df019363c"
 				m_parameterValueType = "ID"
 				m_parameterName = "weapon_category"
 				m_parameterGroupName = ""
 			},
 			{
 				_class = "CNmGraphDocIDParameterReferenceNode"
-				m_ID = "0d7c5285-41e7-4cdf-a951-0f28d824f9e1"
+				m_ID = "5b709dea-4e49-409a-9b70-1c2e8008103f"
 				m_name = "weapon_type"
 				m_floatingComment = ""
 				m_position = [ 1040.0, 425.852203 ]
@@ -1339,28 +1339,28 @@
 				m_outputPins = 
 				[
 					{
-						m_ID = "279a6ddb-ec73-4203-92be-90f00e40daa7"
+						m_ID = "72fe5b92-7759-420a-bbf6-a2cd9ba5afbf"
 						m_name = "Value"
 						m_type = "ID"
 						m_bIsDynamicPin = false
 						m_bAllowMultipleOutConnections = true
 					},
 				]
-				m_parameterUUID = "8b5f8252-3bc1-47e2-9e69-b3bb3fed9bfa"
+				m_parameterUUID = "701d0481-0f15-4910-a127-7c42bda1cc3f"
 				m_parameterValueType = "ID"
 				m_parameterName = "weapon_type"
 				m_parameterGroupName = ""
 			},
 			{
 				_class = "CNmGraphDocPoseResultNode"
-				m_ID = "f551d515-ad44-4cdd-9347-6bdddaa03aac"
+				m_ID = "5402f264-f920-47fb-8ca2-9d663dc62674"
 				m_name = ""
 				m_floatingComment = ""
 				m_position = [ 2080.0, 246.383789 ]
 				m_inputPins = 
 				[
 					{
-						m_ID = "4405115a-147b-4647-be49-265ad767c17a"
+						m_ID = "060d81fb-7da3-4a69-90be-f01258404905"
 						m_name = "Out"
 						m_type = "Pose"
 						m_bIsDynamicPin = false
@@ -1377,67 +1377,67 @@
 		m_connections = 
 		[
 			{
-				m_ID = "780d29f6-ee57-4579-bbe4-4c9ade68c29f"
-				m_fromNodeID = "8518b476-c24e-4d16-9cc7-a759a2bbdc23"
-				m_outputPinID = "9353db40-1235-4518-80ba-70a3d0b6a7e2"
-				m_toNodeID = "24d8c88c-69fb-405d-977f-3a9e3c4df3a2"
-				m_inputPinID = "f793225a-06c9-4751-9377-94914556b293"
+				m_ID = "b63b30fd-2d87-4d3b-ad7b-b3c486f338f6"
+				m_fromNodeID = "314aecfe-f865-4f90-bf7c-4c6b100369ce"
+				m_outputPinID = "ddc670e2-a2b8-43c0-ae5c-6f43311fdcb0"
+				m_toNodeID = "1e54926b-1b1b-4041-87bc-d2b8eab6096e"
+				m_inputPinID = "a7756bc2-ee92-4c59-b92e-f206a98bd6c1"
 			},
 			{
-				m_ID = "483d7db0-9125-4023-bdbc-615b11a8b971"
-				m_fromNodeID = "0ee97ad8-529f-4be8-8368-b544af82e33b"
-				m_outputPinID = "14af9290-465a-4c27-bd51-700bdca0eed8"
-				m_toNodeID = "24d8c88c-69fb-405d-977f-3a9e3c4df3a2"
-				m_inputPinID = "8fd21036-4ef2-4ba8-ac94-9bccaba90350"
+				m_ID = "bdac2cb0-7fda-4642-8d60-8c6b349eab9d"
+				m_fromNodeID = "e532fa16-986c-4542-8e6e-1edc38ca3879"
+				m_outputPinID = "1af139cb-78b6-4564-a427-19b0d6254a9f"
+				m_toNodeID = "1e54926b-1b1b-4041-87bc-d2b8eab6096e"
+				m_inputPinID = "a6be3934-4cb5-4368-a81f-36cc3b12399d"
 			},
 			{
-				m_ID = "2a2f032e-4516-4b8a-9fad-d70819b1684a"
-				m_fromNodeID = "cb9f5dae-63e8-4f97-b5d7-f89ce06bed18"
-				m_outputPinID = "14c82424-00db-49fd-9f18-88d381eabc06"
-				m_toNodeID = "0ee97ad8-529f-4be8-8368-b544af82e33b"
-				m_inputPinID = "96f5e61d-2616-41ff-97f5-654573fd1427"
+				m_ID = "8352341b-86ea-420d-bc24-87ef1548f946"
+				m_fromNodeID = "5a2a8735-197e-4735-b428-9822ac5550dd"
+				m_outputPinID = "c2064c4b-3261-495c-bf52-6065be137dd9"
+				m_toNodeID = "e532fa16-986c-4542-8e6e-1edc38ca3879"
+				m_inputPinID = "31f87f16-d2e4-47f2-98ca-f316c8571fd5"
 			},
 			{
-				m_ID = "f7a55f39-268c-4d93-b06a-65416d9cf8ad"
-				m_fromNodeID = "a49b8e85-81ce-4a83-aa9f-ba6317837ccc"
-				m_outputPinID = "9ec74a5d-afee-4723-8842-996810b63a5c"
-				m_toNodeID = "0ee97ad8-529f-4be8-8368-b544af82e33b"
-				m_inputPinID = "eace405b-6b8d-4fb3-8c71-3ad52d3ca3b8"
+				m_ID = "3b5a8757-1e20-4da6-9f48-c52fea91ae80"
+				m_fromNodeID = "f140ab5f-20e4-417d-b500-cc4261667aef"
+				m_outputPinID = "f789624a-c097-4f03-84ba-06034b73e6e0"
+				m_toNodeID = "e532fa16-986c-4542-8e6e-1edc38ca3879"
+				m_inputPinID = "a0a473fd-2477-415a-902b-c3247bcfbdbf"
 			},
 			{
-				m_ID = "201f8cef-e7f4-4515-a783-854f3e4dc55d"
-				m_fromNodeID = "24d8c88c-69fb-405d-977f-3a9e3c4df3a2"
-				m_outputPinID = "a0e7b28e-1c8f-4d42-84ee-57b0af7b471f"
-				m_toNodeID = "a5ead284-539e-497c-9951-abea03aaf52b"
-				m_inputPinID = "aaf6a680-c29e-49c4-b90c-9f68f7919cdb"
+				m_ID = "0762eb0a-a170-457a-a7fe-2518f3124d40"
+				m_fromNodeID = "1e54926b-1b1b-4041-87bc-d2b8eab6096e"
+				m_outputPinID = "913584cf-e822-490e-911e-e6617a9d87c4"
+				m_toNodeID = "f3ff945d-54f9-4a3c-9089-e6742d4b4e4d"
+				m_inputPinID = "1fd782fe-eb47-4220-969c-d834b437322e"
 			},
 			{
-				m_ID = "f09458d1-e51b-4232-b662-330999619dc2"
-				m_fromNodeID = "0fcd3ff6-2e6a-47b5-8b6e-9cb4a016c5f3"
-				m_outputPinID = "e8b5015e-ea62-48fd-b474-e16565c9f9d8"
-				m_toNodeID = "a5ead284-539e-497c-9951-abea03aaf52b"
-				m_inputPinID = "1c3e0ad9-707e-4599-965f-b2ab7de880f1"
+				m_ID = "56d9a9c2-7601-4920-ad7e-edbe7d41442f"
+				m_fromNodeID = "5a0893a0-4b58-4f8f-9e55-ca6f16edc622"
+				m_outputPinID = "bd50af25-4bf2-40ed-8c9f-76ff4231bb92"
+				m_toNodeID = "f3ff945d-54f9-4a3c-9089-e6742d4b4e4d"
+				m_inputPinID = "23823d2b-e073-440e-a690-1f197dfd486b"
 			},
 			{
-				m_ID = "b1d07352-7ef2-4864-a245-a031be198282"
-				m_fromNodeID = "402aaa2b-9af3-4130-b01e-14e298cfd849"
-				m_outputPinID = "d0f6249c-d425-46c5-9e8c-a45b75e30f83"
-				m_toNodeID = "a5ead284-539e-497c-9951-abea03aaf52b"
-				m_inputPinID = "529d6db6-6ad2-4bd3-8f25-143d6eff817b"
+				m_ID = "3994ab3b-4288-42e7-9e94-ec76372fd8ea"
+				m_fromNodeID = "b555961b-c15a-499c-849b-94e9c79d4120"
+				m_outputPinID = "9c2334d6-5ae2-44a1-9bd8-95071d78b478"
+				m_toNodeID = "f3ff945d-54f9-4a3c-9089-e6742d4b4e4d"
+				m_inputPinID = "4d35b66f-d0e2-4226-a2d5-1f7403100e9b"
 			},
 			{
-				m_ID = "854b191c-0090-4781-a985-3c64e62c0198"
-				m_fromNodeID = "0d7c5285-41e7-4cdf-a951-0f28d824f9e1"
-				m_outputPinID = "279a6ddb-ec73-4203-92be-90f00e40daa7"
-				m_toNodeID = "a5ead284-539e-497c-9951-abea03aaf52b"
-				m_inputPinID = "2ff06e41-0e95-4879-843e-c6dddc934c7a"
+				m_ID = "51a58d22-dc2e-4e57-8966-189cb2e33a45"
+				m_fromNodeID = "5b709dea-4e49-409a-9b70-1c2e8008103f"
+				m_outputPinID = "72fe5b92-7759-420a-bbf6-a2cd9ba5afbf"
+				m_toNodeID = "f3ff945d-54f9-4a3c-9089-e6742d4b4e4d"
+				m_inputPinID = "0a1d8fdf-9574-482d-a9f5-b2509acb709b"
 			},
 			{
-				m_ID = "fe1d796a-2034-4494-86f9-549c448e7c15"
-				m_fromNodeID = "a5ead284-539e-497c-9951-abea03aaf52b"
-				m_outputPinID = "cb1d593f-0ae8-45d5-8929-2646259dcdfd"
-				m_toNodeID = "f551d515-ad44-4cdd-9347-6bdddaa03aac"
-				m_inputPinID = "4405115a-147b-4647-be49-265ad767c17a"
+				m_ID = "2e4aa469-5d73-4471-bc24-fef16132a504"
+				m_fromNodeID = "f3ff945d-54f9-4a3c-9089-e6742d4b4e4d"
+				m_outputPinID = "5f4d947f-907e-42dc-88c6-d43f0f232a9d"
+				m_toNodeID = "5402f264-f920-47fb-8ca2-9d663dc62674"
+				m_inputPinID = "060d81fb-7da3-4a69-90be-f01258404905"
 			},
 		]
 	}

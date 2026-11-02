@@ -2,13 +2,13 @@
 {
 	"shader"	"csgo_character.vfx"
 	"g_bFogEnabled"	"1"
+	"g_flModelTintAmount"	"1"
+	"g_flTexCoordRotation"	"0"
 	"g_nScaleTexCoordUByModelScaleAxis"	"0"
 	"g_nScaleTexCoordVByModelScaleAxis"	"0"
 	"g_nTextureAddressModeU"	"0"
 	"g_nTextureAddressModeV"	"0"
 	"g_flAmbientOcclusionMasking"	"0.4"
-	"g_flModelTintAmount"	"1"
-	"g_flTexCoordRotation"	"0"
 	"g_vColorTint"	"[1.000000 1.000000 1.000000 0.000000]"
 	"g_vTexCoordCenter"	"[0.500000 0.500000 0.000000 0.000000]"
 	"g_vTexCoordOffset"	"[0.000000 0.000000 0.000000 0.000000]"
@@ -25,7 +25,7 @@
 	{
 		"g_tAmbientOcclusion"	"agents/models/otakku/rochelle/materials/producer_body_vmat_g_tambientocclusion_9782fd5c.vtex"
 		"g_tColor"	"agents/models/otakku/rochelle/materials/producer_body_color_png_1399c188.vtex"
-		"g_tMetalness"	"agents/models/otakku/rochelle/materials/producer_body_vmat_g_tmetalness_b99de324.vtex"
+		"g_tMetalness"	"agents/models/otakku/rochelle/materials/producer_body_vmat_g_tmetalness_b99de324_png_d814d95e.vtex"
 		"g_tNormal"	"agents/models/otakku/rochelle/materials/producer_body_normal_png_e5949ce8.vtex"
 	}
 }

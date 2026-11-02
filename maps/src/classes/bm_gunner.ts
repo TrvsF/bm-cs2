@@ -46,7 +46,7 @@ export const GunnerSettings: FGunnerSettings =
 	Melee: "weapon_spanner",
 	Health: 125,
 	SizeScale: 1.1,
-	Model: "agents/models/otakku/rochelle/rochelle.vmdl",
+	Model: "agents/models/otakku/gordon_freeman/gordon_freeman.vmdl",
 	bStartWithMelee: true,
 	MeleeDamage: 0,
 	RepairPerHit: 25,

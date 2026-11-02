@@ -234,6 +234,10 @@ var BloodTemplateName = "blood_template";
 var MaxDecals = 48;
 var ScorchSearchDistance = 16;
 var BloodSplatterDistance = 128;
+var GibTemplateName = "gib_template";
+var GibFallbackTemplateName = "boom_template";
+var GibLifetime = 5;
+var GibFlingSpeed = 450;
 var GDecals = [];
 function SpawnScorchMark(Position) {
   const Surface = FindNearbySurface(Position, ScorchSearchDistance);
@@ -264,6 +268,18 @@ function SpawnBloodSplatter(ExplosionOrigin, Victim) {
   );
   if (Below.didHit && !Below.startedInSolid) {
     SpawnDecal(BloodTemplateName, Below.end, Below.normal);
+  }
+}
+function SpawnGibs(Victim) {
+  const Chest = GetChestPosition(Victim);
+  SpawnBloodSplatter(VectorMath.Add(Chest, UpVector), Victim);
+  const Spawned = SpawnTemporaryTemplate(GibTemplateName, Chest, GibLifetime) ?? SpawnTemporaryTemplate(GibFallbackTemplateName, Chest, GibLifetime) ?? [];
+  const Momentum = Victim.GetAbsVelocity();
+  for (const Ent of Spawned) {
+    if (Ent.IsValid() && Ent.GetClassName().startsWith("prop_physics")) {
+      const Direction = VectorMath.GetSafeNormal({ x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: 0.5 + Math.random() });
+      Ent.Teleport({ velocity: VectorMath.Add(Momentum, VectorMath.Scale(Direction, GibFlingSpeed)) });
+    }
   }
 }
 function SpawnTemporaryTemplate(TemplateName, Position, Lifetime) {
@@ -1733,6 +1749,17 @@ function ApplyBody(Pawn, Health, SizeScale, Model) {
 function RestoreDefaultBody(Pawn) {
   ApplyBody(Pawn, DefaultHealth, DefaultSizeScale, "");
 }
+function HideBody(Pawn) {
+  const OwnModels = GOwnModels.get(GetPlayerSlot(Pawn));
+  const Own = OwnModels ? OwnModels.get(Pawn.GetTeamNumber()) : void 0;
+  if (Own !== void 0) {
+    Pawn.SetModel(Own);
+  }
+  Pawn.SetColor({ ...Pawn.GetColor(), a: 0 });
+}
+function ShowBody(Pawn) {
+  Pawn.SetColor({ ...Pawn.GetColor(), a: 255 });
+}
 function ForgetPlayerModel(Slot) {
   GOwnModels.delete(Slot);
 }
@@ -2723,7 +2750,7 @@ var BoxerSettings = {
   Melee: "",
   Health: 180,
   SizeScale: 1.25,
-  Model: "agents/models/otakku/joker_arkham/joker_arkham.vmdl",
+  Model: "agents/models/otakku/rochelle/rochelle.vmdl",
   PrimaryLauncher: {
     FireInterval: 0.8,
     ClipSize: 1,
@@ -2953,8 +2980,8 @@ var ShrinkerSettings = {
   PrimaryLauncher: void 0,
   SecondaryLauncher: void 0,
   ShrunkScale: 0.33,
-  ShrinkTime: 0.75,
-  GrowTime: 0.75,
+  ShrinkTime: 1.5,
+  GrowTime: 1.5,
   ShrunkDuration: 10,
   RechargeTime: 16,
   MinShrinkCharge: 10,
@@ -3195,7 +3222,7 @@ var GunnerSettings = {
   Melee: "weapon_spanner",
   Health: 125,
   SizeScale: 1.1,
-  Model: "agents/models/otakku/rochelle/rochelle.vmdl",
+  Model: "agents/models/otakku/gordon_freeman/gordon_freeman.vmdl",
   bStartWithMelee: true,
   MeleeDamage: 0,
   RepairPerHit: 25,
@@ -4020,7 +4047,8 @@ var SpawnZoneSettings = {
 };
 var RescanInterval2 = 1;
 var TouchRefreshDelay = 0.05;
-var SafeHistoryTicks = 8;
+var SafeHistoryTicks = 16;
+var StuckResyncTicks = 32;
 var GZones = [];
 var GVisitors = /* @__PURE__ */ new Map();
 var GNextScanTime = 0;
@@ -4037,9 +4065,10 @@ function TickSpawnZones(Now) {
     const Visitor = GetVisitor(Slot);
     const EnemyZone = FindEnemyZone(Pawn, Slot);
     if (EnemyZone) {
-      PushOut(Pawn, Slot, Visitor, EnemyZone);
+      Block(Pawn, Visitor, EnemyZone);
       return;
     }
+    Visitor.BlockedTicks = 0;
     Visitor.History.push(Pawn.GetAbsOrigin());
     if (Visitor.History.length > SafeHistoryTicks) {
       Visitor.History.shift();
@@ -4110,6 +4139,7 @@ function RefreshTouches(Zone) {
   if (!Zone.Entity.IsValid()) {
     return;
   }
+  Zone.Touching.clear();
   Instance13.EntFireAtTarget({ target: Zone.Entity, input: "Disable" });
   Instance13.EntFireAtTarget({ target: Zone.Entity, input: "Enable", delay: TouchRefreshDelay });
 }
@@ -4130,16 +4160,25 @@ function FindEnemyZone(Pawn, Slot) {
 function GetVisitor(Slot) {
   let Visitor = GVisitors.get(Slot);
   if (!Visitor) {
-    Visitor = { History: [] };
+    Visitor = { History: [], BlockedTicks: 0 };
     GVisitors.set(Slot, Visitor);
   }
   return Visitor;
 }
-function PushOut(Pawn, Slot, Visitor, Zone) {
-  Zone.Touching.delete(Slot);
-  const SafeSpot = Visitor.History[0];
+function Block(Pawn, Visitor, Zone) {
+  Visitor.BlockedTicks++;
+  if (Visitor.BlockedTicks % StuckResyncTicks === 0) {
+    RefreshTouches(Zone);
+  }
+  if (Visitor.BlockedTicks > 1) {
+    Visitor.History.pop();
+  }
+  const SafeSpot = Visitor.History[Visitor.History.length - 1];
   if (SafeSpot) {
-    Pawn.Teleport({ position: SafeSpot, velocity: ZeroVector });
+    const Inward = VectorMath.GetSafeNormal(VectorMath.Subtract(Pawn.GetAbsOrigin(), SafeSpot));
+    const Velocity = Pawn.GetAbsVelocity();
+    const bMovingIn = VectorMath.Dot(Velocity, Inward) > 0;
+    Pawn.Teleport({ position: SafeSpot, velocity: bMovingIn ? VectorMath.ProjectOnPlane(Velocity, Inward) : Velocity });
     return;
   }
   const Offset = VectorMath.Subtract(Pawn.GetAbsOrigin(), Zone.Entity.GetAbsOrigin());
@@ -4806,6 +4845,7 @@ function HandlePlayerReset(Event) {
     return;
   }
   ClearPlayer(Slot);
+  ShowBody(Pawn);
   ForgetSpawnZoneHistory(Slot);
   RefreshSpawnZoneTouches();
   GActiveMode.OnPlayerSpawn(Pawn, Slot);
@@ -4831,6 +4871,11 @@ function HandlePlayerReset(Event) {
 function HandlePlayerKill(Event) {
   const Slot = GetPlayerSlot(Event.player);
   if (Slot !== INDEX_NONE) {
+    const PlayerClass3 = GClassBySlot.get(Slot);
+    if (PlayerClass3 !== void 0 && ClassDefinitions[PlayerClass3].Settings.Model !== "") {
+      SpawnGibs(Event.player);
+      HideBody(Event.player);
+    }
     ClearPlayer(Slot);
     RemoveBuildings(Slot);
     ForgetSpawnZonePlayer(Slot);

@@ -1,6 +1,6 @@
 import { Instance, Console } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn } from "cs_script/point_script";
-import { LogPrefix, ETeam, ZeroVector, VectorMath, IsPlayerPawn, GetPlayerSlot, ForEachLivePawn, INDEX_NONE } from "./bm_core";
+import { LogPrefix, ETeam, VectorMath, IsPlayerPawn, GetPlayerSlot, ForEachLivePawn, INDEX_NONE } from "./bm_core";
 import type { FVector } from "./bm_core";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -22,6 +22,7 @@ interface FSpawnZone
 interface FZoneVisitor
 {
 	readonly History: FVector[];
+	BlockedTicks: number;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +36,8 @@ export const SpawnZoneSettings: FSpawnZoneSettings =
 
 const RescanInterval: number = 1;
 const TouchRefreshDelay: number = 0.05;
-const SafeHistoryTicks: number = 8;
+const SafeHistoryTicks: number = 16;
+const StuckResyncTicks: number = 32;
 
 let GZones: FSpawnZone[] = [];
 const GVisitors: Map<number, FZoneVisitor> = new Map<number, FZoneVisitor>();
@@ -63,9 +65,10 @@ export function TickSpawnZones(Now: number): void
 		const EnemyZone: FSpawnZone | undefined = FindEnemyZone(Pawn, Slot);
 		if (EnemyZone)
 		{
-			PushOut(Pawn, Slot, Visitor, EnemyZone);
+			Block(Pawn, Visitor, EnemyZone);
 			return;
 		}
+		Visitor.BlockedTicks = 0;
 		Visitor.History.push(Pawn.GetAbsOrigin());
 		if (Visitor.History.length > SafeHistoryTicks)
 		{
@@ -169,6 +172,7 @@ function RefreshTouches(Zone: FSpawnZone): void
 	{
 		return;
 	}
+	Zone.Touching.clear();
 	Instance.EntFireAtTarget({ target: Zone.Entity, input: "Disable" });
 	Instance.EntFireAtTarget({ target: Zone.Entity, input: "Enable", delay: TouchRefreshDelay });
 }
@@ -200,19 +204,31 @@ function GetVisitor(Slot: number): FZoneVisitor
 	let Visitor: FZoneVisitor | undefined = GVisitors.get(Slot);
 	if (!Visitor)
 	{
-		Visitor = { History: [] };
+		Visitor = { History: [], BlockedTicks: 0 };
 		GVisitors.set(Slot, Visitor);
 	}
 	return Visitor;
 }
 
-function PushOut(Pawn: CSPlayerPawn, Slot: number, Visitor: FZoneVisitor, Zone: FSpawnZone): void
+function Block(Pawn: CSPlayerPawn, Visitor: FZoneVisitor, Zone: FSpawnZone): void
 {
-	Zone.Touching.delete(Slot);
-	const SafeSpot: FVector | undefined = Visitor.History[0];
+	Visitor.BlockedTicks++;
+	if (Visitor.BlockedTicks % StuckResyncTicks === 0)
+	{
+		RefreshTouches(Zone);
+	}
+
+	if (Visitor.BlockedTicks > 1)
+	{
+		Visitor.History.pop();
+	}
+	const SafeSpot: FVector | undefined = Visitor.History[Visitor.History.length - 1];
 	if (SafeSpot)
 	{
-		Pawn.Teleport({ position: SafeSpot, velocity: ZeroVector });
+		const Inward: FVector = VectorMath.GetSafeNormal(VectorMath.Subtract(Pawn.GetAbsOrigin(), SafeSpot));
+		const Velocity: FVector = Pawn.GetAbsVelocity();
+		const bMovingIn: boolean = VectorMath.Dot(Velocity, Inward) > 0;
+		Pawn.Teleport({ position: SafeSpot, velocity: bMovingIn ? VectorMath.ProjectOnPlane(Velocity, Inward) : Velocity });
 		return;
 	}
 

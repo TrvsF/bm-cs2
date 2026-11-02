@@ -17,11 +17,11 @@ import type
 	FModifyDamageResult,
 	FVector,
 } from "./bm_core";
-import { EPlayerClass, GiveNoClassLoadout, RestoreDefaultBody, ForgetPlayerModel, PickRandomClass } from "./bm_classes";
+import { EPlayerClass, GiveNoClassLoadout, RestoreDefaultBody, HideBody, ShowBody, ForgetPlayerModel, PickRandomClass } from "./bm_classes";
 import type { EPlayableClass } from "./bm_classes";
 import { ClassDefinitions, GiveLoadout, IsWeaponAllowed } from "./classes/bm_classlist";
 import { MedicSettings } from "./classes/bm_medic";
-import { ClearDecals } from "./bm_effects";
+import { ClearDecals, SpawnGibs } from "./bm_effects";
 import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
 import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ShowBuildings, ShowBuildHints, ShowTargetId, ResetClassUi } from "./bm_ui";
@@ -171,6 +171,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 	}
 
 	ClearPlayer(Slot);
+	ShowBody(Pawn);
 	ForgetSpawnZoneHistory(Slot);
 	RefreshSpawnZoneTouches();
 	GActiveMode.OnPlayerSpawn(Pawn, Slot);
@@ -206,6 +207,12 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 	const Slot: number = GetPlayerSlot(Event.player);
 	if (Slot !== INDEX_NONE)
 	{
+		const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
+		if (PlayerClass !== undefined && ClassDefinitions[PlayerClass].Settings.Model !== "")
+		{
+			SpawnGibs(Event.player);
+			HideBody(Event.player);
+		}
 		ClearPlayer(Slot);
 		RemoveBuildings(Slot);
 		ForgetSpawnZonePlayer(Slot);

@@ -80,8 +80,8 @@ export const ShrinkerSettings: FShrinkerSettings =
 	SecondaryLauncher: undefined,
 
 	ShrunkScale: 0.33,
-	ShrinkTime: 0.75,
-	GrowTime: 0.75,
+	ShrinkTime: 1.5,
+	GrowTime: 1.5,
 	ShrunkDuration: 10,
 	RechargeTime: 16,
 	MinShrinkCharge: 10,
