@@ -266,12 +266,13 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 	}
 
 	// Called when someone playing this class fires their primary
-	public OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	// ChargeFraction is 0 to 1 for launchers that charge, else 0
+	public OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number, ChargeFraction: number): void
 	{
 	}
 
 	// Called when someone playing this class fires their secondary
-	public OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	public OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number, ChargeFraction: number): void
 	{
 	}
 
@@ -295,7 +296,7 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 			}
 			else
 			{
-				this.OnPrimaryFire(Pawn, Slot, Now);
+				this.OnPrimaryFire(Pawn, Slot, Now, Shot.ChargeFraction);
 			}
 		}
 		else if (Shot.WeaponName === this.Settings.Secondary)
@@ -306,7 +307,7 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 			}
 			else
 			{
-				this.OnSecondaryFire(Pawn, Slot, Now);
+				this.OnSecondaryFire(Pawn, Slot, Now, Shot.ChargeFraction);
 			}
 		}
 	}

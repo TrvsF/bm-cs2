@@ -1,6 +1,6 @@
 import { Instance, Console } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, RotationMath, IsFriendlyFire, IsModelEntity, GetPawnName, GetPlayerSlot, GetColorForTeam, GetOrCreate, SpawnTemplateEntities, INDEX_NONE } from "./bm_core";
+import { TickInterval, LogPrefix, VectorMath, RotationMath, IsFreeForAll, IsModelEntity, GetPawnName, GetPlayerSlot, GetColorForTeam, GetOrCreate, SpawnTemplateEntities, INDEX_NONE } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
 import { ShowDamageNumber } from "./bm_hud";
@@ -11,7 +11,6 @@ export interface FBuildingSettings
 {
 	readonly DisplayName: string;
 	readonly ModelTemplate: string;
-	readonly PreviewTemplate: string;
 	readonly DestroyFxTemplate: string;
 	readonly Health: number;
 	readonly HalfWidth: number;
@@ -103,6 +102,7 @@ interface FPlacement
 	Position: FVector;
 	Yaw: number;
 	bValid: boolean;
+	bPreviewTintedValid: boolean | undefined;
 }
 
 interface FBoxHit
@@ -168,6 +168,8 @@ const DestroyFxLifetime: number = 5;
 const ValidPlacementColor: FColor = { r: 90, g: 230, b: 120 };
 const BlockedPlacementColor: FColor = { r: 255, g: 190, b: 40 };
 const DestroyedDebugColor: FColor = { r: 255, g: 140, b: 0 };
+const PreviewScale: number = 0.5;
+const PreviewAlpha: number = 160;
 
 let GBuildings: FBuilding[] = [];
 const GPlacements: Map<number, FPlacement> = new Map<number, FPlacement>();
@@ -253,7 +255,7 @@ export function GetBuildingCenter(Building: FBuilding): FVector
 
 export function IsBuildingEnemy(Building: FBuilding, Pawn: CSPlayerPawn): boolean
 {
-	return Pawn !== Building.Owner && (IsFriendlyFire() || Pawn.GetTeamNumber() !== Building.Team);
+	return Pawn !== Building.Owner && (IsFreeForAll() || Pawn.GetTeamNumber() !== Building.Team);
 }
 
 export function IsStandingOn(Building: FBuilding, Pawn: CSPlayerPawn, Reach: number, Above: number): boolean
@@ -502,7 +504,6 @@ function GetNextToBuild(Slot: number, Kinds: readonly BuildingKind[]): BuildingK
 	});
 }
 
-// First press shows where it'll land, the same key again builds it there. Pressed while looking at one of your own Kinds, it picks that up instead.
 function UseBuildKey(Pawn: CSPlayerPawn, Slot: number, Kinds: readonly BuildingKind[], Now: number): void
 {
 	const Placing: BuildingKind | undefined = GetPlacingKind(Slot);
@@ -580,6 +581,17 @@ export function TickPlacement(Slot: number): void
 	PlaceModels(Placement.Preview, Placement.Position, Placement.Yaw, false);
 
 	const Color: FColor = Placement.bValid ? ValidPlacementColor : BlockedPlacementColor;
+	if (Placement.bPreviewTintedValid !== Placement.bValid)
+	{
+		Placement.bPreviewTintedValid = Placement.bValid;
+		for (const Model of Placement.Preview)
+		{
+			if (Model.Ent.IsValid() && IsModelEntity(Model.Ent))
+			{
+				Model.Ent.SetColor({ ...Color, a: PreviewAlpha });
+			}
+		}
+	}
 	for (let Index: number = 1; Index < Placement.Path.length; Index++)
 	{
 		const From: FVector | undefined = Placement.Path[Index - 1];
@@ -641,11 +653,27 @@ function DropPlacement(Slot: number): void
 function MakePlacement(Owner: CSPlayerPawn, Kind: BuildingKind, Carried: FBuilding | undefined): FPlacement
 {
 	const Position: FVector = Owner.GetAbsOrigin();
-	return { Kind: Kind, Owner: Owner, Carried: Carried, Preview: SpawnModels(Kind.Settings.PreviewTemplate, Position), Path: [], Position: Position, Yaw: 0, bValid: false };
+	return { Kind: Kind, Owner: Owner, Carried: Carried, Preview: SpawnPreview(Kind, Position), Path: [], Position: Position, Yaw: 0, bValid: false, bPreviewTintedValid: undefined };
 }
 
-// Thrown from the eyes along the aim, falling under gravity, until it lands on something no steeper than
-// MaxPlacementSlopeDegrees. Anything steeper (a wall, a ceiling) and it drops straight down from there, far enough out to fit.
+function SpawnPreview(Kind: BuildingKind, Position: FVector): FBuildingModel[]
+{
+	const Preview: FBuildingModel[] = SpawnModels(Kind.Settings.ModelTemplate, Position);
+	for (const Model of Preview)
+	{
+		if (!IsModelEntity(Model.Ent))
+		{
+			continue;
+		}
+		Instance.EntFireAtTarget({ target: Model.Ent, input: "DisableCollision" });
+		if (Model.Ent.GetParent() === undefined)
+		{
+			Model.Ent.SetModelScale(PreviewScale);
+		}
+	}
+	return Preview;
+}
+
 function UpdatePlacementSpot(Placement: FPlacement): void
 {
 	const Settings: FBuildingSettings = Placement.Kind.Settings;

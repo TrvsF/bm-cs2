@@ -97,6 +97,8 @@ export const BoxerSettings: FBoxerSettings =
 	},
 };
 
+const CubeTemplateName: string = "cube_template";
+
 // Boxer ///////////////////////////////////////////////////////////////////////////////////////////
 
 export class BoxerClass extends PlayerClass<FBoxerSettings>
@@ -110,8 +112,7 @@ export class BoxerClass extends PlayerClass<FBoxerSettings>
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
-		// No model: it's drawn as the debug box it hits things with
-		const Projectile: FProjectile = LaunchProjectile(Pawn, this.Settings.CubeSpeed, 0, this.Settings.CubeGravityScale, undefined, this.Settings.CubeRadius, EProjectileShape.Box);
+		const Projectile: FProjectile = LaunchProjectile(Pawn, this.Settings.CubeSpeed, 0, this.Settings.CubeGravityScale, CubeTemplateName, this.Settings.CubeRadius, EProjectileShape.Box);
 		this.Cubes.push({ ...Projectile, HitPlayers: new Set<CSPlayerPawn>() });
 	}
 

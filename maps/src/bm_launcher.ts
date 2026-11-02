@@ -12,6 +12,8 @@ export interface FLauncherSettings
 	readonly ReloadFirstTime: number;
 	readonly ReloadEachTime: number;
 	readonly ChargeTime: number;
+	// Release early to fire with part of the charge; full charge still fires by itself
+	readonly bFireOnRelease?: boolean;
 	readonly DeployTime: number;
 	readonly FireFxTemplate: string;
 	readonly ReloadFxTemplate: string;
@@ -23,6 +25,7 @@ export interface FLauncherShot
 {
 	readonly WeaponName: string;
 	readonly bAltFire: boolean;
+	readonly ChargeFraction: number;
 }
 
 export interface FLauncherAmmo
@@ -140,7 +143,6 @@ export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo
 	return undefined;
 }
 
-// ATTACK wins if both are held. The alt mode has no charge-up.
 function TickHeldLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): FLauncherShot | undefined
 {
 	const bCanFire: boolean = !Pawn.IsBuyMenuOpen() && !GameRules.IsFreezePeriod();
@@ -165,19 +167,28 @@ function TickHeldLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number
 				return undefined;
 			}
 		}
-		State.ChargeStartTime = undefined;
-		State.Clip--;
-
-		const Interval: number = bAltFire ? State.Settings.AltFireInterval ?? State.Settings.FireInterval : State.Settings.FireInterval;
-		const bHeldThrough: boolean = Now - State.NextFireTime < TickInterval * 1.5;
-		State.NextFireTime = (bHeldThrough ? State.NextFireTime : Now) + Interval;
-		SpawnFireFx(Pawn, bAltFire ? State.Settings.AltFireFxTemplate ?? State.Settings.FireFxTemplate : State.Settings.FireFxTemplate);
-		return { WeaponName: State.WeaponName, bAltFire: bAltFire };
+		return FireLauncher(Pawn, State, Now, bAltFire, bMainHeld && State.Settings.ChargeTime > 0 ? 1 : 0);
 	}
 
+	if (State.Settings.bFireOnRelease && State.ChargeStartTime !== undefined && bCanFire)
+	{
+		return FireLauncher(Pawn, State, Now, false, GetChargeFraction(State));
+	}
 	State.ChargeStartTime = undefined;
 	TickReload(Pawn, State, Now);
 	return undefined;
+}
+
+function FireLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number, bAltFire: boolean, ChargeFraction: number): FLauncherShot
+{
+	State.ChargeStartTime = undefined;
+	State.Clip--;
+
+	const Interval: number = bAltFire ? State.Settings.AltFireInterval ?? State.Settings.FireInterval : State.Settings.FireInterval;
+	const bHeldThrough: boolean = Now - State.NextFireTime < TickInterval * 1.5;
+	State.NextFireTime = (bHeldThrough ? State.NextFireTime : Now) + Interval;
+	SpawnFireFx(Pawn, bAltFire ? State.Settings.AltFireFxTemplate ?? State.Settings.FireFxTemplate : State.Settings.FireFxTemplate);
+	return { WeaponName: State.WeaponName, bAltFire: bAltFire, ChargeFraction: ChargeFraction };
 }
 
 function GetChargeFraction(State: FLauncherState): number

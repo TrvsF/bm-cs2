@@ -114,15 +114,12 @@ export class PayloadMode extends GameMode
 		return IsPayloadReady();
 	}
 
-	public override IsFriendlyFire(): boolean
-	{
-		return false;
-	}
-
 	public override GetMatchCommands(): string[]
 	{
 		const Minutes: number = PayloadSettings.RoundTime / 60;
 		return [
+			"mp_teammates_are_enemies 0",
+			"mp_friendlyfire 0",
 			"mp_ignore_round_win_conditions 1",
 			"mp_warmup_pausetimer 0",
 			"mp_respawn_on_death_t 1",
@@ -609,4 +606,4 @@ function DrawTrack(Track: FPayloadTrack): void
 	{
 		Instance.DebugSphere({ center: GetTrackPosition(Track, CheckpointDistance), radius: 16, duration: TickInterval * 2, color: CheckpointDebugColor });
 	}
-}
+}

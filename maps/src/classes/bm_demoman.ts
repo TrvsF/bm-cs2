@@ -24,6 +24,7 @@ export interface FDemoSettings extends FClassSettings
 	readonly StickyMax: number;
 	readonly StickyArmTime: number;
 	readonly StickyLaunchSpeed: number;
+	readonly StickyMaxLaunchSpeed: number;
 	readonly StickyLaunchUp: number;
 	readonly StickyRadius: number;
 	readonly StickyDamage: number;
@@ -69,7 +70,8 @@ export const DemoSettings: FDemoSettings =
 		ClipSize: 6,
 		ReloadFirstTime: 1.09,
 		ReloadEachTime: 0.67,
-		ChargeTime: 0,
+		ChargeTime: 4,
+		bFireOnRelease: true,
 		DeployTime: 0.1,
 		FireFxTemplate: "sticky_fire_template",
 		ReloadFxTemplate: "sticky_reload_template",
@@ -90,6 +92,7 @@ export const DemoSettings: FDemoSettings =
 	StickyMax: 6,
 	StickyArmTime: 0.8,
 	StickyLaunchSpeed: 900,
+	StickyMaxLaunchSpeed: 2400,
 	StickyLaunchUp: 150,
 	StickyRadius: 160,
 	StickyDamage: 90,
@@ -129,11 +132,12 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 		super(DemoSettings);
 	}
 
-	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
+	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number, ChargeFraction: number): void
 	{
+		const Speed: number = this.Settings.StickyLaunchSpeed + (this.Settings.StickyMaxLaunchSpeed - this.Settings.StickyLaunchSpeed) * ChargeFraction;
 		const Sticky: FStickyBomb =
 		{
-			...LaunchProjectile(Pawn, this.Settings.StickyLaunchSpeed, this.Settings.StickyLaunchUp, 1, StickyTemplateName),
+			...LaunchProjectile(Pawn, Speed, this.Settings.StickyLaunchUp, 1, StickyTemplateName),
 			bStuck: false,
 			ArmedAt: Now + this.Settings.StickyArmTime,
 			bTintedArmed: false,

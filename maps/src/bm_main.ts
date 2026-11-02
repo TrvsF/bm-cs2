@@ -1,6 +1,6 @@
 import { Instance, Console, GameRules, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase } from "cs_script/point_script";
-import { bDebug, IsFriendlyFire, SetFriendlyFire, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
+import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData } from "cs_script/point_script";
+import { bDebug, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
 import type
 {
 	FPlayerChatEvent,
@@ -101,6 +101,7 @@ function Tick(): void
 function BeginPlay(): void
 {
 	SelectGameMode();
+	ApplyMatchSettings();
 	Instance.OnPlayerChat(HandlePlayerChat);
 	Instance.OnPlayerReset(HandlePlayerReset);
 	Instance.OnPlayerKill(HandlePlayerKill);
@@ -213,6 +214,8 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 			SpawnGibs(Event.player);
 			HideBody(Event.player);
 		}
+		const KillerSlot: number = GetPlayerSlot(Event.attacker);
+		GActiveMode.OnPlayerKill(Slot, KillerSlot !== Slot ? KillerSlot : INDEX_NONE);
 		ClearPlayer(Slot);
 		RemoveBuildings(Slot);
 		ForgetSpawnZonePlayer(Slot);
@@ -270,11 +273,11 @@ function HandleGunFire(Event: FGunFireEvent): void
 	const Definition = ClassDefinitions[PlayerClass];
 	if (IsWeapon(Weapon, Definition.Settings.Primary) && !Definition.Settings.PrimaryLauncher)
 	{
-		Definition.OnPrimaryFire(Pawn, Slot, Instance.GetGameTime());
+		Definition.OnPrimaryFire(Pawn, Slot, Instance.GetGameTime(), 0);
 	}
 	else if (IsWeapon(Weapon, Definition.Settings.Secondary) && !Definition.Settings.SecondaryLauncher)
 	{
-		Definition.OnSecondaryFire(Pawn, Slot, Instance.GetGameTime());
+		Definition.OnSecondaryFire(Pawn, Slot, Instance.GetGameTime(), 0);
 	}
 }
 
@@ -309,7 +312,7 @@ function HandleWeaponDrop(Event: FWeaponDropEvent): void
 	const Dropper: CSPlayerPawn = Event.dropper;
 	SetTimer(0, (): void =>
 	{
-		RemoveDeathDrop(Weapon, Dropper);
+		RemoveDroppedWeapon(Weapon, Dropper);
 	});
 }
 
@@ -321,6 +324,7 @@ function HandlePlayerDamage(Event: FPlayerDamageEvent): void
 		return;
 	}
 	ShowDamageNumber(AttackerSlot, Event.damage);
+	GActiveMode.OnPlayerDamage(GetPlayerSlot(Event.player), AttackerSlot, Event.damage);
 
 	if (GetHeightAboveGround(Event.player, AirshotMinHeight) >= AirshotMinHeight)
 	{
@@ -405,14 +409,12 @@ function SelectGameMode(): void
 		Mode.OnActivated();
 		Console.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
 	}
-	SetFriendlyFire(Mode.IsFriendlyFire());
 }
 
 function ApplyMatchSettings(): void
 {
 	const Commands: string[] = [];
 
-	Commands.push(`mp_teammates_are_enemies ${IsFriendlyFire() ? 1 : 0}`, `mp_friendlyfire ${IsFriendlyFire() ? 1 : 0}`);
 	Commands.push("sv_infinite_ammo 0");
 
 	if (bDebug)
@@ -677,17 +679,20 @@ function RemoveIfNotAllowed(Weapon: CSWeaponBase): void
 	});
 }
 
-function RemoveDeathDrop(Weapon: CSWeaponBase, Dropper: CSPlayerPawn): void
+function RemoveDroppedWeapon(Weapon: CSWeaponBase, Dropper: CSPlayerPawn): void
 {
 	if (!Weapon.IsValid() || Weapon.GetOwner())
 	{
 		return;
 	}
-	if (Dropper.IsValid() && Dropper.IsAlive())
-	{
-		return;
-	}
+	const Data: CSWeaponData | undefined = Weapon.GetData();
+	const ItemName: string = Data ? Data.GetName() : Weapon.GetClassName();
+	const bGiveBack: boolean = Dropper.IsValid() && Dropper.IsAlive() && IsWeaponAllowed(GClassBySlot.get(GetPlayerSlot(Dropper)) ?? EPlayerClass.None, Weapon);
 	Weapon.Remove();
+	if (bGiveBack)
+	{
+		Dropper.GiveNamedItem(ItemName, true);
+	}
 }
 
 function EnsureWeaponInHand(Pawn: CSPlayerPawn): void

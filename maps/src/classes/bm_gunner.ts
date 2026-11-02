@@ -87,7 +87,6 @@ export const GunnerSettings: FGunnerSettings =
 	{
 		DisplayName: "Heavy Turret",
 		ModelTemplate: "gunner_heavy_turret_template",
-		PreviewTemplate: "gunner_heavy_turret_preview_template",
 		DestroyFxTemplate: "gunner_turret_destroy_template",
 		Health: 75,
 		HalfWidth: 18,
@@ -123,7 +122,6 @@ export const GunnerSettings: FGunnerSettings =
 	{
 		DisplayName: "Rapid Turret",
 		ModelTemplate: "gunner_rapid_turret_template",
-		PreviewTemplate: "gunner_rapid_turret_preview_template",
 		DestroyFxTemplate: "gunner_turret_destroy_template",
 		Health: 50,
 		HalfWidth: 16,

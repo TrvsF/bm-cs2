@@ -45,6 +45,69 @@
 			</Panel>
 		</Panel>
 
+		<Panel id="Leaderboard" class="Leaderboard" hittest="false">
+			<Panel class="LeaderboardLine LeaderboardHeader" hittest="false">
+				<Label class="LeaderboardRank" text="#" hittest="false" />
+				<Label class="LeaderboardName" text="Player" hittest="false" />
+				<Label class="LeaderboardKills" text="Kills" hittest="false" />
+				<Label class="LeaderboardDamage" text="Dmg" hittest="false" />
+			</Panel>
+			<Panel id="LeaderboardRow0" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="LeaderboardRank0" class="LeaderboardRank" text="{s:rank}" hittest="false" />
+				<Label id="LeaderboardName0" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="LeaderboardKills0" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="LeaderboardDamage0" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="LeaderboardRow1" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="LeaderboardRank1" class="LeaderboardRank" text="{s:rank}" hittest="false" />
+				<Label id="LeaderboardName1" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="LeaderboardKills1" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="LeaderboardDamage1" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="LeaderboardRow2" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="LeaderboardRank2" class="LeaderboardRank" text="{s:rank}" hittest="false" />
+				<Label id="LeaderboardName2" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="LeaderboardKills2" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="LeaderboardDamage2" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="LeaderboardRow3" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="LeaderboardRank3" class="LeaderboardRank" text="{s:rank}" hittest="false" />
+				<Label id="LeaderboardName3" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="LeaderboardKills3" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="LeaderboardDamage3" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="LeaderboardRow4" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="LeaderboardRank4" class="LeaderboardRank" text="{s:rank}" hittest="false" />
+				<Label id="LeaderboardName4" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="LeaderboardKills4" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="LeaderboardDamage4" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="LeaderboardRow5" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="LeaderboardRank5" class="LeaderboardRank" text="{s:rank}" hittest="false" />
+				<Label id="LeaderboardName5" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="LeaderboardKills5" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="LeaderboardDamage5" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="LeaderboardRow6" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="LeaderboardRank6" class="LeaderboardRank" text="{s:rank}" hittest="false" />
+				<Label id="LeaderboardName6" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="LeaderboardKills6" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="LeaderboardDamage6" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="LeaderboardRow7" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="LeaderboardRank7" class="LeaderboardRank" text="{s:rank}" hittest="false" />
+				<Label id="LeaderboardName7" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="LeaderboardKills7" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="LeaderboardDamage7" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="LeaderboardYou" class="LeaderboardLine LeaderboardEntry LeaderboardYou You" hittest="false">
+				<Label id="LeaderboardRankYou" class="LeaderboardRank" text="{s:rank}" hittest="false" />
+				<Label id="LeaderboardNameYou" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="LeaderboardKillsYou" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="LeaderboardDamageYou" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+		</Panel>
+
 		<Panel id="PayloadBar" class="PayloadBar" hittest="false">
 			<Panel class="PayloadSide" hittest="false" />
 			<Label id="PayloadSection0Fill" class="PayloadFill" text="{s:fill}" hittest="false" />
@@ -245,4 +308,4 @@
 			</Panel>
 		</Panel>
 	</Panel>
-</root>
+</root>

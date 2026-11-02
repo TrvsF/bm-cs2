@@ -80,9 +80,9 @@ export const ShrinkerSettings: FShrinkerSettings =
 	SecondaryLauncher: undefined,
 
 	ShrunkScale: 0.33,
-	ShrinkTime: 1.5,
-	GrowTime: 1.5,
-	ShrunkDuration: 10,
+	ShrinkTime: 1,
+	GrowTime: 1,
+	ShrunkDuration: 12,
 	RechargeTime: 16,
 	MinShrinkCharge: 10,
 
@@ -90,7 +90,6 @@ export const ShrinkerSettings: FShrinkerSettings =
 	{
 		DisplayName: "Trap",
 		ModelTemplate: "shrinker_trap_template",
-		PreviewTemplate: "shrinker_trap_preview_template",
 		DestroyFxTemplate: "shrinker_building_destroy_template",
 		Health: 25,
 		HalfWidth: 16,
@@ -112,7 +111,6 @@ export const ShrinkerSettings: FShrinkerSettings =
 	{
 		DisplayName: "Teleporter Entrance",
 		ModelTemplate: "shrinker_teleporter_entrance_template",
-		PreviewTemplate: "shrinker_teleporter_preview_template",
 		DestroyFxTemplate: "shrinker_building_destroy_template",
 		Health: 60,
 		HalfWidth: 24,
@@ -130,7 +128,6 @@ export const ShrinkerSettings: FShrinkerSettings =
 	{
 		DisplayName: "Teleporter Exit",
 		ModelTemplate: "shrinker_teleporter_exit_template",
-		PreviewTemplate: "shrinker_teleporter_preview_template",
 		DestroyFxTemplate: "shrinker_building_destroy_template",
 		Health: 60,
 		HalfWidth: 24,

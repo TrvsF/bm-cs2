@@ -1116,3 +1116,91 @@
 	font-size: 15px;
 	color: #f2f4f7;
 }
+
+.Leaderboard
+{
+	visibility: collapse;
+	horizontal-align: right;
+	vertical-align: top;
+	margin: 12px 12px 0px 0px;
+	width: 280px;
+	flow-children: down;
+	padding: 6px 0px 8px 0px;
+	border-radius: 8px;
+	background-color: #0b0f14b0;
+}
+
+.Leaderboard.Shown
+{
+	visibility: visible;
+}
+
+.LeaderboardLine
+{
+	width: 100%;
+	height: 24px;
+	padding: 0px 12px 0px 10px;
+	flow-children: right;
+}
+
+.LeaderboardEntry
+{
+	visibility: collapse;
+}
+
+.LeaderboardEntry.Shown
+{
+	visibility: visible;
+}
+
+.LeaderboardEntry.You
+{
+	background-color: #ffffff26;
+}
+
+.LeaderboardYou
+{
+	margin-top: 4px;
+}
+
+.LeaderboardLine Label
+{
+	vertical-align: center;
+	font-family: Stratum2 Medium Condensed;
+	font-size: 17px;
+	color: #f2f4f7;
+	text-shadow: 0px 1px 3px 1.0 #000000c0;
+}
+
+.LeaderboardLine .LeaderboardRank
+{
+	width: 26px;
+	color: #ffffffa0;
+}
+
+.LeaderboardLine .LeaderboardName
+{
+	width: fill-parent-flow( 1.0 );
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.LeaderboardLine .LeaderboardKills
+{
+	width: 44px;
+	text-align: right;
+}
+
+.LeaderboardLine .LeaderboardDamage
+{
+	width: 56px;
+	text-align: right;
+}
+
+.LeaderboardHeader Label
+{
+	font-size: 13px;
+	color: #ffffffa0;
+	text-transform: uppercase;
+	letter-spacing: 1px;
+}

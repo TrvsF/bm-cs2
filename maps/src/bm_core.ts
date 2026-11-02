@@ -1,4 +1,4 @@
-import { Instance, CSWeaponType } from "cs_script/point_script";
+import { Instance, Console, CSWeaponType } from "cs_script/point_script";
 import type
 {
 	Entity,
@@ -14,7 +14,7 @@ import type
 	CSInputs,
 } from "cs_script/point_script";
 
-export const bDebug: boolean = false;
+export const bDebug: boolean = true;
 export const TickInterval: number = 1 / 64;
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -70,7 +70,6 @@ const TerroristColor: FColor = { r: 220, g: 60, b: 50 };
 const CounterTerroristColor: FColor = { r: 70, g: 130, b: 230 };
 
 const GPendingTimers: FPendingTimer[] = [];
-let GbFriendlyFire: boolean = false;
 
 // Timers //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -94,14 +93,10 @@ export function TickTimers(Now: number): void
 
 // Game rules //////////////////////////////////////////////////////////////////////////////////////
 
-export function SetFriendlyFire(bFriendlyFire: boolean): void
+export function IsFreeForAll(): boolean
 {
-	GbFriendlyFire = bFriendlyFire;
-}
-
-export function IsFriendlyFire(): boolean
-{
-	return GbFriendlyFire;
+	const Value: string | undefined = Console.GetConvarString("mp_teammates_are_enemies");
+	return Value === "1" || Value === "true";
 }
 
 // Util ///////////////////////////////////////////////////////////////////////////////////////////
@@ -294,7 +289,7 @@ export function GetChestPosition(Pawn: CSPlayerPawn): FVector
 
 export function IsTeammate(A: Entity, B: Entity): boolean
 {
-	return !IsFriendlyFire() && A.GetTeamNumber() === B.GetTeamNumber();
+	return !IsFreeForAll() && A.GetTeamNumber() === B.GetTeamNumber();
 }
 
 export function GetPawnName(Pawn: CSPlayerPawn): string
@@ -378,6 +373,18 @@ export function SpawnTemplateEntities(TemplateName: string, Position: FVector, R
 export function IsModelEntity(Ent: Entity): Ent is BaseModelEntity
 {
 	return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
+}
+
+export function ForEachPlayer(Visitor: (Controller: CSPlayerController, Slot: number) => void): void
+{
+	for (let Slot: number = 0; Slot < MaxPlayerSlots; Slot++)
+	{
+		const Controller: CSPlayerController | undefined = Instance.GetPlayerController(Slot);
+		if (Controller && Controller.IsConnected())
+		{
+			Visitor(Controller, Slot);
+		}
+	}
 }
 
 export function ForEachLivePawn(Visitor: (Pawn: CSPlayerPawn, Slot: number) => void): void

@@ -20,6 +20,14 @@ export interface FTargetId
 	readonly bTerrorist: boolean;
 }
 
+export interface FLeaderboardRow
+{
+	readonly Slot: number;
+	readonly Name: string;
+	readonly Kills: number;
+	readonly Damage: number;
+}
+
 export type FClassMenuChoice = EPlayerClass | "close" | undefined;
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,6 +100,13 @@ const TargetIdOverhealBarId: string = "TargetIdOverhealBar";
 
 const GShownTargetIds: Map<number, string> = new Map<number, string>();
 const GShownBuildHints: Map<number, string[]> = new Map<number, string[]>();
+const LeaderboardPanelId: string = "Leaderboard";
+const LeaderboardRowPrefix: string = "LeaderboardRow";
+const LeaderboardYouId: string = "LeaderboardYou";
+const MaxLeaderboardRows: number = 8;
+
+const GShownLeaderboard: string[] = [];
+const GShownLeaderboardYou: Map<number, string> = new Map<number, string>();
 let GbWarnedNoClassUi: boolean = false;
 
 // Menu ////////////////////////////////////////////////////////////////////////////////////////////
@@ -417,6 +432,92 @@ export function ShowTargetId(Slot: number, Target: FTargetId | undefined): void
 	Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Shown", true);
 }
 
+export function ShowLeaderboard(Rows: readonly FLeaderboardRow[] | undefined): void
+{
+	let Ui: CustomHudLayout | undefined = undefined;
+	for (let Index: number = 0; Index <= MaxLeaderboardRows; Index++)
+	{
+		const bPanel: boolean = Index === MaxLeaderboardRows;
+		const Row: FLeaderboardRow | undefined = Rows && !bPanel ? Rows[Index] : undefined;
+		const Key: string = bPanel ? (Rows ? "Shown" : "") : Row ? GetLeaderboardKey(Row) : "";
+		if ((GShownLeaderboard[Index] ?? "") === Key)
+		{
+			continue;
+		}
+		Ui ??= FindClassUi();
+		if (!Ui)
+		{
+			return;
+		}
+		GShownLeaderboard[Index] = Key;
+		if (bPanel)
+		{
+			Ui.SetHasClass(LeaderboardPanelId, "Shown", Rows !== undefined);
+			continue;
+		}
+		if (Row)
+		{
+			SetLeaderboardRow(Ui, undefined, `${Index}`, Index + 1, Row);
+		}
+		Ui.SetHasClass(`${LeaderboardRowPrefix}${Index}`, "Shown", Row !== undefined);
+	}
+}
+
+export function ShowLeaderboardYou(Slot: number, Rows: readonly FLeaderboardRow[]): void
+{
+	const Index: number = Rows.findIndex((Row: FLeaderboardRow): boolean =>
+	{
+		return Row.Slot === Slot;
+	});
+	const Own: FLeaderboardRow | undefined = Index >= MaxLeaderboardRows ? Rows[Index] : undefined;
+	const Key: string = `${Index}|${Own ? GetLeaderboardKey(Own) : ""}`;
+	if (GShownLeaderboardYou.get(Slot) === Key)
+	{
+		return;
+	}
+	const Ui: CustomHudLayout | undefined = FindClassUi();
+	if (!Ui)
+	{
+		return;
+	}
+	GShownLeaderboardYou.set(Slot, Key);
+	for (let Row: number = 0; Row < MaxLeaderboardRows; Row++)
+	{
+		Ui.SetHasClassForPlayer(Slot, `${LeaderboardRowPrefix}${Row}`, "You", Row === Index);
+	}
+	if (Own)
+	{
+		SetLeaderboardRow(Ui, Slot, "You", Index + 1, Own);
+	}
+	Ui.SetHasClassForPlayer(Slot, LeaderboardYouId, "Shown", Own !== undefined);
+}
+
+function GetLeaderboardKey(Row: FLeaderboardRow): string
+{
+	return `${Row.Slot}|${Row.Name}|${Row.Kills}|${Row.Damage}`;
+}
+
+function SetLeaderboardRow(Ui: CustomHudLayout, Slot: number | undefined, Suffix: string, Rank: number, Row: FLeaderboardRow): void
+{
+	const Values: readonly [string, string, string][] = [
+		[`LeaderboardRank${Suffix}`, "rank", `${Rank}`],
+		[`LeaderboardName${Suffix}`, "name", Row.Name],
+		[`LeaderboardKills${Suffix}`, "kills", `${Row.Kills}`],
+		[`LeaderboardDamage${Suffix}`, "damage", `${Row.Damage}`],
+	];
+	for (const [LabelId, VariableName, Value] of Values)
+	{
+		if (Slot === undefined)
+		{
+			Ui.SetDialogVariableString(LabelId, VariableName, Value);
+		}
+		else
+		{
+			Ui.SetDialogVariableStringForPlayer(Slot, LabelId, VariableName, Value);
+		}
+	}
+}
+
 export function ShowCounter(Slot: number, Counter: FHudCounter | undefined): void
 {
 	const Key: string = Counter ? `${Counter.Label}|${Counter.Count}|${Counter.Max}` : "";
@@ -594,6 +695,7 @@ export function ResetClassUi(Slot: number): void
 	GShownBuildings.delete(Slot);
 	GShownBuildHints.delete(Slot);
 	GShownTargetIds.delete(Slot);
+	GShownLeaderboardYou.delete(Slot);
 	const Ui: CustomHudLayout | undefined = FindClassUi();
 	if (!Ui)
 	{
@@ -622,4 +724,4 @@ function FindClassUi(): CustomHudLayout | undefined
 function IsCustomHudLayout(Ent: Entity | undefined): Ent is CustomHudLayout
 {
 	return Ent !== undefined && "SetInputCaptureEnabled" in Ent && typeof Ent.SetInputCaptureEnabled === "function";
-}
+}

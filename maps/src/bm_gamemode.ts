@@ -7,9 +7,6 @@ export abstract class GameMode
 	// Whether this map has what the mode needs. bm_main plays the first mode in GameModes that says yes.
 	public abstract IsMapSetUp(): boolean;
 
-	// Whether teammates can hurt each other
-	public abstract IsFriendlyFire(): boolean;
-
 	// Server settings for this mode, applied at each round start after the shared ones
 	public GetMatchCommands(): string[]
 	{
@@ -38,6 +35,16 @@ export abstract class GameMode
 	{
 	}
 
+	// A player hurt by another player (never themselves)
+	public OnPlayerDamage(VictimSlot: number, AttackerSlot: number, Damage: number): void
+	{
+	}
+
+	// AttackerSlot is INDEX_NONE when nobody else got the kill
+	public OnPlayerKill(VictimSlot: number, AttackerSlot: number): void
+	{
+	}
+
 	// Called on every mode when a player leaves, so none of them keep stale state
 	public OnPlayerLeave(Slot: number): void
 	{
@@ -51,4 +58,4 @@ export abstract class GameMode
 	public TickPlayerHud(Pawn: CSPlayerPawn, Slot: number): void
 	{
 	}
-}
+}
