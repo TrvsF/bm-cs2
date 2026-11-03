@@ -3,7 +3,7 @@ import { Instance as Instance16, Console as Console14, GameRules as GameRules3, 
 
 // src/bm_core.ts
 import { Instance, Console, CSWeaponType } from "cs_script/point_script";
-var bDebug = true;
+var bDebug = false;
 var TickInterval = 1 / 64;
 var INDEX_NONE = -1;
 var LogPrefix = "[BM]";

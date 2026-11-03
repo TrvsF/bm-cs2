@@ -14,7 +14,7 @@ import type
 	CSInputs,
 } from "cs_script/point_script";
 
-export const bDebug: boolean = true;
+export const bDebug: boolean = false;
 export const TickInterval: number = 1 / 64;
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
