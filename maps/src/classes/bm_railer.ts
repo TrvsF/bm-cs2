@@ -17,6 +17,9 @@ export interface FRailerSettings extends FClassSettings
 	readonly Railgun: FHitscanWeaponSettings;
 	readonly ChargeBeamTemplate: string;
 	readonly ChargeBeamEndName: string;
+	// How often the charge beam is redrawn, from just starting to fully charged, so it gets denser as it fills
+	readonly ChargeBeamRefireStart: number;
+	readonly ChargeBeamRefireFull: number;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,6 +114,8 @@ export const RailerSettings: FRailerSettings =
 
 	ChargeBeamTemplate: "rail_charge_beam_template",
 	ChargeBeamEndName: "rail_charge_beam_end",
+	ChargeBeamRefireStart: 0.25,
+	ChargeBeamRefireFull: 0.04,
 };
 
 // Railer //////////////////////////////////////////////////////////////////////////////////////////
@@ -138,7 +143,7 @@ export class RailerClass extends PlayerClass<FRailerSettings>
 	{
 		const Ammo: FLauncherAmmo | undefined = GetLauncherAmmo(Pawn, Slot);
 		const bCharging: boolean = Ammo !== undefined && Ammo.ChargeFraction > 0 && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Secondary);
-		if (!bCharging)
+		if (!Ammo || !bCharging)
 		{
 			this.StopChargeBeam(Slot);
 			return;
@@ -147,14 +152,16 @@ export class RailerClass extends PlayerClass<FRailerSettings>
 		const Start: FVector = Pawn.GetEyePosition();
 		const End: FVector = TraceHitscanWeapon(Pawn, this.Settings.Railgun, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
 		const BeamStart: FVector = VectorMath.Subtract(Start, BeamStartDrop);
+		const RefireInterval: number = this.Settings.ChargeBeamRefireStart + (this.Settings.ChargeBeamRefireFull - this.Settings.ChargeBeamRefireStart) * Ammo.ChargeFraction;
 		const Beam: FHeldBeam | undefined = this.ChargeBeams.get(Slot);
 		if (Beam)
 		{
+			Beam.RefireInterval = RefireInterval;
 			MoveHeldBeam(Beam, BeamStart, End);
 		}
 		else
 		{
-			this.ChargeBeams.set(Slot, SpawnHeldBeam(this.Settings.ChargeBeamTemplate, this.Settings.ChargeBeamEndName, BeamStart, End, GetTeamColor(Pawn)));
+			this.ChargeBeams.set(Slot, SpawnHeldBeam(this.Settings.ChargeBeamTemplate, this.Settings.ChargeBeamEndName, BeamStart, End, GetTeamColor(Pawn), RefireInterval));
 		}
 	}
 

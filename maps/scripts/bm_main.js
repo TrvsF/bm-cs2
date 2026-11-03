@@ -243,6 +243,7 @@ var GibTemplateName = "gib_template";
 var GibFallbackTemplateName = "boom_template";
 var GibLifetime = 5;
 var GibFlingSpeed = 450;
+var RefiredBeamLifetime = 0.15;
 var GDecals = [];
 function SpawnScorchMark(Position) {
   const Surface = FindNearbySurface(Position, ScorchSearchDistance);
@@ -301,36 +302,72 @@ function SpawnTemporaryTemplate(TemplateName, Position, Lifetime) {
   return Spawned;
 }
 function SpawnBeam(TemplateName, EndMarkerName, Start, End, Lifetime, FallbackColor) {
-  const Template = Instance2.FindEntityByName(TemplateName);
-  if (!IsPointTemplate(Template)) {
+  const Spawned = SpawnBeamCopy(TemplateName, EndMarkerName, Start, End);
+  if (!Spawned) {
     Instance2.DebugLine({ start: Start, end: End, duration: Lifetime, color: FallbackColor });
     return;
-  }
-  const Spawned = Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start)));
-  if (!Spawned || Spawned.length === 0) {
-    return;
-  }
-  for (const Ent of Spawned) {
-    if (Ent.GetEntityName().startsWith(EndMarkerName)) {
-      Ent.Teleport({ position: End });
-    }
   }
   SetTimer(Lifetime, () => {
     RemoveEntities(Spawned);
   });
 }
-function SpawnHeldBeam(TemplateName, EndMarkerName, Start, End, FallbackColor) {
+function SpawnBeamCopy(TemplateName, EndMarkerName, Start, End) {
   const Template = Instance2.FindEntityByName(TemplateName);
-  const Entities = IsPointTemplate(Template) ? Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start))) ?? [] : [];
-  const Beam = { Entities, EndMarkerName, FallbackColor };
+  if (!IsPointTemplate(Template)) {
+    return void 0;
+  }
+  const Spawned = Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start))) ?? [];
+  for (const Ent of Spawned) {
+    if (Ent.GetEntityName().startsWith(EndMarkerName)) {
+      Ent.Teleport({ position: End });
+    }
+  }
+  return Spawned;
+}
+function SpawnHeldBeam(TemplateName, EndMarkerName, Start, End, FallbackColor, RefireInterval = 0) {
+  const Beam = { TemplateName, EndMarkerName, FallbackColor, Entities: [], RefireInterval, NextRefireTime: 0, Copies: [] };
+  if (RefireInterval > 0) {
+    MoveHeldBeam(Beam, Start, End);
+    return Beam;
+  }
+  const Template = Instance2.FindEntityByName(TemplateName);
+  if (IsPointTemplate(Template)) {
+    Beam.Entities.push(...Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start))) ?? []);
+  }
   PlaceHeldBeam(Beam, Start, End, true);
   return Beam;
 }
 function MoveHeldBeam(Beam, Start, End) {
-  PlaceHeldBeam(Beam, Start, End, false);
+  if (Beam.RefireInterval <= 0) {
+    PlaceHeldBeam(Beam, Start, End, false);
+    return;
+  }
+  const Now = Instance2.GetGameTime();
+  for (let Index = Beam.Copies.length - 1; Index >= 0; Index--) {
+    const Copy = Beam.Copies[Index];
+    if (Copy && Copy.RemoveAt <= Now) {
+      RemoveEntities(Copy.Entities);
+      Beam.Copies.splice(Index, 1);
+    }
+  }
+  if (Now < Beam.NextRefireTime) {
+    return;
+  }
+  const bOnSchedule = Now - Beam.NextRefireTime < Beam.RefireInterval;
+  Beam.NextRefireTime = (bOnSchedule ? Beam.NextRefireTime : Now) + Beam.RefireInterval;
+  const Spawned = SpawnBeamCopy(Beam.TemplateName, Beam.EndMarkerName, Start, End);
+  if (Spawned) {
+    Beam.Copies.push({ Entities: Spawned, RemoveAt: Now + Math.max(RefiredBeamLifetime, Beam.RefireInterval) });
+  } else {
+    Instance2.DebugLine({ start: Start, end: End, duration: Beam.RefireInterval, color: Beam.FallbackColor });
+  }
 }
 function RemoveHeldBeam(Beam) {
   RemoveEntities(Beam.Entities);
+  for (const Copy of Beam.Copies) {
+    RemoveEntities(Copy.Entities);
+  }
+  Beam.Copies.length = 0;
 }
 function PlaceHeldBeam(Beam, Start, End, bTeleport) {
   if (Beam.Entities.length === 0) {
@@ -2592,7 +2629,9 @@ var RailerSettings = {
     ImpactLifetime: 2
   },
   ChargeBeamTemplate: "rail_charge_beam_template",
-  ChargeBeamEndName: "rail_charge_beam_end"
+  ChargeBeamEndName: "rail_charge_beam_end",
+  ChargeBeamRefireStart: 0.25,
+  ChargeBeamRefireFull: 0.04
 };
 var RailerClass = class extends PlayerClass {
   ChargeBeams = /* @__PURE__ */ new Map();
@@ -2608,18 +2647,20 @@ var RailerClass = class extends PlayerClass {
   TickPlayer(Pawn, Slot, Now, DeltaTime) {
     const Ammo = GetLauncherAmmo(Pawn, Slot);
     const bCharging = Ammo !== void 0 && Ammo.ChargeFraction > 0 && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Secondary);
-    if (!bCharging) {
+    if (!Ammo || !bCharging) {
       this.StopChargeBeam(Slot);
       return;
     }
     const Start = Pawn.GetEyePosition();
     const End = TraceHitscanWeapon(Pawn, this.Settings.Railgun, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
     const BeamStart = VectorMath.Subtract(Start, BeamStartDrop);
+    const RefireInterval = this.Settings.ChargeBeamRefireStart + (this.Settings.ChargeBeamRefireFull - this.Settings.ChargeBeamRefireStart) * Ammo.ChargeFraction;
     const Beam = this.ChargeBeams.get(Slot);
     if (Beam) {
+      Beam.RefireInterval = RefireInterval;
       MoveHeldBeam(Beam, BeamStart, End);
     } else {
-      this.ChargeBeams.set(Slot, SpawnHeldBeam(this.Settings.ChargeBeamTemplate, this.Settings.ChargeBeamEndName, BeamStart, End, GetTeamColor(Pawn)));
+      this.ChargeBeams.set(Slot, SpawnHeldBeam(this.Settings.ChargeBeamTemplate, this.Settings.ChargeBeamEndName, BeamStart, End, GetTeamColor(Pawn), RefireInterval));
     }
   }
   OnRoundStart() {
@@ -2693,6 +2734,7 @@ var BeamerSettings = {
     ImpactTemplate: "",
     ImpactLifetime: 0
   },
+  EnergyBeamRefireInterval: 0.05,
   Shotgun: {
     Damage: 10,
     HeadshotMultiplier: 1,
@@ -2740,7 +2782,7 @@ var BeamerClass = class extends PlayerClass {
     if (State.Beam) {
       MoveHeldBeam(State.Beam, BeamStart, End);
     } else {
-      State.Beam = SpawnHeldBeam(Beam.BeamTemplate, Beam.BeamEndName, BeamStart, End, GetTeamColor(Pawn));
+      State.Beam = SpawnHeldBeam(Beam.BeamTemplate, Beam.BeamEndName, BeamStart, End, GetTeamColor(Pawn), this.Settings.EnergyBeamRefireInterval);
     }
   }
   OnRoundStart() {

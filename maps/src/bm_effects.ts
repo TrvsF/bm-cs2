@@ -5,11 +5,22 @@ import type { FVector, FRotator, FColor } from "./bm_core";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
-export interface FHeldBeam
+interface FBeamCopy
 {
 	readonly Entities: Entity[];
+	readonly RemoveAt: number;
+}
+
+export interface FHeldBeam
+{
+	readonly TemplateName: string;
 	readonly EndMarkerName: string;
 	readonly FallbackColor: FColor;
+	readonly Entities: Entity[];
+	// Above 0, a fresh copy of a one-shot beam is spawned this often instead of moving one long-lived copy
+	RefireInterval: number;
+	NextRefireTime: number;
+	readonly Copies: FBeamCopy[];
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,6 +34,7 @@ const GibTemplateName: string = "gib_template";
 const GibFallbackTemplateName: string = "boom_template";
 const GibLifetime: number = 5;
 const GibFlingSpeed: number = 450;
+const RefiredBeamLifetime: number = 0.15;
 
 let GDecals: Entity[][] = [];
 
@@ -107,24 +119,11 @@ export function SpawnTemporaryTemplate(TemplateName: string, Position: FVector, 
 
 export function SpawnBeam(TemplateName: string, EndMarkerName: string, Start: FVector, End: FVector, Lifetime: number, FallbackColor: FColor): void
 {
-	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	if (!IsPointTemplate(Template))
+	const Spawned: Entity[] | undefined = SpawnBeamCopy(TemplateName, EndMarkerName, Start, End);
+	if (!Spawned)
 	{
 		Instance.DebugLine({ start: Start, end: End, duration: Lifetime, color: FallbackColor });
 		return;
-	}
-
-	const Spawned: Entity[] | undefined = Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start)));
-	if (!Spawned || Spawned.length === 0)
-	{
-		return;
-	}
-	for (const Ent of Spawned)
-	{
-		if (Ent.GetEntityName().startsWith(EndMarkerName))
-		{
-			Ent.Teleport({ position: End });
-		}
 	}
 	SetTimer(Lifetime, (): void =>
 	{
@@ -132,23 +131,84 @@ export function SpawnBeam(TemplateName: string, EndMarkerName: string, Start: FV
 	});
 }
 
-export function SpawnHeldBeam(TemplateName: string, EndMarkerName: string, Start: FVector, End: FVector, FallbackColor: FColor): FHeldBeam
+// undefined when the map has no such template
+function SpawnBeamCopy(TemplateName: string, EndMarkerName: string, Start: FVector, End: FVector): Entity[] | undefined
 {
 	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	const Entities: Entity[] = IsPointTemplate(Template) ? Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start))) ?? [] : [];
-	const Beam: FHeldBeam = { Entities: Entities, EndMarkerName: EndMarkerName, FallbackColor: FallbackColor };
+	if (!IsPointTemplate(Template))
+	{
+		return undefined;
+	}
+	const Spawned: Entity[] = Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start))) ?? [];
+	for (const Ent of Spawned)
+	{
+		if (Ent.GetEntityName().startsWith(EndMarkerName))
+		{
+			Ent.Teleport({ position: End });
+		}
+	}
+	return Spawned;
+}
+
+export function SpawnHeldBeam(TemplateName: string, EndMarkerName: string, Start: FVector, End: FVector, FallbackColor: FColor, RefireInterval: number = 0): FHeldBeam
+{
+	const Beam: FHeldBeam = { TemplateName: TemplateName, EndMarkerName: EndMarkerName, FallbackColor: FallbackColor, Entities: [], RefireInterval: RefireInterval, NextRefireTime: 0, Copies: [] };
+	if (RefireInterval > 0)
+	{
+		MoveHeldBeam(Beam, Start, End);
+		return Beam;
+	}
+	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
+	if (IsPointTemplate(Template))
+	{
+		Beam.Entities.push(...(Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start))) ?? []));
+	}
 	PlaceHeldBeam(Beam, Start, End, true);
 	return Beam;
 }
 
 export function MoveHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector): void
 {
-	PlaceHeldBeam(Beam, Start, End, false);
+	if (Beam.RefireInterval <= 0)
+	{
+		PlaceHeldBeam(Beam, Start, End, false);
+		return;
+	}
+	const Now: number = Instance.GetGameTime();
+	for (let Index: number = Beam.Copies.length - 1; Index >= 0; Index--)
+	{
+		const Copy: FBeamCopy | undefined = Beam.Copies[Index];
+		if (Copy && Copy.RemoveAt <= Now)
+		{
+			RemoveEntities(Copy.Entities);
+			Beam.Copies.splice(Index, 1);
+		}
+	}
+	if (Now < Beam.NextRefireTime)
+	{
+		return;
+	}
+	const bOnSchedule: boolean = Now - Beam.NextRefireTime < Beam.RefireInterval;
+	Beam.NextRefireTime = (bOnSchedule ? Beam.NextRefireTime : Now) + Beam.RefireInterval;
+	const Spawned: Entity[] | undefined = SpawnBeamCopy(Beam.TemplateName, Beam.EndMarkerName, Start, End);
+	if (Spawned)
+	{
+		Beam.Copies.push({ Entities: Spawned, RemoveAt: Now + Math.max(RefiredBeamLifetime, Beam.RefireInterval) });
+	}
+	else
+	{
+		Instance.DebugLine({ start: Start, end: End, duration: Beam.RefireInterval, color: Beam.FallbackColor });
+	}
 }
 
 export function RemoveHeldBeam(Beam: FHeldBeam): void
 {
 	RemoveEntities(Beam.Entities);
+	for (const Copy of Beam.Copies)
+	{
+		RemoveEntities(Copy.Entities);
+	}
+	Beam.Copies.length = 0;
 }
 
 function PlaceHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector, bTeleport: boolean): void

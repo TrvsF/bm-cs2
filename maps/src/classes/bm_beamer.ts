@@ -13,6 +13,7 @@ import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
 export interface FBeamerSettings extends FClassSettings
 {
 	readonly EnergyBeam: FHitscanWeaponSettings;
+	readonly EnergyBeamRefireInterval: number;
 	readonly Shotgun: FHitscanWeaponSettings;
 }
 
@@ -83,6 +84,7 @@ export const BeamerSettings: FBeamerSettings =
 		ImpactTemplate: "",
 		ImpactLifetime: 0,
 	},
+	EnergyBeamRefireInterval: 0.05,
 
 	Shotgun:
 	{
@@ -150,7 +152,7 @@ export class BeamerClass extends PlayerClass<FBeamerSettings>
 		}
 		else
 		{
-			State.Beam = SpawnHeldBeam(Beam.BeamTemplate, Beam.BeamEndName, BeamStart, End, GetTeamColor(Pawn));
+			State.Beam = SpawnHeldBeam(Beam.BeamTemplate, Beam.BeamEndName, BeamStart, End, GetTeamColor(Pawn), this.Settings.EnergyBeamRefireInterval);
 		}
 	}
 
