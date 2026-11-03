@@ -101,6 +101,7 @@ function Tick(): void
 function BeginPlay(): void
 {
 	SelectGameMode();
+	ApplyMatchSettings();
 	Instance.OnPlayerChat(HandlePlayerChat);
 	Instance.OnPlayerReset(HandlePlayerReset);
 	Instance.OnPlayerKill(HandlePlayerKill);
