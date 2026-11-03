@@ -4988,7 +4988,6 @@ function Tick() {
 }
 function BeginPlay() {
   SelectGameMode();
-  ApplyMatchSettings();
   Instance16.OnPlayerChat(HandlePlayerChat);
   Instance16.OnPlayerReset(HandlePlayerReset);
   Instance16.OnPlayerKill(HandlePlayerKill);

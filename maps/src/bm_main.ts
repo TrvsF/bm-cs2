@@ -101,7 +101,6 @@ function Tick(): void
 function BeginPlay(): void
 {
 	SelectGameMode();
-	ApplyMatchSettings();
 	Instance.OnPlayerChat(HandlePlayerChat);
 	Instance.OnPlayerReset(HandlePlayerReset);
 	Instance.OnPlayerKill(HandlePlayerKill);
@@ -483,7 +482,6 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass}`);
 }
 
-// Anyone in their own team's spawn zone with a different class requested is swapped to it there and then
 function TickSpawnClassSwaps(): void
 {
 	ForEachLivePawn((Pawn: CSPlayerPawn, Slot: number): void =>
@@ -633,7 +631,6 @@ function TickPlayerHud(): void
 	});
 }
 
-// Who they're healing, else the teammate under the crosshair right now, as "Name (Class)"
 function FindTargetId(Pawn: CSPlayerPawn, Slot: number): FTargetId | undefined
 {
 	const ViewerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
