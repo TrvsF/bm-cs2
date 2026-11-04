@@ -1,8 +1,8 @@
-import { Instance, Console, CSInputs } from "cs_script/point_script";
+import { Instance, Console, CSInputs, CSDamageTypes, CSDamageFlags } from "cs_script/point_script";
 import type { CSPlayerPawn } from "cs_script/point_script";
 import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, ForEachLivePawn } from "../bm_core";
 import type { FVector, FColor, FHeldInputs } from "../bm_core";
-import { Explode } from "../bm_combat";
+import { Explode, SpawnExplosionFx } from "../bm_combat";
 import { SpawnTemporaryTemplate } from "../bm_effects";
 import { BuildingKind, FindOwnedBuilding, IsBuildingEnemy, IsStandingOn, GetBuildingCenter, TickBuildTool, CancelPlacement, RemoveBuilding, DestroyBuilding } from "../bm_buildings";
 import type { FBuilding, FBuildingSettings, FBuildKeys } from "../bm_buildings";
@@ -21,6 +21,10 @@ export interface FTrapSettings extends FBuildingSettings
 	readonly BlastHeight: number;
 	readonly Knockback: number;
 	readonly ExplodeFxTemplate: string;
+	// Its owner stepping on it once it's armed sets it off on them alone: a flat hit, and a launch away from its centre
+	readonly OwnerDamage: number;
+	readonly OwnerLaunchSpeed: number;
+	readonly OwnerLaunchUpSpeed: number;
 }
 
 export interface FTeleporterSettings extends FBuildingSettings
@@ -105,6 +109,9 @@ export const ShrinkerSettings: FShrinkerSettings =
 		BlastHeight: 24,
 		Knockback: 300,
 		ExplodeFxTemplate: "shrinker_trap_explode_template",
+		OwnerDamage: 33,
+		OwnerLaunchSpeed: 600,
+		OwnerLaunchUpSpeed: 550,
 	},
 
 	TeleporterEntrance:
@@ -143,6 +150,7 @@ export const ShrinkerSettings: FShrinkerSettings =
 };
 
 const MaxShrinkCharge: number = 100;
+const UnarmedTrapColor: FColor = { r: 255, g: 255, b: 255 };
 const TeleportFxLifetime: number = 3;
 const ArrivalLift: number = 2;
 
@@ -164,22 +172,64 @@ export class TrapKind extends BuildingKind<FTrapSettings>
 
 	public override Tick(Building: FBuilding, Now: number, DeltaTime: number): void
 	{
-		const State: FTrapState | undefined = this.States.get(Building);
-		const Victim: CSPlayerPawn | undefined = State && Now >= State.ArmedAt ? this.FindVictim(Building) : undefined;
-		if (!Victim)
+		if (!this.IsArmed(Building, Now))
 		{
 			return;
 		}
 		const Origin: FVector = VectorMath.Add(Building.Position, { x: 0, y: 0, z: this.Settings.BlastHeight });
-		Console.Log(`${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
-		Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, undefined, this.Settings.ExplodeFxTemplate);
-		RemoveBuilding(Building);
+		const Victim: CSPlayerPawn | undefined = this.FindVictim(Building);
+		if (Victim)
+		{
+			Console.Log(`${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
+			Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, undefined, this.Settings.ExplodeFxTemplate);
+			RemoveBuilding(Building);
+		}
+		else if (this.IsOwnerOnIt(Building))
+		{
+			SpawnExplosionFx(Origin, this.Settings.BlastRadius, this.Settings.ExplodeFxTemplate);
+			this.LaunchOwner(Building);
+			RemoveBuilding(Building);
+		}
+	}
+
+	public override GetColor(Building: FBuilding, Now: number): FColor | undefined
+	{
+		return this.IsArmed(Building, Now) ? undefined : UnarmedTrapColor;
 	}
 
 	public override GetStatus(Building: FBuilding, Now: number): string
 	{
+		return this.IsArmed(Building, Now) ? "Armed" : "Arming";
+	}
+
+	private IsArmed(Building: FBuilding, Now: number): boolean
+	{
 		const State: FTrapState | undefined = this.States.get(Building);
-		return State && Now < State.ArmedAt ? "Arming" : "Armed";
+		return State !== undefined && Now >= State.ArmedAt;
+	}
+
+	private IsOwnerOnIt(Building: FBuilding): boolean
+	{
+		const Owner: CSPlayerPawn = Building.Owner;
+		return Owner.IsValid() && Owner.IsAlive() && IsStandingOn(Building, Owner, this.Settings.TriggerReach, this.Settings.TriggerHeight);
+	}
+
+	private LaunchOwner(Building: FBuilding): void
+	{
+		const Owner: CSPlayerPawn = Building.Owner;
+		const Feet: FVector = Owner.GetAbsOrigin();
+		const Away: FVector = VectorMath.GetSafeNormal({ x: Feet.x - Building.Position.x, y: Feet.y - Building.Position.y, z: 0 });
+		const Launch: FVector = VectorMath.Add(VectorMath.Scale(Away, this.Settings.OwnerLaunchSpeed), { x: 0, y: 0, z: this.Settings.OwnerLaunchUpSpeed });
+		Console.Log(`${LogPrefix} ${GetPawnName(Owner)} stepped on their own ${this.Settings.DisplayName}`);
+		Owner.Teleport({ velocity: Launch });
+		Owner.TakeDamage(
+		{
+			damage: this.Settings.OwnerDamage,
+			damageTypes: CSDamageTypes.BLAST,
+			damageFlags: CSDamageFlags.IGNORE_ARMOR,
+			attacker: Owner,
+			inflictor: Owner,
+		});
 	}
 
 	private FindVictim(Building: FBuilding): CSPlayerPawn | undefined

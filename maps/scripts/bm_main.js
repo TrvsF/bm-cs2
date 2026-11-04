@@ -1,5 +1,5 @@
 // src/bm_main.ts
-import { Instance as Instance16, Console as Console14, GameRules as GameRules3, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2, CSGearSlot as CSGearSlot4 } from "cs_script/point_script";
+import { Instance as Instance16, Console as Console14, GameRules as GameRules3, CSDamageTypes as CSDamageTypes4, CSDamageFlags as CSDamageFlags4, CSGearSlot as CSGearSlot4 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance, Console, CSWeaponType } from "cs_script/point_script";
@@ -244,6 +244,8 @@ var GibFallbackTemplateName = "boom_template";
 var GibLifetime = 5;
 var GibFlingSpeed = 450;
 var RefiredBeamLifetime = 0.15;
+var BeamParticleSuffix = "_fx";
+var BeamFxLingerTime = 1;
 var GDecals = [];
 function SpawnScorchMark(Position) {
   const Surface = FindNearbySurface(Position, ScorchSearchDistance);
@@ -308,7 +310,7 @@ function SpawnBeam(TemplateName, EndMarkerName, Start, End, Lifetime, FallbackCo
     return;
   }
   SetTimer(Lifetime, () => {
-    RemoveEntities(Spawned);
+    RemoveBeamCopy(Spawned);
   });
 }
 function SpawnBeamCopy(TemplateName, EndMarkerName, Start, End) {
@@ -346,7 +348,7 @@ function MoveHeldBeam(Beam, Start, End) {
   for (let Index = Beam.Copies.length - 1; Index >= 0; Index--) {
     const Copy = Beam.Copies[Index];
     if (Copy && Copy.RemoveAt <= Now) {
-      RemoveEntities(Copy.Entities);
+      RemoveBeamCopy(Copy.Entities);
       Beam.Copies.splice(Index, 1);
     }
   }
@@ -365,7 +367,7 @@ function MoveHeldBeam(Beam, Start, End) {
 function RemoveHeldBeam(Beam) {
   RemoveEntities(Beam.Entities);
   for (const Copy of Beam.Copies) {
-    RemoveEntities(Copy.Entities);
+    RemoveBeamCopy(Copy.Entities);
   }
   Beam.Copies.length = 0;
 }
@@ -438,6 +440,14 @@ function FindNearbySurface(Position, MaxDistance) {
     }
   }
   return Closest;
+}
+function RemoveBeamCopy(Entities) {
+  RemoveEntities(Entities.filter((Ent) => {
+    return Ent.IsValid() && Ent.GetEntityName().endsWith(BeamParticleSuffix);
+  }));
+  SetTimer(BeamFxLingerTime, () => {
+    RemoveEntities(Entities);
+  });
 }
 function RemoveEntities(Entities) {
   for (const Ent of Entities) {
@@ -1422,11 +1432,7 @@ function PlaceProjectileModels(Projectile, bTeleport) {
 }
 function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff, FxTemplate = ExplosionTemplateName) {
   const Origin = VectorMath.Add(Position, ExplosionOffset);
-  const Fx = SpawnTemporaryTemplate(FxTemplate, Origin, ExplosionFxLifetime) ?? SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime);
-  if (!Fx) {
-    Instance5.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
-  }
-  SpawnScorchMark(Position);
+  SpawnExplosionFx(Position, Radius, FxTemplate);
   if (!Attacker.IsValid()) {
     return 0;
   }
@@ -1469,6 +1475,14 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff, Fx
     Console4.Log(`${LogPrefix} ${GetPawnName(Attacker)} Damaged (explosive) ${GetPawnName(Victim)} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
   });
   return DamageTotal;
+}
+function SpawnExplosionFx(Position, Radius, FxTemplate = ExplosionTemplateName) {
+  const Origin = VectorMath.Add(Position, ExplosionOffset);
+  const Fx = SpawnTemporaryTemplate(FxTemplate, Origin, ExplosionFxLifetime) ?? SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime);
+  if (!Fx) {
+    Instance5.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
+  }
+  SpawnScorchMark(Position);
 }
 function GetDistanceDamageScale(Distance, Falloff) {
   const Closeness = Math.min(1, Math.max(0, 1 - Distance / (2 * Falloff.OptimalDistance)));
@@ -2088,7 +2102,7 @@ var SoldierSettings = {
     ReloadFxTemplate: "rocket_reload_template"
   },
   SecondaryLauncher: void 0,
-  RocketDamage: 90,
+  RocketDamage: 75,
   RocketRadius: 160,
   RocketSpeed: 1200,
   RocketKnockback: 400,
@@ -3046,7 +3060,7 @@ var ShockerClass = class extends PlayerClass {
 };
 
 // src/classes/bm_shrinker.ts
-import { Instance as Instance9, Console as Console9, CSInputs as CSInputs5 } from "cs_script/point_script";
+import { Instance as Instance9, Console as Console9, CSInputs as CSInputs5, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2 } from "cs_script/point_script";
 var ShrinkerSettings = {
   DisplayName: "Shrinker",
   PickFxTemplate: "shrinker_pick_template",
@@ -3083,7 +3097,10 @@ var ShrinkerSettings = {
     BlastRadius: 120,
     BlastHeight: 24,
     Knockback: 300,
-    ExplodeFxTemplate: "shrinker_trap_explode_template"
+    ExplodeFxTemplate: "shrinker_trap_explode_template",
+    OwnerDamage: 33,
+    OwnerLaunchSpeed: 600,
+    OwnerLaunchUpSpeed: 550
   },
   TeleporterEntrance: {
     DisplayName: "Teleporter Entrance",
@@ -3117,6 +3134,7 @@ var ShrinkerSettings = {
   }
 };
 var MaxShrinkCharge = 100;
+var UnarmedTrapColor = { r: 255, g: 255, b: 255 };
 var TeleportFxLifetime = 3;
 var ArrivalLift = 2;
 var TrapKind = class extends BuildingKind {
@@ -3128,19 +3146,51 @@ var TrapKind = class extends BuildingKind {
     this.States.delete(Building);
   }
   Tick(Building, Now, DeltaTime) {
-    const State = this.States.get(Building);
-    const Victim = State && Now >= State.ArmedAt ? this.FindVictim(Building) : void 0;
-    if (!Victim) {
+    if (!this.IsArmed(Building, Now)) {
       return;
     }
     const Origin = VectorMath.Add(Building.Position, { x: 0, y: 0, z: this.Settings.BlastHeight });
-    Console9.Log(`${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
-    Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, void 0, this.Settings.ExplodeFxTemplate);
-    RemoveBuilding(Building);
+    const Victim = this.FindVictim(Building);
+    if (Victim) {
+      Console9.Log(`${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
+      Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, void 0, this.Settings.ExplodeFxTemplate);
+      RemoveBuilding(Building);
+    } else if (this.IsOwnerOnIt(Building)) {
+      SpawnExplosionFx(Origin, this.Settings.BlastRadius, this.Settings.ExplodeFxTemplate);
+      this.LaunchOwner(Building);
+      RemoveBuilding(Building);
+    }
+  }
+  GetColor(Building, Now) {
+    return this.IsArmed(Building, Now) ? void 0 : UnarmedTrapColor;
   }
   GetStatus(Building, Now) {
+    return this.IsArmed(Building, Now) ? "Armed" : "Arming";
+  }
+  IsArmed(Building, Now) {
     const State = this.States.get(Building);
-    return State && Now < State.ArmedAt ? "Arming" : "Armed";
+    return State !== void 0 && Now >= State.ArmedAt;
+  }
+  IsOwnerOnIt(Building) {
+    const Owner = Building.Owner;
+    return Owner.IsValid() && Owner.IsAlive() && IsStandingOn(Building, Owner, this.Settings.TriggerReach, this.Settings.TriggerHeight);
+  }
+  LaunchOwner(Building) {
+    const Owner = Building.Owner;
+    const Feet = Owner.GetAbsOrigin();
+    const Away = VectorMath.GetSafeNormal({ x: Feet.x - Building.Position.x, y: Feet.y - Building.Position.y, z: 0 });
+    const Launch = VectorMath.Add(VectorMath.Scale(Away, this.Settings.OwnerLaunchSpeed), { x: 0, y: 0, z: this.Settings.OwnerLaunchUpSpeed });
+    Console9.Log(`${LogPrefix} ${GetPawnName(Owner)} stepped on their own ${this.Settings.DisplayName}`);
+    Owner.Teleport({ velocity: Launch });
+    Owner.TakeDamage(
+      {
+        damage: this.Settings.OwnerDamage,
+        damageTypes: CSDamageTypes3.BLAST,
+        damageFlags: CSDamageFlags2.IGNORE_ARMOR,
+        attacker: Owner,
+        inflictor: Owner
+      }
+    );
   }
   FindVictim(Building) {
     let Victim = void 0;
@@ -4538,7 +4588,7 @@ function BuildLeaderboard() {
 }
 
 // src/gamemodes/bm_payload.ts
-import { Instance as Instance15, Console as Console13, GameRules as GameRules2, CSRoundEndReason } from "cs_script/point_script";
+import { Instance as Instance15, Console as Console13, GameRules as GameRules2, CSRoundEndReason, CSDamageFlags as CSDamageFlags3 } from "cs_script/point_script";
 var PayloadSettings = {
   CartName: "payload_cart",
   PathPrefix: "payload_path_",
@@ -4554,7 +4604,8 @@ var PayloadSettings = {
   CheckpointBonusTime: 120,
   PusherHealPerSecond: 10,
   TurnBlendDistance: 48,
-  BuyTime: 3
+  BuyTime: 3,
+  HumiliationTime: 5
 };
 var AttackingTeam = 2 /* Terrorist */;
 var DefendingTeam = 3 /* CounterTerrorist */;
@@ -4572,6 +4623,8 @@ var GLastAttendedTime = 0;
 var GbRoundTimerSet = false;
 var GbRoundOver = false;
 var GbDelivered = false;
+var GWinner = void 0;
+var GRoundEndTime = 0;
 var GNextScanTime2 = 0;
 var GStatus = void 0;
 var GLastScanReport2 = "";
@@ -4614,12 +4667,14 @@ var PayloadMode = class extends GameMode {
     GbRoundTimerSet = false;
     GbRoundOver = false;
     GbDelivered = false;
+    GWinner = void 0;
     GHealAccumulators.clear();
     GStatus = void 0;
     PlaceCart(true);
   }
   OnRoundEnd() {
     GbRoundOver = true;
+    GWinner = void 0;
   }
   Tick(Now, DeltaTime) {
     TickPayload(Now, DeltaTime);
@@ -4643,6 +4698,9 @@ function TickPayload(Now, DeltaTime) {
   }
   if (bDebug) {
     DrawTrack(Track);
+  }
+  if (GWinner !== void 0) {
+    TickHumiliation(GWinner, Now);
   }
   if (GbRoundOver || GameRules2.IsWarmupPeriod() || GameRules2.IsFreezePeriod()) {
     GStatus = MakeStatus(Track, 0, false, false, false, Now);
@@ -4672,9 +4730,9 @@ function TickPayload(Now, DeltaTime) {
   const bTimeUp = GameRules2.GetRoundRemainingTime() <= 0;
   if (GDistance >= Track.Length) {
     GbDelivered = true;
-    EndRound(AttackingTeam);
+    WinRound(AttackingTeam, Now);
   } else if (bTimeUp && Crowd.Attackers.length === 0) {
-    EndRound(DefendingTeam);
+    WinRound(DefendingTeam, Now);
   }
   GStatus = MakeStatus(Track, Pushers, bBlocked && !GbRoundOver, bRollingBack, bTimeUp && !GbRoundOver, Now);
 }
@@ -4736,14 +4794,36 @@ function ReachCheckpoints(Track, Now) {
     Console13.Log(`${LogPrefix} payload checkpoint ${GCheckpointsReached} / ${Track.Checkpoints.length} reached. adding ${PayloadSettings.CheckpointBonusTime} seconds to match timer`);
   }
 }
-function EndRound(Winner) {
+function WinRound(Winner, Now) {
   if (GbRoundOver) {
     return;
   }
   GbRoundOver = true;
+  GWinner = Winner;
+  GRoundEndTime = Now + PayloadSettings.HumiliationTime;
+  const Loser = GetOtherTeam(Winner);
+  Console13.ServerCommand(`mp_respawn_on_death_${Loser === 2 /* Terrorist */ ? "t" : "ct"} 0`);
+  KillTeam(Loser);
+  Console13.Log(`${LogPrefix} payload round won. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}, round ends in ${PayloadSettings.HumiliationTime}s`);
+}
+function TickHumiliation(Winner, Now) {
+  KillTeam(GetOtherTeam(Winner));
+  if (Now < GRoundEndTime) {
+    return;
+  }
+  GWinner = void 0;
   GameRules2.AddTeamScore(Winner, 1);
   GameRules2.TerminateRound(Winner === 2 /* Terrorist */ ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
-  Console13.Log(`${LogPrefix} payload round finished. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}`);
+}
+function KillTeam(Team) {
+  ForEachLivePawn((Pawn) => {
+    if (Pawn.GetTeamNumber() === Team) {
+      Pawn.TakeDamage({ damage: Pawn.GetHealth() + 1e3, damageFlags: CSDamageFlags3.FORCE_DEATH | CSDamageFlags3.IGNORE_ARMOR });
+    }
+  });
+}
+function GetOtherTeam(Team) {
+  return Team === 2 /* Terrorist */ ? 3 /* CounterTerrorist */ : 2 /* Terrorist */;
 }
 function MakeStatus(Track, Pushers, bBlocked, bRollingBack, bOvertime, Now) {
   const Status = {
@@ -5165,7 +5245,7 @@ function HandleCustomHudClicked(Event) {
   }
 }
 function HandleModifyPlayerDamage(Event) {
-  if ((Event.damageFlags & CSDamageFlags2.FORCE_DEATH) !== 0) {
+  if ((Event.damageFlags & CSDamageFlags4.FORCE_DEATH) !== 0) {
     return;
   }
   for (const Definition of Object.values(ClassDefinitions)) {
@@ -5174,7 +5254,7 @@ function HandleModifyPlayerDamage(Event) {
       return Result;
     }
   }
-  if ((Event.damageTypes & CSDamageTypes3.FALL) !== 0 && GClassBySlot.has(GetPlayerSlot(Event.player))) {
+  if ((Event.damageTypes & CSDamageTypes4.FALL) !== 0 && GClassBySlot.has(GetPlayerSlot(Event.player))) {
     return { abort: true };
   }
   const AttackerSlot = GetPlayerSlot(Event.attacker);

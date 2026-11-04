@@ -421,13 +421,7 @@ function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): voi
 export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined, FxTemplate: string = ExplosionTemplateName): number
 {
 	const Origin: FVector = VectorMath.Add(Position, ExplosionOffset);
-
-	const Fx: Entity[] | undefined = SpawnTemporaryTemplate(FxTemplate, Origin, ExplosionFxLifetime) ?? SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime);
-	if (!Fx)
-	{
-		Instance.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
-	}
-	SpawnScorchMark(Position);
+	SpawnExplosionFx(Position, Radius, FxTemplate);
 	if (!Attacker.IsValid())
 	{
 		return 0;
@@ -482,6 +476,17 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		Console.Log(`${LogPrefix} ${GetPawnName(Attacker)} Damaged (explosive) ${GetPawnName(Victim)} : ${DamageTaken}d : ${VectorMath.Size(Push)}k (${PushDirection.x}, ${PushDirection.y}, ${PushDirection.z}) : ${Falloff}f : ${RangeScale.toFixed(2)}r`);
 	});
 	return DamageTotal;
+}
+
+export function SpawnExplosionFx(Position: FVector, Radius: number, FxTemplate: string = ExplosionTemplateName): void
+{
+	const Origin: FVector = VectorMath.Add(Position, ExplosionOffset);
+	const Fx: Entity[] | undefined = SpawnTemporaryTemplate(FxTemplate, Origin, ExplosionFxLifetime) ?? SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime);
+	if (!Fx)
+	{
+		Instance.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
+	}
+	SpawnScorchMark(Position);
 }
 
 // Damage Falloff /////////////////////////////////////////////////////////////////////////////////

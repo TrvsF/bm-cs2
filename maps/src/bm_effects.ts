@@ -35,6 +35,9 @@ const GibFallbackTemplateName: string = "boom_template";
 const GibLifetime: number = 5;
 const GibFlingSpeed: number = 450;
 const RefiredBeamLifetime: number = 0.15;
+// A beam template's own particle is named "<beam>_fx". The rest (the impact on the end marker, muzzle flashes) is kept this much longer so it can play out
+const BeamParticleSuffix: string = "_fx";
+const BeamFxLingerTime: number = 1;
 
 let GDecals: Entity[][] = [];
 
@@ -127,7 +130,7 @@ export function SpawnBeam(TemplateName: string, EndMarkerName: string, Start: FV
 	}
 	SetTimer(Lifetime, (): void =>
 	{
-		RemoveEntities(Spawned);
+		RemoveBeamCopy(Spawned);
 	});
 }
 
@@ -180,7 +183,7 @@ export function MoveHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector): voi
 		const Copy: FBeamCopy | undefined = Beam.Copies[Index];
 		if (Copy && Copy.RemoveAt <= Now)
 		{
-			RemoveEntities(Copy.Entities);
+			RemoveBeamCopy(Copy.Entities);
 			Beam.Copies.splice(Index, 1);
 		}
 	}
@@ -206,7 +209,7 @@ export function RemoveHeldBeam(Beam: FHeldBeam): void
 	RemoveEntities(Beam.Entities);
 	for (const Copy of Beam.Copies)
 	{
-		RemoveEntities(Copy.Entities);
+		RemoveBeamCopy(Copy.Entities);
 	}
 	Beam.Copies.length = 0;
 }
@@ -305,6 +308,18 @@ function FindNearbySurface(Position: FVector, MaxDistance: number): TraceResult 
 		}
 	}
 	return Closest;
+}
+
+function RemoveBeamCopy(Entities: readonly Entity[]): void
+{
+	RemoveEntities(Entities.filter((Ent: Entity): boolean =>
+	{
+		return Ent.IsValid() && Ent.GetEntityName().endsWith(BeamParticleSuffix);
+	}));
+	SetTimer(BeamFxLingerTime, (): void =>
+	{
+		RemoveEntities(Entities);
+	});
 }
 
 function RemoveEntities(Entities: readonly Entity[]): void

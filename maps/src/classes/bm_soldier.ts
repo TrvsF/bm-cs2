@@ -45,7 +45,7 @@ export const SoldierSettings: FSoliderSettings =
 	},
 	SecondaryLauncher: undefined,
 
-	RocketDamage: 90,
+	RocketDamage: 75,
 	RocketRadius: 160,
 	RocketSpeed: 1200,
 	RocketKnockback: 400,
