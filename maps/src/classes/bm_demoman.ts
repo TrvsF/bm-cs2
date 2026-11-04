@@ -4,7 +4,7 @@ import { bDebug, TickInterval, GetTeamColor, GetOrCreate } from "../bm_core";
 import type { FColor } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, Explode } from "../bm_combat";
 import type { FProjectile, FBouncingProjectile, FBounceSettings, FDamageFalloff } from "../bm_combat";
-import { TF2RocketFalloff, PlayerClass } from "../bm_classes";
+import { TF2RocketFalloff, TF2PipeFalloff, PlayerClass } from "../bm_classes";
 import type { FClassSettings, FHudCounter } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -105,7 +105,7 @@ export const DemoSettings: FDemoSettings =
 	PipeDamage: 75,
 	PipeRolledDamageScale: 0.6,
 	PipeKnockback: 500,
-	PipeFalloff: TF2RocketFalloff,
+	PipeFalloff: TF2PipeFalloff,
 	PipeFuseTime: 1.6,
 	PipeBounce:
 	{

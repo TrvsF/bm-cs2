@@ -35,9 +35,10 @@ const GibFallbackTemplateName: string = "boom_template";
 const GibLifetime: number = 5;
 const GibFlingSpeed: number = 450;
 const RefiredBeamLifetime: number = 0.15;
-// A beam template's own particle is named "<beam>_fx". The rest (the impact on the end marker, muzzle flashes) is kept this much longer so it can play out
 const BeamParticleSuffix: string = "_fx";
 const BeamFxLingerTime: number = 1;
+const OneShotSoundLifetime: number = 10;
+const StoppedSoundLifetime: number = 0.5;
 
 let GDecals: Entity[][] = [];
 
@@ -119,6 +120,59 @@ export function SpawnTemporaryTemplate(TemplateName: string, Position: FVector, 
 	}
 	return Spawned;
 }
+
+// Sounds //////////////////////////////////////////////////////////////////////////////////////////
+
+// A sound is a point_template holding a point_soundevent that starts on spawn. It's spawned on the pawn and parented to them so it follows them.
+export function PlaySoundOn(TemplateName: string, Pawn: CSPlayerPawn): void
+{
+	const Spawned: Entity[] = SpawnSoundOn(TemplateName, Pawn);
+	if (Spawned.length > 0)
+	{
+		SetTimer(OneShotSoundLifetime, (): void =>
+		{
+			RemoveEntities(Spawned);
+		});
+	}
+}
+
+// For a looping sound: keeps playing until it's handed to StopSound
+export function StartSoundOn(TemplateName: string, Pawn: CSPlayerPawn): Entity[]
+{
+	return SpawnSoundOn(TemplateName, Pawn);
+}
+
+export function StopSound(Entities: readonly Entity[]): void
+{
+	for (const Ent of Entities)
+	{
+		if (Ent.IsValid())
+		{
+			Instance.EntFireAtTarget({ target: Ent, input: "StopSound" });
+		}
+	}
+	SetTimer(StoppedSoundLifetime, (): void =>
+	{
+		RemoveEntities(Entities);
+	});
+}
+
+function SpawnSoundOn(TemplateName: string, Pawn: CSPlayerPawn): Entity[]
+{
+	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
+	if (!IsPointTemplate(Template))
+	{
+		return [];
+	}
+	const Spawned: Entity[] = Template.ForceSpawn(Pawn.GetAbsOrigin()) ?? [];
+	for (const Ent of Spawned)
+	{
+		Ent.SetParent(Pawn);
+	}
+	return Spawned;
+}
+
+// Beams ///////////////////////////////////////////////////////////////////////////////////////////
 
 export function SpawnBeam(TemplateName: string, EndMarkerName: string, Start: FVector, End: FVector, Lifetime: number, FallbackColor: FColor): void
 {

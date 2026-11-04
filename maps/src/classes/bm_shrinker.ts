@@ -3,7 +3,7 @@ import type { CSPlayerPawn } from "cs_script/point_script";
 import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, ForEachLivePawn } from "../bm_core";
 import type { FVector, FColor, FHeldInputs } from "../bm_core";
 import { Explode, SpawnExplosionFx } from "../bm_combat";
-import { SpawnTemporaryTemplate } from "../bm_effects";
+import { SpawnTemporaryTemplate, PlaySoundOn } from "../bm_effects";
 import { BuildingKind, FindOwnedBuilding, IsBuildingEnemy, IsStandingOn, GetBuildingCenter, TickBuildTool, CancelPlacement, RemoveBuilding, DestroyBuilding } from "../bm_buildings";
 import type { FBuilding, FBuildingSettings, FBuildKeys } from "../bm_buildings";
 import { PlayerClass } from "../bm_classes";
@@ -21,7 +21,6 @@ export interface FTrapSettings extends FBuildingSettings
 	readonly BlastHeight: number;
 	readonly Knockback: number;
 	readonly ExplodeFxTemplate: string;
-	// Its owner stepping on it once it's armed sets it off on them alone: a flat hit, and a launch away from its centre
 	readonly OwnerDamage: number;
 	readonly OwnerLaunchSpeed: number;
 	readonly OwnerLaunchUpSpeed: number;
@@ -43,6 +42,8 @@ export interface FShrinkerSettings extends FClassSettings
 	readonly ShrunkDuration: number;
 	readonly RechargeTime: number;
 	readonly MinShrinkCharge: number;
+	readonly ShrinkSoundTemplate: string;
+	readonly GrowSoundTemplate: string;
 	readonly Trap: FTrapSettings;
 	readonly TeleporterEntrance: FTeleporterSettings;
 	readonly TeleporterExit: FTeleporterSettings;
@@ -89,6 +90,8 @@ export const ShrinkerSettings: FShrinkerSettings =
 	ShrunkDuration: 12,
 	RechargeTime: 16,
 	MinShrinkCharge: 10,
+	ShrinkSoundTemplate: "shrinker_shrink_sound_template",
+	GrowSoundTemplate: "shrinker_grow_sound_template",
 
 	Trap:
 	{
@@ -376,11 +379,16 @@ export class ShrinkerClass extends PlayerClass<FShrinkerSettings>
 		const bRightPressed: boolean = ConsumePress(Pawn, State.Held, CSInputs.ATTACK2);
 		TickBuildTool(Pawn, Slot, this.GetBuildKeys(Pawn), bLeftPressed, bRightPressed, Now);
 
+		const bWasShrunk: boolean = State.bWantsShrunk;
 		if (bRightPressed && IsKnife(Pawn.GetActiveWeapon()))
 		{
 			this.ToggleShrink(State);
 		}
 		this.TickCharge(State, DeltaTime);
+		if (State.bWantsShrunk !== bWasShrunk)
+		{
+			PlaySoundOn(State.bWantsShrunk ? this.Settings.ShrinkSoundTemplate : this.Settings.GrowSoundTemplate, Pawn);
+		}
 		this.TickSize(Pawn, State, DeltaTime);
 	}
 

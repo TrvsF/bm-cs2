@@ -246,6 +246,8 @@ var GibFlingSpeed = 450;
 var RefiredBeamLifetime = 0.15;
 var BeamParticleSuffix = "_fx";
 var BeamFxLingerTime = 1;
+var OneShotSoundLifetime = 10;
+var StoppedSoundLifetime = 0.5;
 var GDecals = [];
 function SpawnScorchMark(Position) {
   const Surface = FindNearbySurface(Position, ScorchSearchDistance);
@@ -300,6 +302,38 @@ function SpawnTemporaryTemplate(TemplateName, Position, Lifetime) {
     SetTimer(Lifetime, () => {
       RemoveEntities(Spawned);
     });
+  }
+  return Spawned;
+}
+function PlaySoundOn(TemplateName, Pawn) {
+  const Spawned = SpawnSoundOn(TemplateName, Pawn);
+  if (Spawned.length > 0) {
+    SetTimer(OneShotSoundLifetime, () => {
+      RemoveEntities(Spawned);
+    });
+  }
+}
+function StartSoundOn(TemplateName, Pawn) {
+  return SpawnSoundOn(TemplateName, Pawn);
+}
+function StopSound(Entities) {
+  for (const Ent of Entities) {
+    if (Ent.IsValid()) {
+      Instance2.EntFireAtTarget({ target: Ent, input: "StopSound" });
+    }
+  }
+  SetTimer(StoppedSoundLifetime, () => {
+    RemoveEntities(Entities);
+  });
+}
+function SpawnSoundOn(TemplateName, Pawn) {
+  const Template = Instance2.FindEntityByName(TemplateName);
+  if (!IsPointTemplate(Template)) {
+    return [];
+  }
+  const Spawned = Template.ForceSpawn(Pawn.GetAbsOrigin()) ?? [];
+  for (const Ent of Spawned) {
+    Ent.SetParent(Pawn);
   }
   return Spawned;
 }
@@ -1804,6 +1838,7 @@ var EPlayerClass = /* @__PURE__ */ ((EPlayerClass2) => {
   return EPlayerClass2;
 })(EPlayerClass || {});
 var TF2RocketFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
+var TF2PipeFalloff = { RampUp: 1, FallOff: 0.9, OptimalDistance: 512 };
 var BeamerShotgunFalloff = [
   { Distance: 0, Scale: 1 },
   { Distance: 256, Scale: 1 },
@@ -2185,7 +2220,7 @@ var DemoSettings = {
   PipeDamage: 75,
   PipeRolledDamageScale: 0.6,
   PipeKnockback: 500,
-  PipeFalloff: TF2RocketFalloff,
+  PipeFalloff: TF2PipeFalloff,
   PipeFuseTime: 1.6,
   PipeBounce: {
     Restitution: 0.2,
@@ -2356,7 +2391,8 @@ var MedicSettings = {
   OverhealMult: 1.5,
   OverhealDecayPerSec: 3.3,
   UberSecondsToFill: 40,
-  UberDuration: 8
+  UberDuration: 8,
+  HealSoundTemplate: "medic_heal_sound_template"
 };
 var BoltTemplateName = "crossbow_bolt_template";
 var MedicClass = class extends PlayerClass {
@@ -2394,6 +2430,7 @@ var MedicClass = class extends PlayerClass {
       Target = this.AcquireHealTarget(Pawn);
     }
     State.HealTarget = Target;
+    this.UpdateHealSound(Pawn, State, Target !== void 0);
     if (Target) {
       this.HealedThisTick.add(Target);
       const MaxHealth = Target.GetMaxHealth();
@@ -2438,11 +2475,18 @@ var MedicClass = class extends PlayerClass {
     this.UberedPawns = this.UberedThisTick;
   }
   OnRoundStart() {
+    for (const State of this.PlayerStates.values()) {
+      this.StopHealSound(State);
+    }
     this.PlayerStates.clear();
     DestroyProjectiles(this.Bolts);
     this.Bolts = [];
   }
   ClearPlayer(Slot) {
+    const State = this.PlayerStates.get(Slot);
+    if (State) {
+      this.StopHealSound(State);
+    }
     this.PlayerStates.delete(Slot);
     this.DecayAccumulators.delete(Slot);
   }
@@ -2507,9 +2551,22 @@ var MedicClass = class extends PlayerClass {
     DealShockDamage(Medic, Victim, Damage, Medic.FindWeapon(this.Settings.Primary));
     Console6.Log(`${LogPrefix} ${MedicName} Damaged (bolt) ${VictimName} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
   }
+  UpdateHealSound(Pawn, State, bHealing) {
+    if (bHealing && !State.HealSound) {
+      State.HealSound = StartSoundOn(this.Settings.HealSoundTemplate, Pawn);
+    } else if (!bHealing) {
+      this.StopHealSound(State);
+    }
+  }
+  StopHealSound(State) {
+    if (State.HealSound) {
+      StopSound(State.HealSound);
+      State.HealSound = void 0;
+    }
+  }
   GetPlayerState(Slot) {
     return GetOrCreate(this.PlayerStates, Slot, () => {
-      return { HealTarget: void 0, HealAccumulator: 0, UberCharge: 0, UberEndTime: 0 };
+      return { HealTarget: void 0, HealAccumulator: 0, UberCharge: 0, UberEndTime: 0, HealSound: void 0 };
     });
   }
   IsHealTargetValid(Medic, Target) {
@@ -3080,6 +3137,8 @@ var ShrinkerSettings = {
   ShrunkDuration: 12,
   RechargeTime: 16,
   MinShrinkCharge: 10,
+  ShrinkSoundTemplate: "shrinker_shrink_sound_template",
+  GrowSoundTemplate: "shrinker_grow_sound_template",
   Trap: {
     DisplayName: "Trap",
     ModelTemplate: "shrinker_trap_template",
@@ -3291,10 +3350,14 @@ var ShrinkerClass = class extends PlayerClass {
     const bLeftPressed = ConsumePress(Pawn, State.Held, CSInputs5.ATTACK);
     const bRightPressed = ConsumePress(Pawn, State.Held, CSInputs5.ATTACK2);
     TickBuildTool(Pawn, Slot, this.GetBuildKeys(Pawn), bLeftPressed, bRightPressed, Now);
+    const bWasShrunk = State.bWantsShrunk;
     if (bRightPressed && IsKnife(Pawn.GetActiveWeapon())) {
       this.ToggleShrink(State);
     }
     this.TickCharge(State, DeltaTime);
+    if (State.bWantsShrunk !== bWasShrunk) {
+      PlaySoundOn(State.bWantsShrunk ? this.Settings.ShrinkSoundTemplate : this.Settings.GrowSoundTemplate, Pawn);
+    }
     this.TickSize(Pawn, State, DeltaTime);
   }
   GetBuildKeys(Pawn) {

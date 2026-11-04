@@ -5,6 +5,7 @@ import type { FVector, FModifyDamageEvent, FModifyDamageResult } from "../bm_cor
 import { LaunchProjectile, MoveProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve } from "../bm_combat";
 import type { FProjectile, FDamageCurve } from "../bm_combat";
 import { DamageTracedBuilding } from "../bm_buildings";
+import { StartSoundOn, StopSound } from "../bm_effects";
 import { BeamStartDrop, PlayerClass, DealShockDamage } from "../bm_classes";
 import type { FClassSettings, FHudCounter } from "../bm_classes";
 
@@ -26,6 +27,7 @@ export interface FMedicSettings extends FClassSettings
 	readonly OverhealDecayPerSec: number;
 	readonly UberSecondsToFill: number;
 	readonly UberDuration: number;
+	readonly HealSoundTemplate: string;
 }
 
 export interface FBolt extends FProjectile
@@ -39,6 +41,7 @@ interface FMedicPlayerState
 	HealAccumulator: number;
 	UberCharge: number;
 	UberEndTime: number;
+	HealSound: Entity[] | undefined;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,6 +93,7 @@ export const MedicSettings: FMedicSettings =
 	OverhealDecayPerSec: 3.3,
 	UberSecondsToFill: 40,
 	UberDuration: 8,
+	HealSoundTemplate: "medic_heal_sound_template",
 };
 
 const BoltTemplateName: string = "crossbow_bolt_template";
@@ -143,6 +147,7 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 			Target = this.AcquireHealTarget(Pawn);
 		}
 		State.HealTarget = Target;
+		this.UpdateHealSound(Pawn, State, Target !== undefined);
 
 		if (Target)
 		{
@@ -201,6 +206,10 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 
 	public override OnRoundStart(): void
 	{
+		for (const State of this.PlayerStates.values())
+		{
+			this.StopHealSound(State);
+		}
 		this.PlayerStates.clear();
 		DestroyProjectiles(this.Bolts);
 		this.Bolts = [];
@@ -208,6 +217,11 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 
 	public override ClearPlayer(Slot: number): void
 	{
+		const State: FMedicPlayerState | undefined = this.PlayerStates.get(Slot);
+		if (State)
+		{
+			this.StopHealSound(State);
+		}
 		this.PlayerStates.delete(Slot);
 		this.DecayAccumulators.delete(Slot);
 	}
@@ -297,11 +311,32 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 		Console.Log(`${LogPrefix} ${MedicName} Damaged (bolt) ${VictimName} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
 	}
 
+	private UpdateHealSound(Pawn: CSPlayerPawn, State: FMedicPlayerState, bHealing: boolean): void
+	{
+		if (bHealing && !State.HealSound)
+		{
+			State.HealSound = StartSoundOn(this.Settings.HealSoundTemplate, Pawn);
+		}
+		else if (!bHealing)
+		{
+			this.StopHealSound(State);
+		}
+	}
+
+	private StopHealSound(State: FMedicPlayerState): void
+	{
+		if (State.HealSound)
+		{
+			StopSound(State.HealSound);
+			State.HealSound = undefined;
+		}
+	}
+
 	private GetPlayerState(Slot: number): FMedicPlayerState
 	{
 		return GetOrCreate(this.PlayerStates, Slot, (): FMedicPlayerState =>
 		{
-			return { HealTarget: undefined, HealAccumulator: 0, UberCharge: 0, UberEndTime: 0 };
+			return { HealTarget: undefined, HealAccumulator: 0, UberCharge: 0, UberEndTime: 0, HealSound: undefined };
 		});
 	}
 

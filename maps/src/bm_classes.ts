@@ -77,6 +77,7 @@ export interface FHitscanWeaponSettings
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 export const TF2RocketFalloff: FDamageFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
+export const TF2PipeFalloff: FDamageFalloff = { RampUp: 1, FallOff: 0.9, OptimalDistance: 512 };
 
 export const BeamerShotgunFalloff: FDamageCurve =
 [
