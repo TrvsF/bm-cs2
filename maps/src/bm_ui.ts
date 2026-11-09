@@ -1,6 +1,6 @@
 import { Instance, Console, CSInputs } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CustomHudLayout } from "cs_script/point_script";
-import { LogPrefix, ForEachLivePawn, GetOrCreate } from "./bm_core";
+import { LogPrefix, INDEX_NONE, ForEachLivePawn, GetOrCreate } from "./bm_core";
 import { EPlayerClass } from "./bm_classes";
 import type { FHudCounter, FClassSettings } from "./bm_classes";
 import { ClassDefinitions } from "./classes/bm_classlist";
@@ -26,6 +26,15 @@ export interface FLeaderboardRow
 	readonly Name: string;
 	readonly Kills: number;
 	readonly Damage: number;
+}
+
+export interface FTeamLeaderboard
+{
+	readonly KillsToWin: number;
+	readonly TerroristKills: number;
+	readonly CounterTerroristKills: number;
+	readonly Terrorists: readonly FLeaderboardRow[];
+	readonly CounterTerrorists: readonly FLeaderboardRow[];
 }
 
 export type FClassMenuChoice = EPlayerClass | "close" | undefined;
@@ -107,6 +116,13 @@ const MaxLeaderboardRows: number = 8;
 
 const GShownLeaderboard: string[] = [];
 const GShownLeaderboardYou: Map<number, string> = new Map<number, string>();
+const TeamBoardPanelId: string = "TeamBoard";
+const TeamBoardGoalId: string = "TeamBoardGoal";
+const TeamBoardSides: readonly string[] = ["T", "CT"];
+const MaxTeamBoardRows: number = 8;
+
+const GShownTeamBoard: Map<string, string> = new Map<string, string>();
+const GShownTeamBoardYou: Map<number, string> = new Map<number, string>();
 let GbWarnedNoClassUi: boolean = false;
 
 // Menu ////////////////////////////////////////////////////////////////////////////////////////////
@@ -492,6 +508,84 @@ export function ShowLeaderboardYou(Slot: number, Rows: readonly FLeaderboardRow[
 	Ui.SetHasClassForPlayer(Slot, LeaderboardYouId, "Shown", Own !== undefined);
 }
 
+export function ShowTeamLeaderboard(Board: FTeamLeaderboard | undefined): void
+{
+	let Ui: CustomHudLayout | undefined = undefined;
+	const NeedsUpdate = (Id: string, Key: string): CustomHudLayout | undefined =>
+	{
+		if (GShownTeamBoard.get(Id) === Key)
+		{
+			return undefined;
+		}
+		Ui ??= FindClassUi();
+		if (Ui)
+		{
+			GShownTeamBoard.set(Id, Key);
+		}
+		return Ui;
+	};
+
+	const PanelUi: CustomHudLayout | undefined = NeedsUpdate(TeamBoardPanelId, Board ? "Shown" : "");
+	PanelUi?.SetHasClass(TeamBoardPanelId, "Shown", Board !== undefined);
+	if (!Board)
+	{
+		return;
+	}
+	NeedsUpdate(TeamBoardGoalId, `${Board.KillsToWin}`)?.SetDialogVariableString(TeamBoardGoalId, "goal", `${Board.KillsToWin}`);
+	for (const Side of TeamBoardSides)
+	{
+		const bTerrorists: boolean = Side === "T";
+		const Kills: string = `${bTerrorists ? Board.TerroristKills : Board.CounterTerroristKills}`;
+		NeedsUpdate(`TeamBoardScore${Side}`, Kills)?.SetDialogVariableString(`TeamBoardScore${Side}`, "kills", Kills);
+		const Rows: readonly FLeaderboardRow[] = bTerrorists ? Board.Terrorists : Board.CounterTerrorists;
+		for (let Index: number = 0; Index < MaxTeamBoardRows; Index++)
+		{
+			const Row: FLeaderboardRow | undefined = Rows[Index];
+			const RowId: string = `TeamBoard${Side}Row${Index}`;
+			const RowUi: CustomHudLayout | undefined = NeedsUpdate(RowId, Row ? GetLeaderboardKey(Row) : "");
+			if (!RowUi)
+			{
+				continue;
+			}
+			if (Row)
+			{
+				RowUi.SetDialogVariableString(`TeamBoard${Side}Name${Index}`, "name", Row.Name);
+				RowUi.SetDialogVariableString(`TeamBoard${Side}Kills${Index}`, "kills", `${Row.Kills}`);
+				RowUi.SetDialogVariableString(`TeamBoard${Side}Damage${Index}`, "damage", `${Row.Damage}`);
+			}
+			RowUi.SetHasClass(RowId, "Shown", Row !== undefined);
+		}
+	}
+}
+
+export function ShowTeamLeaderboardYou(Slot: number, Board: FTeamLeaderboard): void
+{
+	const IsOwn = (Row: FLeaderboardRow): boolean =>
+	{
+		return Row.Slot === Slot;
+	};
+	const TerroristIndex: number = Board.Terrorists.findIndex(IsOwn);
+	const OwnRowId: string = TerroristIndex !== INDEX_NONE ? `TeamBoardTRow${TerroristIndex}` : `TeamBoardCTRow${Board.CounterTerrorists.findIndex(IsOwn)}`;
+	if (GShownTeamBoardYou.get(Slot) === OwnRowId)
+	{
+		return;
+	}
+	const Ui: CustomHudLayout | undefined = FindClassUi();
+	if (!Ui)
+	{
+		return;
+	}
+	GShownTeamBoardYou.set(Slot, OwnRowId);
+	for (const Side of TeamBoardSides)
+	{
+		for (let Index: number = 0; Index < MaxTeamBoardRows; Index++)
+		{
+			const RowId: string = `TeamBoard${Side}Row${Index}`;
+			Ui.SetHasClassForPlayer(Slot, RowId, "You", RowId === OwnRowId);
+		}
+	}
+}
+
 function GetLeaderboardKey(Row: FLeaderboardRow): string
 {
 	return `${Row.Slot}|${Row.Name}|${Row.Kills}|${Row.Damage}`;
@@ -696,6 +790,7 @@ export function ResetClassUi(Slot: number): void
 	GShownBuildHints.delete(Slot);
 	GShownTargetIds.delete(Slot);
 	GShownLeaderboardYou.delete(Slot);
+	GShownTeamBoardYou.delete(Slot);
 	const Ui: CustomHudLayout | undefined = FindClassUi();
 	if (!Ui)
 	{
@@ -724,4 +819,4 @@ function FindClassUi(): CustomHudLayout | undefined
 function IsCustomHudLayout(Ent: Entity | undefined): Ent is CustomHudLayout
 {
 	return Ent !== undefined && "SetInputCaptureEnabled" in Ent && typeof Ent.SetInputCaptureEnabled === "function";
-}
+}

@@ -34,15 +34,17 @@ import type { FBuildKeys } from "./bm_buildings";
 import { GameMode } from "./bm_gamemode";
 import { FreeForAllMode } from "./gamemodes/bm_freeforall";
 import { PayloadMode } from "./gamemodes/bm_payload";
+import { TeamDeathmatchMode } from "./gamemodes/bm_teamdeathmatch";
 import type { FClassMenuChoice, FTargetId } from "./bm_ui";
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 const AirshotMinHeight: number = 64;
 
-const FreeForAll: FreeForAllMode = new FreeForAllMode();
-const GameModes: readonly GameMode[] = [new PayloadMode(), FreeForAll];
-let GActiveMode: GameMode = FreeForAll;
+const GameModes: readonly GameMode[] = [new PayloadMode(), new FreeForAllMode(), new TeamDeathmatchMode()];
+let GActiveMode: GameMode = new FreeForAllMode();
+let GChosenMode: GameMode | undefined = undefined;
+const MapModePrefix: string = "bm_gm_";
 
 // Main ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -139,6 +141,10 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 	{
 		return Candidate === Command;
 	});
+	const Mode: GameMode | undefined = GameModes.find((Candidate: GameMode): boolean =>
+	{
+		return Candidate.CommandName === Command;
+	});
 
 	if (Command === "class")
 	{
@@ -155,6 +161,10 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 	else if (PlayerClass !== undefined)
 	{
 		RequestPlayerClass(Player, PlayerClass);
+	}
+	else if (Mode !== undefined)
+	{
+		ChooseGameMode(Player, Mode);
 	}
 	else
 	{
@@ -397,10 +407,17 @@ let GLastThinkTime: number = 0;
 
 function SelectGameMode(): void
 {
-	const Mode: GameMode = GameModes.find((Candidate: GameMode): boolean =>
+	const MapMode: GameMode | undefined = GameModes.find((Candidate: GameMode): boolean =>
+	{
+		return Instance.FindEntityByName(`${MapModePrefix}${Candidate.CommandName}`) !== undefined;
+	});
+	const Mode: GameMode = [GChosenMode, MapMode].find((Candidate: GameMode | undefined): boolean =>
+	{
+		return Candidate !== undefined && Candidate.IsMapSetUp();
+	}) ?? GameModes.find((Candidate: GameMode): boolean =>
 	{
 		return Candidate.IsMapSetUp();
-	}) ?? FreeForAll;
+	}) ?? new FreeForAllMode();
 
 	if (Mode !== GActiveMode)
 	{
@@ -409,6 +426,18 @@ function SelectGameMode(): void
 		Mode.OnActivated();
 		Console.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
 	}
+}
+
+function ChooseGameMode(Player: CSPlayerController, Mode: GameMode): void
+{
+	if (!Mode.IsMapSetUp())
+	{
+		Console.Log(`${LogPrefix} ${Player.GetPlayerName()} picked ${Mode.DisplayName}, but this map isn't set up for it`);
+		return;
+	}
+	GChosenMode = Mode;
+	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} picked ${Mode.DisplayName}, restarting`);
+	Console.ServerCommand("mp_restartgame 1");
 }
 
 function ApplyMatchSettings(): void

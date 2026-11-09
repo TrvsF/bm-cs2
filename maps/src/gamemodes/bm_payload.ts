@@ -111,6 +111,7 @@ const GHealAccumulators: Map<number, number> = new Map<number, number>();
 export class PayloadMode extends GameMode
 {
 	public override readonly DisplayName: string = "Payload";
+	public override readonly CommandName: string = "payload";
 
 	public override IsMapSetUp(): boolean
 	{
@@ -647,4 +648,4 @@ function DrawTrack(Track: FPayloadTrack): void
 	{
 		Instance.DebugSphere({ center: GetTrackPosition(Track, CheckpointDistance), radius: 16, duration: TickInterval * 2, color: CheckpointDebugColor });
 	}
-}
+}

@@ -3,6 +3,7 @@ import type { CSPlayerPawn } from "cs_script/point_script";
 export abstract class GameMode
 {
 	public abstract readonly DisplayName: string;
+	public abstract readonly CommandName: string;
 
 	// Whether this map has what the mode needs. bm_main plays the first mode in GameModes that says yes.
 	public abstract IsMapSetUp(): boolean;
@@ -58,4 +59,4 @@ export abstract class GameMode
 	public TickPlayerHud(Pawn: CSPlayerPawn, Slot: number): void
 	{
 	}
-}
+}

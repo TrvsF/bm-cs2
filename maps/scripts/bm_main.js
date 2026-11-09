@@ -1,9 +1,9 @@
 // src/bm_main.ts
-import { Instance as Instance16, Console as Console14, GameRules as GameRules3, CSDamageTypes as CSDamageTypes4, CSDamageFlags as CSDamageFlags4, CSGearSlot as CSGearSlot4 } from "cs_script/point_script";
+import { Instance as Instance17, Console as Console15, GameRules as GameRules4, CSDamageTypes as CSDamageTypes4, CSDamageFlags as CSDamageFlags4, CSGearSlot as CSGearSlot4 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance, Console, CSWeaponType } from "cs_script/point_script";
-var bDebug = false;
+var bDebug = true;
 var TickInterval = 1 / 64;
 var INDEX_NONE = -1;
 var LogPrefix = "[BM]";
@@ -3708,6 +3708,12 @@ var LeaderboardYouId = "LeaderboardYou";
 var MaxLeaderboardRows = 8;
 var GShownLeaderboard = [];
 var GShownLeaderboardYou = /* @__PURE__ */ new Map();
+var TeamBoardPanelId = "TeamBoard";
+var TeamBoardGoalId = "TeamBoardGoal";
+var TeamBoardSides = ["T", "CT"];
+var MaxTeamBoardRows = 8;
+var GShownTeamBoard = /* @__PURE__ */ new Map();
+var GShownTeamBoardYou = /* @__PURE__ */ new Map();
 var GbWarnedNoClassUi = false;
 function OpenClassMenu(Slot) {
   const Ui = FindClassUi();
@@ -3993,6 +3999,66 @@ function ShowLeaderboardYou(Slot, Rows) {
   }
   Ui.SetHasClassForPlayer(Slot, LeaderboardYouId, "Shown", Own !== void 0);
 }
+function ShowTeamLeaderboard(Board) {
+  let Ui = void 0;
+  const NeedsUpdate = (Id, Key) => {
+    if (GShownTeamBoard.get(Id) === Key) {
+      return void 0;
+    }
+    Ui ??= FindClassUi();
+    if (Ui) {
+      GShownTeamBoard.set(Id, Key);
+    }
+    return Ui;
+  };
+  const PanelUi = NeedsUpdate(TeamBoardPanelId, Board ? "Shown" : "");
+  PanelUi?.SetHasClass(TeamBoardPanelId, "Shown", Board !== void 0);
+  if (!Board) {
+    return;
+  }
+  NeedsUpdate(TeamBoardGoalId, `${Board.KillsToWin}`)?.SetDialogVariableString(TeamBoardGoalId, "goal", `${Board.KillsToWin}`);
+  for (const Side of TeamBoardSides) {
+    const bTerrorists = Side === "T";
+    const Kills = `${bTerrorists ? Board.TerroristKills : Board.CounterTerroristKills}`;
+    NeedsUpdate(`TeamBoardScore${Side}`, Kills)?.SetDialogVariableString(`TeamBoardScore${Side}`, "kills", Kills);
+    const Rows = bTerrorists ? Board.Terrorists : Board.CounterTerrorists;
+    for (let Index = 0; Index < MaxTeamBoardRows; Index++) {
+      const Row = Rows[Index];
+      const RowId = `TeamBoard${Side}Row${Index}`;
+      const RowUi = NeedsUpdate(RowId, Row ? GetLeaderboardKey(Row) : "");
+      if (!RowUi) {
+        continue;
+      }
+      if (Row) {
+        RowUi.SetDialogVariableString(`TeamBoard${Side}Name${Index}`, "name", Row.Name);
+        RowUi.SetDialogVariableString(`TeamBoard${Side}Kills${Index}`, "kills", `${Row.Kills}`);
+        RowUi.SetDialogVariableString(`TeamBoard${Side}Damage${Index}`, "damage", `${Row.Damage}`);
+      }
+      RowUi.SetHasClass(RowId, "Shown", Row !== void 0);
+    }
+  }
+}
+function ShowTeamLeaderboardYou(Slot, Board) {
+  const IsOwn = (Row) => {
+    return Row.Slot === Slot;
+  };
+  const TerroristIndex = Board.Terrorists.findIndex(IsOwn);
+  const OwnRowId = TerroristIndex !== INDEX_NONE ? `TeamBoardTRow${TerroristIndex}` : `TeamBoardCTRow${Board.CounterTerrorists.findIndex(IsOwn)}`;
+  if (GShownTeamBoardYou.get(Slot) === OwnRowId) {
+    return;
+  }
+  const Ui = FindClassUi();
+  if (!Ui) {
+    return;
+  }
+  GShownTeamBoardYou.set(Slot, OwnRowId);
+  for (const Side of TeamBoardSides) {
+    for (let Index = 0; Index < MaxTeamBoardRows; Index++) {
+      const RowId = `TeamBoard${Side}Row${Index}`;
+      Ui.SetHasClassForPlayer(Slot, RowId, "You", RowId === OwnRowId);
+    }
+  }
+}
 function GetLeaderboardKey(Row) {
   return `${Row.Slot}|${Row.Name}|${Row.Kills}|${Row.Damage}`;
 }
@@ -4148,6 +4214,7 @@ function ResetClassUi(Slot) {
   GShownBuildHints.delete(Slot);
   GShownTargetIds.delete(Slot);
   GShownLeaderboardYou.delete(Slot);
+  GShownTeamBoardYou.delete(Slot);
   const Ui = FindClassUi();
   if (!Ui) {
     return;
@@ -4579,6 +4646,7 @@ function DriveBot(Pawn, Assignment) {
 var GScores = /* @__PURE__ */ new Map();
 var FreeForAllMode = class extends GameMode {
   DisplayName = "Free for all";
+  CommandName = "ffa";
   IsMapSetUp() {
     return true;
   }
@@ -4694,6 +4762,7 @@ var GLastScanReport2 = "";
 var GHealAccumulators = /* @__PURE__ */ new Map();
 var PayloadMode = class extends GameMode {
   DisplayName = "Payload";
+  CommandName = "payload";
   IsMapSetUp() {
     ScanPayload();
     return IsPayloadReady();
@@ -5085,14 +5154,126 @@ function DrawTrack(Track) {
   }
 }
 
+// src/gamemodes/bm_teamdeathmatch.ts
+import { Instance as Instance16, Console as Console14, GameRules as GameRules3, CSRoundEndReason as CSRoundEndReason2 } from "cs_script/point_script";
+var TeamDeathmatchSettings = {
+  KillsToWin: 100
+};
+var GScores2 = /* @__PURE__ */ new Map();
+var GTeamKills = /* @__PURE__ */ new Map();
+var GWinner2 = void 0;
+var GbRoundEnded = false;
+var TeamDeathmatchMode = class extends GameMode {
+  DisplayName = "Team deathmatch";
+  CommandName = "tdm";
+  IsMapSetUp() {
+    return true;
+  }
+  GetMatchCommands() {
+    return [
+      "mp_teammates_are_enemies 0",
+      "mp_friendlyfire 0",
+      "mp_ignore_round_win_conditions 1",
+      "mp_respawn_on_death_t 1",
+      "mp_respawn_on_death_ct 1",
+      "mp_use_respawn_waves 0",
+      "mp_deathcam_skippable 1",
+      "mp_roundtime 60",
+      "mp_roundtime_defuse 60",
+      "mp_roundtime_hostage 60",
+      "bot_stop 0"
+    ];
+  }
+  OnDeactivated() {
+    ShowTeamLeaderboard(void 0);
+  }
+  OnRoundStart() {
+    GScores2.clear();
+    GTeamKills.clear();
+    GWinner2 = void 0;
+    GbRoundEnded = false;
+  }
+  OnPlayerDamage(VictimSlot, AttackerSlot, Damage) {
+    if (IsCounting()) {
+      GetScore2(AttackerSlot).Damage += Damage;
+    }
+  }
+  OnPlayerKill(VictimSlot, AttackerSlot) {
+    if (AttackerSlot === INDEX_NONE || !IsCounting()) {
+      return;
+    }
+    const Team = Instance16.GetPlayerController(AttackerSlot)?.GetTeamNumber();
+    if (Team !== 2 /* Terrorist */ && Team !== 3 /* CounterTerrorist */) {
+      return;
+    }
+    GetScore2(AttackerSlot).Kills++;
+    const TeamKills = (GTeamKills.get(Team) ?? 0) + 1;
+    GTeamKills.set(Team, TeamKills);
+    if (TeamKills >= TeamDeathmatchSettings.KillsToWin) {
+      GWinner2 = Team;
+    }
+  }
+  OnPlayerLeave(Slot) {
+    GScores2.delete(Slot);
+  }
+  Tick(Now, DeltaTime) {
+    if (GWinner2 !== void 0 && !GbRoundEnded) {
+      EndRound(GWinner2);
+    }
+    const Board = BuildLeaderboard2();
+    ShowTeamLeaderboard(Board);
+    ForEachPlayer((Controller, Slot) => {
+      if (!Controller.IsBot()) {
+        ShowTeamLeaderboardYou(Slot, Board);
+      }
+    });
+  }
+};
+function IsCounting() {
+  return GWinner2 === void 0 && !GameRules3.IsWarmupPeriod();
+}
+function EndRound(Winner) {
+  GbRoundEnded = true;
+  const bTerrorists = Winner === 2 /* Terrorist */;
+  Console14.Log(`${LogPrefix} ${bTerrorists ? "terrorists" : "counter-terrorists"} reached ${TeamDeathmatchSettings.KillsToWin} kills and win`);
+  GameRules3.AddTeamScore(Winner, 1);
+  GameRules3.TerminateRound(bTerrorists ? CSRoundEndReason2.TERRORISTS_WIN : CSRoundEndReason2.CTS_WIN);
+}
+function GetScore2(Slot) {
+  return GetOrCreate(GScores2, Slot, () => {
+    return { Kills: 0, Damage: 0 };
+  });
+}
+function BuildLeaderboard2() {
+  const Terrorists = [];
+  const CounterTerrorists = [];
+  ForEachPlayer((Controller, Slot) => {
+    const Team = Controller.GetTeamNumber();
+    const Rows = Team === 2 /* Terrorist */ ? Terrorists : Team === 3 /* CounterTerrorist */ ? CounterTerrorists : void 0;
+    const Score = GScores2.get(Slot);
+    Rows?.push({ Slot, Name: Controller.GetPlayerName(), Kills: Score ? Score.Kills : 0, Damage: Score ? Math.round(Score.Damage) : 0 });
+  });
+  return {
+    KillsToWin: TeamDeathmatchSettings.KillsToWin,
+    TerroristKills: GTeamKills.get(2 /* Terrorist */) ?? 0,
+    CounterTerroristKills: GTeamKills.get(3 /* CounterTerrorist */) ?? 0,
+    Terrorists: Terrorists.sort(CompareRows),
+    CounterTerrorists: CounterTerrorists.sort(CompareRows)
+  };
+}
+function CompareRows(A, B) {
+  return B.Kills - A.Kills || B.Damage - A.Damage || A.Slot - B.Slot;
+}
+
 // src/bm_main.ts
 var AirshotMinHeight = 64;
-var FreeForAll = new FreeForAllMode();
-var GameModes = [new PayloadMode(), FreeForAll];
-var GActiveMode = FreeForAll;
+var GameModes = [new PayloadMode(), new FreeForAllMode(), new TeamDeathmatchMode()];
+var GActiveMode = new FreeForAllMode();
+var GChosenMode = void 0;
+var MapModePrefix = "bm_gm_";
 function Tick() {
-  const Now = Instance16.GetGameTime();
-  Instance16.SetNextThink(Now + TickInterval);
+  const Now = Instance17.GetGameTime();
+  Instance17.SetNextThink(Now + TickInterval);
   const DeltaTime = Math.min(0.1, Math.max(0, Now - GLastThinkTime)) || TickInterval;
   GLastThinkTime = Now;
   try {
@@ -5126,28 +5307,28 @@ function Tick() {
     TickNoBuying();
     TickBotClasses();
   } catch (Exception) {
-    Console14.Log(`${LogPrefix} error: ${String(Exception)}`);
+    Console15.Log(`${LogPrefix} error: ${String(Exception)}`);
   }
 }
 function BeginPlay() {
   SelectGameMode();
   ApplyMatchSettings();
-  Instance16.OnPlayerChat(HandlePlayerChat);
-  Instance16.OnPlayerReset(HandlePlayerReset);
-  Instance16.OnPlayerKill(HandlePlayerKill);
-  Instance16.OnPlayerDisconnect(HandlePlayerDisconnect);
-  Instance16.OnRoundStart(HandleRoundStart);
-  Instance16.OnRoundEnd(HandleRoundEnd);
-  Instance16.OnGunFire(HandleGunFire);
-  Instance16.OnKnifeAttack(HandleKnifeAttack);
-  Instance16.OnWeaponPickup(HandleWeaponPickup);
-  Instance16.OnWeaponDrop(HandleWeaponDrop);
-  Instance16.OnPlayerDamage(HandlePlayerDamage);
-  Instance16.OnModifyPlayerDamage(HandleModifyPlayerDamage);
-  Instance16.OnCustomHudClicked(HandleCustomHudClicked);
-  Instance16.SetThink(Tick);
-  Instance16.SetNextThink(Instance16.GetGameTime());
-  Console14.Log(`${LogPrefix} loaded${bDebug ? " DEBUG mode!" : ""}`);
+  Instance17.OnPlayerChat(HandlePlayerChat);
+  Instance17.OnPlayerReset(HandlePlayerReset);
+  Instance17.OnPlayerKill(HandlePlayerKill);
+  Instance17.OnPlayerDisconnect(HandlePlayerDisconnect);
+  Instance17.OnRoundStart(HandleRoundStart);
+  Instance17.OnRoundEnd(HandleRoundEnd);
+  Instance17.OnGunFire(HandleGunFire);
+  Instance17.OnKnifeAttack(HandleKnifeAttack);
+  Instance17.OnWeaponPickup(HandleWeaponPickup);
+  Instance17.OnWeaponDrop(HandleWeaponDrop);
+  Instance17.OnPlayerDamage(HandlePlayerDamage);
+  Instance17.OnModifyPlayerDamage(HandleModifyPlayerDamage);
+  Instance17.OnCustomHudClicked(HandleCustomHudClicked);
+  Instance17.SetThink(Tick);
+  Instance17.SetNextThink(Instance17.GetGameTime());
+  Console15.Log(`${LogPrefix} loaded${bDebug ? " DEBUG mode!" : ""}`);
 }
 BeginPlay();
 function HandlePlayerChat(Event) {
@@ -5160,6 +5341,9 @@ function HandlePlayerChat(Event) {
   const PlayerClass3 = Object.values(EPlayerClass).find((Candidate) => {
     return Candidate === Command;
   });
+  const Mode = GameModes.find((Candidate) => {
+    return Candidate.CommandName === Command;
+  });
   if (Command === "class") {
     OpenClassMenu(Player.GetPlayerSlot());
   } else if (Command === "start") {
@@ -5168,8 +5352,10 @@ function HandlePlayerChat(Event) {
     ShowDamageNumber(Player.GetPlayerSlot(), 123);
   } else if (PlayerClass3 !== void 0) {
     RequestPlayerClass(Player, PlayerClass3);
+  } else if (Mode !== void 0) {
+    ChooseGameMode(Player, Mode);
   } else {
-    Console14.Log(`${LogPrefix} ${Player.GetPlayerName()} typed unknown command "${ChatCommandPrefix}${Command}"`);
+    Console15.Log(`${LogPrefix} ${Player.GetPlayerName()} typed unknown command "${ChatCommandPrefix}${Command}"`);
   }
 }
 function HandlePlayerReset(Event) {
@@ -5241,7 +5427,7 @@ function HandleRoundStart() {
   SelectGameMode();
   GActiveMode.OnRoundStart();
   ApplyMatchSettings();
-  Console14.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
+  Console15.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
 }
 function HandleRoundEnd() {
   GActiveMode.OnRoundEnd();
@@ -5256,9 +5442,9 @@ function HandleGunFire(Event) {
   }
   const Definition = ClassDefinitions[PlayerClass3];
   if (IsWeapon(Weapon, Definition.Settings.Primary) && !Definition.Settings.PrimaryLauncher) {
-    Definition.OnPrimaryFire(Pawn, Slot, Instance16.GetGameTime(), 0);
+    Definition.OnPrimaryFire(Pawn, Slot, Instance17.GetGameTime(), 0);
   } else if (IsWeapon(Weapon, Definition.Settings.Secondary) && !Definition.Settings.SecondaryLauncher) {
-    Definition.OnSecondaryFire(Pawn, Slot, Instance16.GetGameTime(), 0);
+    Definition.OnSecondaryFire(Pawn, Slot, Instance17.GetGameTime(), 0);
   }
 }
 function HandleKnifeAttack(Event) {
@@ -5270,7 +5456,7 @@ function HandleKnifeAttack(Event) {
   }
   const RepairPerHit = ClassDefinitions[PlayerClass3].Settings.RepairPerHit;
   if (RepairPerHit !== void 0) {
-    RepairBuildingInReach(Pawn, Slot, RepairPerHit, Instance16.GetGameTime());
+    RepairBuildingInReach(Pawn, Slot, RepairPerHit, Instance17.GetGameTime());
   }
 }
 function HandleWeaponPickup(Event) {
@@ -5332,15 +5518,29 @@ var TargetIdRange = 3e3;
 var GPendingClassBySlot = /* @__PURE__ */ new Map();
 var GLastThinkTime = 0;
 function SelectGameMode() {
-  const Mode = GameModes.find((Candidate) => {
+  const MapMode = GameModes.find((Candidate) => {
+    return Instance17.FindEntityByName(`${MapModePrefix}${Candidate.CommandName}`) !== void 0;
+  });
+  const Mode = [GChosenMode, MapMode].find((Candidate) => {
+    return Candidate !== void 0 && Candidate.IsMapSetUp();
+  }) ?? GameModes.find((Candidate) => {
     return Candidate.IsMapSetUp();
-  }) ?? FreeForAll;
+  }) ?? new FreeForAllMode();
   if (Mode !== GActiveMode) {
     GActiveMode.OnDeactivated();
     GActiveMode = Mode;
     Mode.OnActivated();
-    Console14.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
+    Console15.Log(`${LogPrefix} activated ${Mode.DisplayName}`);
   }
+}
+function ChooseGameMode(Player, Mode) {
+  if (!Mode.IsMapSetUp()) {
+    Console15.Log(`${LogPrefix} ${Player.GetPlayerName()} picked ${Mode.DisplayName}, but this map isn't set up for it`);
+    return;
+  }
+  GChosenMode = Mode;
+  Console15.Log(`${LogPrefix} ${Player.GetPlayerName()} picked ${Mode.DisplayName}, restarting`);
+  Console15.ServerCommand("mp_restartgame 1");
 }
 function ApplyMatchSettings() {
   const Commands = [];
@@ -5351,20 +5551,20 @@ function ApplyMatchSettings() {
   }
   Commands.push(...GActiveMode.GetMatchCommands());
   for (const Command of Commands) {
-    Console14.ServerCommand(Command);
+    Console15.ServerCommand(Command);
   }
 }
 function EndWarmupNow(Player) {
-  if (!GameRules3.IsWarmupPeriod()) {
-    Console14.Log(`${LogPrefix} ${Player.GetPlayerName()} typed ${ChatCommandPrefix}start, but warmup is already over`);
+  if (!GameRules4.IsWarmupPeriod()) {
+    Console15.Log(`${LogPrefix} ${Player.GetPlayerName()} typed ${ChatCommandPrefix}start, but warmup is already over`);
     return;
   }
-  Console14.Log(`${LogPrefix} ${Player.GetPlayerName()} ended warmup`);
-  GameRules3.EndWarmup();
+  Console15.Log(`${LogPrefix} ${Player.GetPlayerName()} ended warmup`);
+  GameRules4.EndWarmup();
 }
 function TickMatch(Now) {
-  if (bDebug && GameRules3.IsWarmupPeriod()) {
-    Console14.ServerCommand("mp_warmup_end");
+  if (bDebug && GameRules4.IsWarmupPeriod()) {
+    Console15.ServerCommand("mp_warmup_end");
   }
 }
 function RequestPlayerClass(Player, PlayerClass3) {
@@ -5387,7 +5587,7 @@ function RequestPlayerClass(Player, PlayerClass3) {
     GPendingClassBySlot.set(Slot, PlayerClass3);
   }
   ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
-  Console14.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass3}`);
+  Console15.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass3}`);
 }
 function TickSpawnClassSwaps() {
   ForEachLivePawn((Pawn, Slot) => {
@@ -5436,7 +5636,7 @@ function SetPlayerClass(Player, PlayerClass3) {
   }
   ShowClassIndicator(Slot, PlayerClass3, Pawn?.GetTeamNumber() === 2);
   const ClassLabel = PlayerClass3 === "none" /* None */ ? "normal" : PlayerClass3;
-  Console14.Log(`${LogPrefix} ${Player.GetPlayerName()} set class to ${ClassLabel}`);
+  Console15.Log(`${LogPrefix} ${Player.GetPlayerName()} set class to ${ClassLabel}`);
 }
 function AssignRandomBotClass(Pawn, Slot) {
   const Controller = Pawn.GetPlayerController();
@@ -5488,9 +5688,9 @@ function TickPlayerHud() {
       ShowHealth(Slot, Pawn);
       ShowAmmo(Slot, GetLauncherAmmo(Pawn, Slot));
       ShowCounter(Slot, PlayerClass3 !== void 0 ? ClassDefinitions[PlayerClass3].GetHudCounter(Slot) : void 0);
-      ShowBuildings(Slot, GetBuildingHudRows(Slot, Instance16.GetGameTime()));
+      ShowBuildings(Slot, GetBuildingHudRows(Slot, Instance17.GetGameTime()));
       const BuildKeys = PlayerClass3 !== void 0 ? ClassDefinitions[PlayerClass3].GetBuildKeys(Pawn) : void 0;
-      ShowBuildHints(Slot, BuildKeys ? GetBuildHints(Slot, BuildKeys, Instance16.GetGameTime()) : void 0);
+      ShowBuildHints(Slot, BuildKeys ? GetBuildHints(Slot, BuildKeys, Instance17.GetGameTime()) : void 0);
       ShowTargetId(Slot, FindTargetId(Pawn, Slot));
       GActiveMode.TickPlayerHud(Pawn, Slot);
     }
@@ -5501,7 +5701,7 @@ function FindTargetId(Pawn, Slot) {
   const HealTarget = ViewerClass !== void 0 ? ClassDefinitions[ViewerClass].GetHealTarget(Slot) : void 0;
   const Eye = Pawn.GetEyePosition();
   const End = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), TargetIdRange));
-  const Target = HealTarget ?? Instance16.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn }).hitEntity;
+  const Target = HealTarget ?? Instance17.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn }).hitEntity;
   if (!IsPlayerPawn(Target) || !Target.IsAlive() || !IsTeammate(Target, Pawn)) {
     return void 0;
   }
