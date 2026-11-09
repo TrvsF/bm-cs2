@@ -1,4 +1,4 @@
-import { Instance, Console, CSWeaponType } from "cs_script/point_script";
+import { Instance, Console, Entities, CSWeaponType } from "cs_script/point_script";
 import type
 {
 	Entity,
@@ -282,6 +282,18 @@ export function IsPointTemplate(Ent: Entity | undefined): Ent is PointTemplate
 	return Ent !== undefined && "ForceSpawn" in Ent && typeof Ent.ForceSpawn === "function";
 }
 
+export function FindEntityByName(Name: string): Entity | undefined
+{
+	return Entities.FindByName(Name)[0];
+}
+
+// undefined when the map has no such template
+export function FindPointTemplate(Name: string): PointTemplate | undefined
+{
+	const Template: Entity | undefined = FindEntityByName(Name);
+	return IsPointTemplate(Template) ? Template : undefined;
+}
+
 export function GetChestPosition(Pawn: CSPlayerPawn): FVector
 {
 	return VectorMath.Add(Pawn.GetAbsOrigin(), ChestOffset);
@@ -350,19 +362,13 @@ export function IsKnife(Weapon: CSWeaponBase | undefined): boolean
 
 export function SpawnFromTemplate(TemplateName: string, Position: FVector): Entity | undefined
 {
-	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	if (!IsPointTemplate(Template))
-	{
-		return undefined;
-	}
-	const Spawned: Entity[] | undefined = Template.ForceSpawn(Position);
-	return Spawned ? Spawned[0] : undefined;
+	return FindPointTemplate(TemplateName)?.ForceSpawn(Position)?.[0];
 }
 
 export function SpawnTemplateEntities(TemplateName: string, Position: FVector, Rotation: FRotator | undefined): Entity[]
 {
-	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	if (!IsPointTemplate(Template))
+	const Template: PointTemplate | undefined = FindPointTemplate(TemplateName);
+	if (!Template)
 	{
 		return [];
 	}

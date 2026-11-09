@@ -7,6 +7,11 @@ import type { FLeaderboardRow, FTeamLeaderboard } from "../bm_ui";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
+export interface FTeamDeathmatchSettings
+{
+	readonly KillsToWin: number;
+}
+
 interface FPlayerScore
 {
 	Kills: number;
@@ -15,7 +20,8 @@ interface FPlayerScore
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
-export const TeamDeathmatchSettings = {
+export const TeamDeathmatchSettings: FTeamDeathmatchSettings =
+{
 	KillsToWin: 100,
 };
 

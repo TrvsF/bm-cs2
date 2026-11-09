@@ -4,7 +4,7 @@ import { bDebug, TickInterval, GetTeamColor, GetOrCreate } from "../bm_core";
 import type { FColor } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, Explode } from "../bm_combat";
 import type { FProjectile, FBouncingProjectile, FBounceSettings, FDamageFalloff } from "../bm_combat";
-import { TF2RocketFalloff, TF2PipeFalloff, PlayerClass } from "../bm_classes";
+import { TF2PipeFalloff, PlayerClass } from "../bm_classes";
 import type { FClassSettings, FHudCounter } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -286,4 +286,4 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 		const Damage: number = this.Settings.PipeDamage * (Pipe.bTouchedWorld ? this.Settings.PipeRolledDamageScale : 1);
 		Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
 	}
-}
+}

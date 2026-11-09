@@ -1,4 +1,4 @@
-import { Instance, Console } from "cs_script/point_script";
+import { Instance, Console, Entities } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, BaseModelEntity } from "cs_script/point_script";
 import { bDebug, LogPrefix, TickInterval, ForEachLivePawn } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";
@@ -106,10 +106,10 @@ export function ResetHealthKits(): void
 
 function RescanHealthKits(): void
 {
-	const Found: Set<Entity> = new Set<Entity>(Instance.FindEntitiesByName(HealthKitSettings.Name));
+	const Found: Set<Entity> = new Set<Entity>(Entities.FindByName(HealthKitSettings.Name));
 	for (const ClassName of KitClassNames)
 	{
-		for (const Ent of Instance.FindEntitiesByClass(ClassName))
+		for (const Ent of Entities.FindByClass(ClassName))
 		{
 			if (Ent.GetEntityName().includes(HealthKitSettings.Name))
 			{
@@ -219,4 +219,4 @@ function SpawnKitFx(TemplateName: string, Kit: FHealthKit): void
 function IsModelEntity(Ent: Entity): Ent is BaseModelEntity
 {
 	return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
-}
+}

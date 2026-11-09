@@ -1,5 +1,5 @@
-import { Instance } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSPlayerController, TraceResult } from "cs_script/point_script";
+import { Instance, Entities } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSPlayerController } from "cs_script/point_script";
 import { ZeroVector, VectorMath, ForEachLivePawn } from "./bm_core";
 import type { FVector } from "./bm_core";
 
@@ -100,7 +100,7 @@ function FindFreeBotMarkers(): Map<Entity, EBotMode>
 	const FreeMarkers: Map<Entity, EBotMode> = new Map<Entity, EBotMode>();
 	for (const [MarkerName, Mode] of BotMarkerModes)
 	{
-		for (const Marker of Instance.FindEntitiesByName(MarkerName))
+		for (const Marker of Entities.FindByName(MarkerName))
 		{
 			if (Marker.IsValid() && !Claimed.has(Marker))
 			{
@@ -151,4 +151,4 @@ function DriveBot(Pawn: CSPlayerPawn, Assignment: FBotAssignment): void
 
 	const Forward: FVector = VectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
 	Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
-}
+}

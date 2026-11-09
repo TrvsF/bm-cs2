@@ -1,6 +1,6 @@
-import { Instance, Console, CSInputs } from "cs_script/point_script";
+import { Console, CSInputs } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CustomHudLayout } from "cs_script/point_script";
-import { LogPrefix, INDEX_NONE, ForEachLivePawn, GetOrCreate } from "./bm_core";
+import { LogPrefix, INDEX_NONE, ForEachLivePawn, GetOrCreate, FindEntityByName } from "./bm_core";
 import { EPlayerClass } from "./bm_classes";
 import type { FHudCounter, FClassSettings } from "./bm_classes";
 import { ClassDefinitions } from "./classes/bm_classlist";
@@ -802,7 +802,7 @@ export function ResetClassUi(Slot: number): void
 
 function FindClassUi(): CustomHudLayout | undefined
 {
-	const Ui: Entity | undefined = Instance.FindEntityByName(ClassUiName);
+	const Ui: Entity | undefined = FindEntityByName(ClassUiName);
 	if (IsCustomHudLayout(Ui))
 	{
 		return Ui;

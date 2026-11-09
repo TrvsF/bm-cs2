@@ -665,7 +665,7 @@ function SpawnPreview(Kind: BuildingKind, Position: FVector): FBuildingModel[]
 		{
 			continue;
 		}
-		Instance.EntFireAtTarget({ target: Model.Ent, input: "DisableCollision" });
+		Model.Ent.FireInput({ input: "DisableCollision" });
 		if (Model.Ent.GetParent() === undefined)
 		{
 			Model.Ent.SetModelScale(PreviewScale);
@@ -995,4 +995,4 @@ function DrawBuildingBox(Position: FVector, Settings: FBuildingSettings, Color: 
 		duration: TickInterval * 2,
 		color: Color,
 	});
-}
+}

@@ -1,4 +1,4 @@
-import { Instance, Console } from "cs_script/point_script";
+import { Console, Entities } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn } from "cs_script/point_script";
 import { LogPrefix, ETeam, VectorMath, IsPlayerPawn, GetPlayerSlot, ForEachLivePawn, INDEX_NONE } from "./bm_core";
 import type { FVector } from "./bm_core";
@@ -137,7 +137,7 @@ function ScanSpawnZones(): void
 
 function AddZones(Name: string, Team: ETeam): void
 {
-	for (const Ent of Instance.FindEntitiesByName(`${Name}*`))
+	for (const Ent of Entities.FindByName(`${Name}*`))
 	{
 		const bKnown: boolean = GZones.some((Zone: FSpawnZone): boolean =>
 		{
@@ -150,17 +150,27 @@ function AddZones(Name: string, Team: ETeam): void
 
 		const Zone: FSpawnZone = { Entity: Ent, Team: Team, Touching: new Set<number>() };
 		GZones.push(Zone);
-		Instance.ConnectOutput(Ent, "OnStartTouch", (InputData: { activator?: Entity }): void =>
+		Entities.ConnectOutput(
 		{
-			const Slot: number = GetToucherSlot(InputData.activator);
-			if (Slot !== INDEX_NONE)
+			target: Ent,
+			output: "OnStartTouch",
+			callback: (InputData: { activator?: Entity }): void =>
 			{
-				Zone.Touching.add(Slot);
-			}
+				const Slot: number = GetToucherSlot(InputData.activator);
+				if (Slot !== INDEX_NONE)
+				{
+					Zone.Touching.add(Slot);
+				}
+			},
 		});
-		Instance.ConnectOutput(Ent, "OnEndTouch", (InputData: { activator?: Entity }): void =>
+		Entities.ConnectOutput(
 		{
-			Zone.Touching.delete(GetToucherSlot(InputData.activator));
+			target: Ent,
+			output: "OnEndTouch",
+			callback: (InputData: { activator?: Entity }): void =>
+			{
+				Zone.Touching.delete(GetToucherSlot(InputData.activator));
+			},
 		});
 		RefreshTouches(Zone);
 	}
@@ -173,8 +183,8 @@ function RefreshTouches(Zone: FSpawnZone): void
 		return;
 	}
 	Zone.Touching.clear();
-	Instance.EntFireAtTarget({ target: Zone.Entity, input: "Disable" });
-	Instance.EntFireAtTarget({ target: Zone.Entity, input: "Enable", delay: TouchRefreshDelay });
+	Zone.Entity.FireInput({ input: "Disable" });
+	Zone.Entity.FireInput({ input: "Enable", delay: TouchRefreshDelay });
 }
 
 function CountZones(Team: ETeam): number
@@ -235,4 +245,4 @@ function Block(Pawn: CSPlayerPawn, Visitor: FZoneVisitor, Zone: FSpawnZone): voi
 	const Offset: FVector = VectorMath.Subtract(Pawn.GetAbsOrigin(), Zone.Entity.GetAbsOrigin());
 	const Away: FVector = VectorMath.GetSafeNormal({ x: Offset.x, y: Offset.y, z: 0 });
 	Pawn.Teleport({ velocity: VectorMath.Scale(Away, SpawnZoneSettings.PushOutSpeed) });
-}
+}

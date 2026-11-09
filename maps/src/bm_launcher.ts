@@ -1,7 +1,7 @@
 import { Instance, GameRules, CSInputs, CSGearSlot } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
 import { TickInterval } from "./bm_core";
-import { SpawnTemporaryTemplate } from "./bm_effects";
+import { SpawnTemporaryTemplate, PlaySoundOn } from "./bm_effects";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,6 +19,10 @@ export interface FLauncherSettings
 	readonly ReloadFxTemplate: string;
 	readonly AltFireInterval?: number;
 	readonly AltFireFxTemplate?: string;
+	// Sound events, played on the player so they move with them. Reload plays as each round goes in
+	readonly FireSound?: string;
+	readonly AltFireSound?: string;
+	readonly ReloadSound?: string;
 }
 
 export interface FLauncherShot
@@ -188,6 +192,7 @@ function FireLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number, bA
 	const bHeldThrough: boolean = Now - State.NextFireTime < TickInterval * 1.5;
 	State.NextFireTime = (bHeldThrough ? State.NextFireTime : Now) + Interval;
 	SpawnFireFx(Pawn, bAltFire ? State.Settings.AltFireFxTemplate ?? State.Settings.FireFxTemplate : State.Settings.FireFxTemplate);
+	PlaySoundOn(bAltFire ? State.Settings.AltFireSound ?? State.Settings.FireSound : State.Settings.FireSound, Pawn);
 	return { WeaponName: State.WeaponName, bAltFire: bAltFire, ChargeFraction: ChargeFraction };
 }
 
@@ -243,6 +248,7 @@ function TickReload(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): voi
 	}
 	State.Clip = State.Settings.ReloadEachTime > 0 ? State.Clip + 1 : State.Settings.ClipSize;
 	SpawnReloadFx(Pawn, State.Settings);
+	PlaySoundOn(State.Settings.ReloadSound, Pawn);
 	State.ReloadStartTime = Now;
 	State.NextReloadTime = CanReload(State) ? Now + State.Settings.ReloadEachTime : undefined;
 }
@@ -308,4 +314,4 @@ function SpawnReloadFx(Pawn: CSPlayerPawn, Settings: FLauncherSettings): void
 			Ent.SetParent(Pawn);
 		}
 	}
-}
+}

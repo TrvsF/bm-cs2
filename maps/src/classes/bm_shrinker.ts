@@ -42,8 +42,9 @@ export interface FShrinkerSettings extends FClassSettings
 	readonly ShrunkDuration: number;
 	readonly RechargeTime: number;
 	readonly MinShrinkCharge: number;
-	readonly ShrinkSoundTemplate: string;
-	readonly GrowSoundTemplate: string;
+	// Sound events, played as the shrink or grow starts
+	readonly ShrinkSound: string;
+	readonly GrowSound: string;
 	readonly Trap: FTrapSettings;
 	readonly TeleporterEntrance: FTeleporterSettings;
 	readonly TeleporterExit: FTeleporterSettings;
@@ -90,8 +91,8 @@ export const ShrinkerSettings: FShrinkerSettings =
 	ShrunkDuration: 12,
 	RechargeTime: 16,
 	MinShrinkCharge: 10,
-	ShrinkSoundTemplate: "shrinker_shrink_sound_template",
-	GrowSoundTemplate: "shrinker_grow_sound_template",
+	ShrinkSound: "bm.shrinker.shrink",
+	GrowSound: "bm.shrinker.grow",
 
 	Trap:
 	{
@@ -387,7 +388,7 @@ export class ShrinkerClass extends PlayerClass<FShrinkerSettings>
 		this.TickCharge(State, DeltaTime);
 		if (State.bWantsShrunk !== bWasShrunk)
 		{
-			PlaySoundOn(State.bWantsShrunk ? this.Settings.ShrinkSoundTemplate : this.Settings.GrowSoundTemplate, Pawn);
+			PlaySoundOn(State.bWantsShrunk ? this.Settings.ShrinkSound : this.Settings.GrowSound, Pawn);
 		}
 		this.TickSize(Pawn, State, DeltaTime);
 	}
@@ -453,4 +454,4 @@ export class ShrinkerClass extends PlayerClass<FShrinkerSettings>
 			return { Charge: MaxShrinkCharge, bWantsShrunk: false, ShrinkAlpha: 0, Held: { Mask: 0 } };
 		});
 	}
-}
+}

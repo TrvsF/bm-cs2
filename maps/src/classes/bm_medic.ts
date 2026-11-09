@@ -27,7 +27,8 @@ export interface FMedicSettings extends FClassSettings
 	readonly OverhealDecayPerSec: number;
 	readonly UberSecondsToFill: number;
 	readonly UberDuration: number;
-	readonly HealSoundTemplate: string;
+	// Sound event that loops while the beam is on someone
+	readonly HealSound: string;
 }
 
 export interface FBolt extends FProjectile
@@ -93,7 +94,7 @@ export const MedicSettings: FMedicSettings =
 	OverhealDecayPerSec: 3.3,
 	UberSecondsToFill: 40,
 	UberDuration: 8,
-	HealSoundTemplate: "medic_heal_sound_template",
+	HealSound: "bm.medic.heal_loop",
 };
 
 const BoltTemplateName: string = "crossbow_bolt_template";
@@ -315,7 +316,7 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 	{
 		if (bHealing && !State.HealSound)
 		{
-			State.HealSound = StartSoundOn(this.Settings.HealSoundTemplate, Pawn);
+			State.HealSound = StartSoundOn(this.Settings.HealSound, Pawn);
 		}
 		else if (!bHealing)
 		{
@@ -410,4 +411,4 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 		}
 		this.GlowingPawns = new Set<CSPlayerPawn>(this.UberedThisTick);
 	}
-}
+}

@@ -1,6 +1,6 @@
 import { Instance, Console } from "cs_script/point_script";
 import type { Entity, CustomHudLayout } from "cs_script/point_script";
-import { LogPrefix, SetTimer } from "./bm_core";
+import { LogPrefix, SetTimer, FindEntityByName } from "./bm_core";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -106,7 +106,7 @@ function GetDamageNumberState(Slot: number): FDamageNumberState
 
 function FindDamageHud(): CustomHudLayout | undefined
 {
-	const Hud: Entity | undefined = Instance.FindEntityByName(DamageHudName);
+	const Hud: Entity | undefined = FindEntityByName(DamageHudName);
 	if (IsCustomHudLayout(Hud))
 	{
 		return Hud;
@@ -123,4 +123,4 @@ function FindDamageHud(): CustomHudLayout | undefined
 function IsCustomHudLayout(Ent: Entity | undefined): Ent is CustomHudLayout
 {
 	return Ent !== undefined && "SetDialogVariableStringForPlayer" in Ent && typeof Ent.SetDialogVariableStringForPlayer === "function";
-}
+}

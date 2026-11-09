@@ -1,4 +1,4 @@
-import { Instance, Console, GameRules, CSRoundEndReason, CSDamageFlags } from "cs_script/point_script";
+import { Instance, Console, GameRules, Entities, CSRoundEndReason, CSDamageFlags } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn } from "cs_script/point_script";
 import { bDebug, LogPrefix, TickInterval, ETeam, VectorMath, RotationMath, GetPlayerSlot, ForEachLivePawn } from "../bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "../bm_core";
@@ -430,7 +430,7 @@ function ScanPayload(): void
 
 function FindCartEntity(): Entity | undefined
 {
-	const Named: Entity | undefined = Instance.FindEntitiesByName(PayloadSettings.CartName).find((Ent: Entity): boolean =>
+	const Named: Entity | undefined = Entities.FindByName(PayloadSettings.CartName).find((Ent: Entity): boolean =>
 	{
 		return Ent.IsValid();
 	});
@@ -440,7 +440,7 @@ function FindCartEntity(): Entity | undefined
 	}
 	for (const ClassName of CartClasses)
 	{
-		for (const Ent of Instance.FindEntitiesByClass(ClassName))
+		for (const Ent of Entities.FindByClass(ClassName))
 		{
 			if (Ent.IsValid() && Ent.GetEntityName().includes(PayloadSettings.CartName))
 			{
@@ -453,10 +453,10 @@ function FindCartEntity(): Entity | undefined
 
 function FindPathPoints(): Entity[]
 {
-	const Candidates: Set<Entity> = new Set<Entity>(Instance.FindEntitiesByName(`${PayloadSettings.PathPrefix}*`));
+	const Candidates: Set<Entity> = new Set<Entity>(Entities.FindByName(`${PayloadSettings.PathPrefix}*`));
 	for (const ClassName of PathPointClasses)
 	{
-		for (const Ent of Instance.FindEntitiesByClass(ClassName))
+		for (const Ent of Entities.FindByClass(ClassName))
 		{
 			Candidates.add(Ent);
 		}
