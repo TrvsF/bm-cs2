@@ -1,5 +1,5 @@
 import { Instance, Console, GameRules, Entities, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
 import { bDebug, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
 import type
 {
@@ -21,6 +21,7 @@ import { EPlayerClass, GiveNoClassLoadout, RestoreDefaultBody, HideBody, ShowBod
 import type { EPlayableClass } from "./bm_classes";
 import { ClassDefinitions, GiveLoadout, IsWeaponAllowed } from "./classes/bm_classlist";
 import { MedicSettings } from "./classes/bm_medic";
+import { TurretKind } from "./classes/bm_gunner";
 import { ClearDecals, SpawnGibs, PrecacheSounds, RunSpawnTest } from "./bm_effects";
 import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
@@ -29,8 +30,8 @@ import { TickLauncher, ClearLauncher, GetLauncherAmmo, EmptyRealGuns } from "./b
 import type { FLauncherShot } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
 import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone, RefreshSpawnZoneTouches } from "./bm_spawnzones";
-import { TickBuildings, ClearBuildings, RemoveBuildings, GetBuildingHudRows, GetBuildHints, RepairBuildingInReach } from "./bm_buildings";
-import type { FBuildKeys } from "./bm_buildings";
+import { TickBuildings, ClearBuildings, RemoveBuildings, GetBuildingHudRows, GetBuildHints, RepairBuildingInReach, TraceBuildings, GetTraceBuilding, IsBuildingEnemy } from "./bm_buildings";
+import type { FBuilding, FBuildingHit, FBuildKeys } from "./bm_buildings";
 import { GameMode } from "./bm_gamemode";
 import { FreeForAllMode } from "./gamemodes/bm_freeforall";
 import { PayloadMode } from "./gamemodes/bm_payload";
@@ -691,10 +692,20 @@ function FindTargetId(Pawn: CSPlayerPawn, Slot: number): FTargetId | undefined
 {
 	const ViewerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
 	const HealTarget: CSPlayerPawn | undefined = ViewerClass !== undefined ? ClassDefinitions[ViewerClass].GetHealTarget(Slot) : undefined;
+	if (HealTarget)
+	{
+		return GetPawnTargetId(HealTarget, Pawn);
+	}
 	const Eye: FVector = Pawn.GetEyePosition();
 	const End: FVector = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), MainSettings.TargetIdRange));
-	const Target: Entity | undefined = HealTarget ?? Instance.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn }).hitEntity;
-	if (!IsPlayerPawn(Target) || !Target.IsAlive() || !IsTeammate(Target, Pawn))
+	const Trace: TraceResult = Instance.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn });
+	const Turret: FBuilding | undefined = FindFriendlyTurret(Pawn, Eye, End, Trace);
+	return Turret ? GetTurretTargetId(Turret) : GetPawnTargetId(Trace.hitEntity, Pawn);
+}
+
+function GetPawnTargetId(Target: Entity | undefined, Viewer: CSPlayerPawn): FTargetId | undefined
+{
+	if (!IsPlayerPawn(Target) || !Target.IsAlive() || !IsTeammate(Target, Viewer))
 	{
 		return undefined;
 	}
@@ -702,6 +713,29 @@ function FindTargetId(Pawn: CSPlayerPawn, Slot: number): FTargetId | undefined
 	const Name: string = TargetClass !== undefined ? `${GetPawnName(Target)} (${ClassDefinitions[TargetClass].Settings.DisplayName})` : GetPawnName(Target);
 	const MaxHealth: number = Target.GetMaxHealth();
 	return { Name: Name, Health: Target.GetHealth(), MaxHealth: MaxHealth, MaxOverheal: Math.floor(MaxHealth * MedicSettings.OverhealMult), bTerrorist: Target.GetTeamNumber() === ETeam.Terrorist };
+}
+
+function GetTurretTargetId(Turret: FBuilding): FTargetId
+{
+	const MaxHealth: number = Turret.Kind.Settings.Health;
+	const Name: string = `${GetPawnName(Turret.Owner)}'s ${Turret.Kind.Settings.DisplayName}`;
+	return { Name: Name, Health: Math.max(0, Math.ceil(Turret.Health)), MaxHealth: MaxHealth, MaxOverheal: MaxHealth, bTerrorist: Turret.Team === ETeam.Terrorist };
+}
+
+// The turret on the viewer's side the eye line reaches before anything else, whether or not its model is solid to traces
+function FindFriendlyTurret(Viewer: CSPlayerPawn, Eye: FVector, End: FVector, Trace: TraceResult): FBuilding | undefined
+{
+	const IsFriendlyTurret: (Building: FBuilding) => boolean = (Building: FBuilding): boolean =>
+	{
+		return Building.Kind instanceof TurretKind && !Building.bRemoved && !IsBuildingEnemy(Building, Viewer);
+	};
+	const Struck: FBuilding | undefined = GetTraceBuilding(Trace);
+	if (Struck)
+	{
+		return IsFriendlyTurret(Struck) ? Struck : undefined;
+	}
+	const Hit: FBuildingHit | undefined = TraceBuildings(Eye, End, 0, IsFriendlyTurret);
+	return Hit && (!Trace.didHit || Hit.Fraction <= Trace.fraction) ? Hit.Building : undefined;
 }
 
 // Weapons /////////////////////////////////////////////////////////////////////////////////////////

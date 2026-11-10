@@ -4463,6 +4463,8 @@ import { Console as Console13, Entities as Entities4 } from "cs_script/point_scr
 var SpawnZoneSettings = {
   TerroristZoneName: "spawnzone_t",
   CounterTerroristZoneName: "spawnzone_ct",
+  TerroristBarrierName: "barrier_t",
+  CounterTerroristBarrierName: "barrier_ct",
   PushOutSpeed: 250
 };
 var RescanInterval2 = 1;
@@ -4525,6 +4527,8 @@ function ScanSpawnZones() {
   });
   AddZones(SpawnZoneSettings.TerroristZoneName, 2 /* Terrorist */);
   AddZones(SpawnZoneSettings.CounterTerroristZoneName, 3 /* CounterTerrorist */);
+  TintBarriers(SpawnZoneSettings.TerroristBarrierName, 2 /* Terrorist */);
+  TintBarriers(SpawnZoneSettings.CounterTerroristBarrierName, 3 /* CounterTerrorist */);
   const TerroristZones = CountZones(2 /* Terrorist */);
   const CounterTerroristZones = CountZones(3 /* CounterTerrorist */);
   const Report = TerroristZones + CounterTerroristZones > 0 ? `spawn zones: ${TerroristZones} for Ts ("${SpawnZoneSettings.TerroristZoneName}"), ${CounterTerroristZones} for CTs ("${SpawnZoneSettings.CounterTerroristZoneName}")` : "";
@@ -4565,6 +4569,13 @@ function AddZones(Name, Team) {
       }
     );
     RefreshTouches(Zone);
+  }
+}
+function TintBarriers(Name, Team) {
+  for (const Ent of Entities4.FindByName(`${Name}*`)) {
+    if (Ent.IsValid() && IsModelEntity(Ent)) {
+      Ent.SetColor(GetColorForTeam(Team));
+    }
   }
 }
 function RefreshTouches(Zone) {
@@ -5815,16 +5826,39 @@ function TickPlayerHud() {
 function FindTargetId(Pawn, Slot) {
   const ViewerClass = GClassBySlot.get(Slot);
   const HealTarget = ViewerClass !== void 0 ? ClassDefinitions[ViewerClass].GetHealTarget(Slot) : void 0;
+  if (HealTarget) {
+    return GetPawnTargetId(HealTarget, Pawn);
+  }
   const Eye = Pawn.GetEyePosition();
   const End = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), MainSettings.TargetIdRange));
-  const Target = HealTarget ?? Instance15.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn }).hitEntity;
-  if (!IsPlayerPawn(Target) || !Target.IsAlive() || !IsTeammate(Target, Pawn)) {
+  const Trace = Instance15.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn });
+  const Turret = FindFriendlyTurret(Pawn, Eye, End, Trace);
+  return Turret ? GetTurretTargetId(Turret) : GetPawnTargetId(Trace.hitEntity, Pawn);
+}
+function GetPawnTargetId(Target, Viewer) {
+  if (!IsPlayerPawn(Target) || !Target.IsAlive() || !IsTeammate(Target, Viewer)) {
     return void 0;
   }
   const TargetClass = GClassBySlot.get(GetPlayerSlot(Target));
   const Name = TargetClass !== void 0 ? `${GetPawnName(Target)} (${ClassDefinitions[TargetClass].Settings.DisplayName})` : GetPawnName(Target);
   const MaxHealth = Target.GetMaxHealth();
   return { Name, Health: Target.GetHealth(), MaxHealth, MaxOverheal: Math.floor(MaxHealth * MedicSettings.OverhealMult), bTerrorist: Target.GetTeamNumber() === 2 /* Terrorist */ };
+}
+function GetTurretTargetId(Turret) {
+  const MaxHealth = Turret.Kind.Settings.Health;
+  const Name = `${GetPawnName(Turret.Owner)}'s ${Turret.Kind.Settings.DisplayName}`;
+  return { Name, Health: Math.max(0, Math.ceil(Turret.Health)), MaxHealth, MaxOverheal: MaxHealth, bTerrorist: Turret.Team === 2 /* Terrorist */ };
+}
+function FindFriendlyTurret(Viewer, Eye, End, Trace) {
+  const IsFriendlyTurret = (Building) => {
+    return Building.Kind instanceof TurretKind && !Building.bRemoved && !IsBuildingEnemy(Building, Viewer);
+  };
+  const Struck = GetTraceBuilding(Trace);
+  if (Struck) {
+    return IsFriendlyTurret(Struck) ? Struck : void 0;
+  }
+  const Hit = TraceBuildings(Eye, End, 0, IsFriendlyTurret);
+  return Hit && (!Trace.didHit || Hit.Fraction <= Trace.fraction) ? Hit.Building : void 0;
 }
 function RemoveIfNotAllowed(Weapon) {
   if (!Weapon.IsValid()) {
