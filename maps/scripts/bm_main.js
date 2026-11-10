@@ -12,8 +12,8 @@ var MaxPlayerSlots = 64;
 var UpVector = { x: 0, y: 0, z: 1 };
 var ZeroVector = { x: 0, y: 0, z: 0 };
 var ChestOffset = { x: 0, y: 0, z: 40 };
-var TerroristColor = { r: 220, g: 60, b: 50 };
-var CounterTerroristColor = { r: 70, g: 130, b: 230 };
+var TerroristColor = { r: 238, g: 158, b: 153 };
+var CounterTerroristColor = { r: 163, g: 193, b: 243 };
 var GPendingTimers = [];
 function SetTimer(Delay, Callback) {
   GPendingTimers.push({ FireTime: Instance.GetGameTime() + Delay, Callback });

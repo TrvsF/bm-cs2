@@ -66,8 +66,8 @@ export const UpVector: FVector = { x: 0, y: 0, z: 1 };
 export const ZeroVector: FVector = { x: 0, y: 0, z: 0 };
 const ChestOffset: FVector = { x: 0, y: 0, z: 40 };
 
-const TerroristColor: FColor = { r: 220, g: 60, b: 50 };
-const CounterTerroristColor: FColor = { r: 70, g: 130, b: 230 };
+const TerroristColor: FColor = { r: 238, g: 158, b: 153 };
+const CounterTerroristColor: FColor = { r: 163, g: 193, b: 243 };
 
 const GPendingTimers: FPendingTimer[] = [];
 
