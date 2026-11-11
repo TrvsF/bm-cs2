@@ -3,7 +3,7 @@ import { Instance as Instance15, Console as Console16, GameRules as GameRules4, 
 
 // src/bm_core.ts
 import { Instance, Console, Entities, CSWeaponType } from "cs_script/point_script";
-var bDebug = true;
+var bDebug = false;
 var TickInterval = 1 / 64;
 var INDEX_NONE = -1;
 var LogPrefix = "[BM]";
@@ -4527,6 +4527,8 @@ function ScanSpawnZones() {
   });
   AddZones(SpawnZoneSettings.TerroristZoneName, 2 /* Terrorist */);
   AddZones(SpawnZoneSettings.CounterTerroristZoneName, 3 /* CounterTerrorist */);
+  AddZones(SpawnZoneSettings.TerroristBarrierName, 2 /* Terrorist */);
+  AddZones(SpawnZoneSettings.CounterTerroristBarrierName, 3 /* CounterTerrorist */);
   TintBarriers(SpawnZoneSettings.TerroristBarrierName, 2 /* Terrorist */);
   TintBarriers(SpawnZoneSettings.CounterTerroristBarrierName, 3 /* CounterTerrorist */);
   const TerroristZones = CountZones(2 /* Terrorist */);
@@ -4542,7 +4544,7 @@ function AddZones(Name, Team) {
     const bKnown = GZones.some((Zone2) => {
       return Zone2.Entity === Ent;
     });
-    if (bKnown || !Ent.IsValid()) {
+    if (bKnown || !Ent.IsValid() || !Ent.GetClassName().startsWith("trigger_")) {
       continue;
     }
     const Zone = { Entity: Ent, Team, Touching: /* @__PURE__ */ new Set() };

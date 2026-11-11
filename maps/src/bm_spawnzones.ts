@@ -126,6 +126,8 @@ function ScanSpawnZones(): void
 	});
 	AddZones(SpawnZoneSettings.TerroristZoneName, ETeam.Terrorist);
 	AddZones(SpawnZoneSettings.CounterTerroristZoneName, ETeam.CounterTerrorist);
+	AddZones(SpawnZoneSettings.TerroristBarrierName, ETeam.Terrorist);
+	AddZones(SpawnZoneSettings.CounterTerroristBarrierName, ETeam.CounterTerrorist);
 	TintBarriers(SpawnZoneSettings.TerroristBarrierName, ETeam.Terrorist);
 	TintBarriers(SpawnZoneSettings.CounterTerroristBarrierName, ETeam.CounterTerrorist);
 
@@ -149,7 +151,7 @@ function AddZones(Name: string, Team: ETeam): void
 		{
 			return Zone.Entity === Ent;
 		});
-		if (bKnown || !Ent.IsValid())
+		if (bKnown || !Ent.IsValid() || !Ent.GetClassName().startsWith("trigger_"))
 		{
 			continue;
 		}
