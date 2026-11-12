@@ -3,7 +3,7 @@ import { Instance as Instance16, Console as Console16, GameRules as GameRules4, 
 
 // src/bm_core.ts
 import { Instance, Console, Entities, CSWeaponType } from "cs_script/point_script";
-var bDebug = true;
+var bDebug = false;
 var TickInterval = 1 / 64;
 var INDEX_NONE = -1;
 var LogPrefix = "[BM]";
@@ -15,6 +15,7 @@ var ChestOffset = { x: 0, y: 0, z: 40 };
 var TerroristColor = { r: 238, g: 158, b: 153 };
 var CounterTerroristColor = { r: 163, g: 193, b: 243 };
 var GPendingTimers = [];
+var GBotControls = /* @__PURE__ */ new Map();
 function SetTimer(Delay, Callback) {
   GPendingTimers.push({ FireTime: Instance.GetGameTime() + Delay, Callback });
 }
@@ -231,6 +232,25 @@ function ForEachLivePawn(Visitor) {
       Visitor(Pawn, Slot);
     }
   }
+}
+function SetBotControl(Slot, Control) {
+  if (Control) {
+    GBotControls.set(Slot, Control);
+  } else {
+    GBotControls.delete(Slot);
+  }
+}
+function IsInputDown(Pawn, Input) {
+  const Control = GBotControls.get(GetPlayerSlot(Pawn));
+  return Control ? (Control.Inputs & Input) !== 0 : Pawn.IsInputPressed(Input);
+}
+function GetHeldWeapon(Pawn) {
+  const Control = GBotControls.get(GetPlayerSlot(Pawn));
+  return (Control ? Pawn.FindWeapon(Control.WeaponName) : void 0) ?? Pawn.GetActiveWeapon();
+}
+function GetAimAngles(Pawn) {
+  const Control = GBotControls.get(GetPlayerSlot(Pawn));
+  return Control ? Control.Aim : Pawn.GetEyeAngles();
 }
 
 // src/bm_classes.ts
@@ -1328,9 +1348,10 @@ var MinGroundNormalZ2 = 0.7;
 var GroundProbeDistance = 8;
 var MinFacingSpeed = 1;
 var MissingProjectileRadius = 3;
+var AimPointPasses = 3;
 var GShootables = [];
 function LaunchProjectile(Owner, Speed, UpSpeed, GravityScale, TemplateName, Radius = 0, Shape = "sphere" /* Sphere */) {
-  const Direction = VectorMath.GetForwardVector(Owner.GetEyeAngles());
+  const Direction = VectorMath.GetForwardVector(GetAimAngles(Owner));
   const Start = Owner.GetEyePosition();
   const Velocity = VectorMath.Add(VectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed });
   const Projectile = {
@@ -1348,6 +1369,19 @@ function LaunchProjectile(Owner, Speed, UpSpeed, GravityScale, TemplateName, Rad
   PlaceProjectileModels(Projectile, true);
   TintProjectile(Projectile, GetTeamColor(Owner));
   return Projectile;
+}
+function GetAimPoint(Start, Target, TargetVelocity, Ballistics) {
+  if (!Ballistics || Ballistics.Speed <= 0) {
+    return Target;
+  }
+  let Lead = Target;
+  let Time = 0;
+  for (let Pass = 0; Pass < AimPointPasses; Pass++) {
+    Time = VectorMath.Size(VectorMath.Subtract(Lead, Start)) / Ballistics.Speed;
+    Lead = VectorMath.Add(Target, VectorMath.Scale(TargetVelocity, Time));
+  }
+  const Drop = 0.5 * Gravity * Ballistics.GravityScale * Time * Time - Ballistics.UpSpeed * Time;
+  return { x: Lead.x, y: Lead.y, z: Lead.z + Drop };
 }
 function MoveProjectile(Projectile, DeltaTime, bHitPlayers) {
   const Velocity = Projectile.Velocity;
@@ -1809,7 +1843,7 @@ function TickLauncher(Pawn, Slot, Now) {
   if (!Launchers) {
     return void 0;
   }
-  const Active = Pawn.GetActiveWeapon();
+  const Active = GetHeldWeapon(Pawn);
   let Shot = void 0;
   for (const State of Launchers) {
     const Weapon = EmptyRealGun(Pawn, State.WeaponName);
@@ -1829,7 +1863,7 @@ function TickLauncher(Pawn, Slot, Now) {
 }
 function GetLauncherAmmo(Pawn, Slot) {
   const Launchers = GLaunchers.get(Slot);
-  const Active = Pawn.GetActiveWeapon();
+  const Active = GetHeldWeapon(Pawn);
   if (!Launchers || !Active) {
     return void 0;
   }
@@ -1849,8 +1883,8 @@ function GetLauncherAmmo(Pawn, Slot) {
 }
 function TickHeldLauncher(Pawn, State, Now) {
   const bCanFire = !Pawn.IsBuyMenuOpen() && !GameRules.IsFreezePeriod();
-  const bMainHeld = bCanFire && Pawn.IsInputPressed(CSInputs.ATTACK);
-  const bAltFire = bCanFire && !bMainHeld && State.Settings.AltFireInterval !== void 0 && Pawn.IsInputPressed(CSInputs.ATTACK2);
+  const bMainHeld = bCanFire && IsInputDown(Pawn, CSInputs.ATTACK);
+  const bAltFire = bCanFire && !bMainHeld && State.Settings.AltFireInterval !== void 0 && IsInputDown(Pawn, CSInputs.ATTACK2);
   if ((bMainHeld || bAltFire) && State.Clip > 0) {
     State.NextReloadTime = void 0;
     if (Now < State.NextFireTime) {
@@ -2131,6 +2165,19 @@ var PlayerClass = class {
       }
     }
   }
+  // The weapons a bot of this class shoots with: by default every one the script fires
+  // WHAT ^
+  GetBotWeapons() {
+    const Weapons = this.Settings.PrimaryLauncher ? [this.Settings.Primary] : [];
+    if (this.Settings.SecondaryLauncher && this.Settings.Secondary !== "" && this.Settings.Secondary !== this.Settings.Primary) {
+      Weapons.push(this.Settings.Secondary);
+    }
+    return Weapons;
+  }
+  // Override for weapons that fire projectiles, so bots lead and arc their shots. undefined = lands instantly.
+  GetBallistics(WeaponName) {
+    return void 0;
+  }
   // Called every tick, whether or not anyone is playing this class
   TickWorld(Now, DeltaTime) {
   }
@@ -2181,7 +2228,7 @@ var PlayerClass = class {
 };
 function FireHitscanWeapon(Shooter, Settings, Weapon, Intercept) {
   const Start = Shooter.GetEyePosition();
-  const Aim = Shooter.GetEyeAngles();
+  const Aim = GetAimAngles(Shooter);
   FireHitscan(Shooter, Settings, Weapon, Start, Aim, VectorMath.Subtract(Start, BeamStartDrop), Intercept);
   const Backwards = VectorMath.Scale(VectorMath.GetForwardVector(Aim), -1);
   ApplyKnockback(Shooter, Backwards, Settings.Damage * Settings.Pellets, Settings.SelfKnockback, true);
@@ -2291,6 +2338,9 @@ var SoldierClass = class extends PlayerClass {
   constructor() {
     super(SoldierSettings);
   }
+  GetBallistics(WeaponName) {
+    return { Speed: this.Settings.RocketSpeed, UpSpeed: 0, GravityScale: 0 };
+  }
   OnPrimaryFire(Pawn, Slot, Now) {
     const Rocket = LaunchProjectile(Pawn, this.Settings.RocketSpeed, 0, 0, RocketTemplateName);
     this.Rockets.push(Rocket);
@@ -2380,6 +2430,13 @@ var DemomanClass = class extends PlayerClass {
   Pipes = [];
   constructor() {
     super(DemoSettings);
+  }
+  // pipes only 4 those fuckers
+  GetBotWeapons() {
+    return [this.Settings.Secondary];
+  }
+  GetBallistics(WeaponName) {
+    return WeaponName === this.Settings.Primary ? { Speed: this.Settings.StickyLaunchSpeed, UpSpeed: this.Settings.StickyLaunchUp, GravityScale: 1 } : { Speed: this.Settings.PipeLaunchSpeed, UpSpeed: this.Settings.PipeLaunchUp, GravityScale: 1 };
   }
   OnPrimaryFire(Pawn, Slot, Now, ChargeFraction) {
     const Speed = this.Settings.StickyLaunchSpeed + (this.Settings.StickyMaxLaunchSpeed - this.Settings.StickyLaunchSpeed) * ChargeFraction;
@@ -2556,6 +2613,9 @@ var MedicClass = class extends PlayerClass {
   Bolts = [];
   constructor() {
     super(MedicSettings);
+  }
+  GetBallistics(WeaponName) {
+    return { Speed: this.Settings.BoltSpeed, UpSpeed: 0, GravityScale: this.Settings.BoltGravityScale };
   }
   OnPrimaryFire(Pawn, Slot, Now) {
     const Projectile = LaunchProjectile(Pawn, this.Settings.BoltSpeed, 0, this.Settings.BoltGravityScale, BoltTemplateName);
@@ -2867,13 +2927,13 @@ var RailerClass = class extends PlayerClass {
   }
   TickPlayer(Pawn, Slot, Now, DeltaTime) {
     const Ammo = GetLauncherAmmo(Pawn, Slot);
-    const bCharging = Ammo !== void 0 && Ammo.ChargeFraction > 0 && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Secondary);
+    const bCharging = Ammo !== void 0 && Ammo.ChargeFraction > 0 && IsWeapon(GetHeldWeapon(Pawn), this.Settings.Secondary);
     if (!Ammo || !bCharging) {
       this.StopChargeBeam(Slot);
       return;
     }
     const Start = Pawn.GetEyePosition();
-    const End = TraceHitscanWeapon(Pawn, this.Settings.Railgun, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
+    const End = TraceHitscanWeapon(Pawn, this.Settings.Railgun, Start, VectorMath.GetForwardVector(GetAimAngles(Pawn))).End;
     const BeamStart = VectorMath.Subtract(Start, BeamStartDrop);
     const RefireInterval = this.Settings.ChargeBeamRefireStart + (this.Settings.ChargeBeamRefireFull - this.Settings.ChargeBeamRefireStart) * Ammo.ChargeFraction;
     const Beam = this.ChargeBeams.get(Slot);
@@ -2998,7 +3058,7 @@ var BeamerClass = class extends PlayerClass {
     }
     const Beam = this.Settings.EnergyBeam;
     const Start = Pawn.GetEyePosition();
-    const End = TraceHitscanWeapon(Pawn, Beam, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
+    const End = TraceHitscanWeapon(Pawn, Beam, Start, VectorMath.GetForwardVector(GetAimAngles(Pawn))).End;
     const BeamStart = VectorMath.Subtract(Start, BeamStartDrop);
     if (State.Beam) {
       MoveHeldBeam(State.Beam, BeamStart, End);
@@ -3026,7 +3086,7 @@ var BeamerClass = class extends PlayerClass {
   IsBeamOn(Pawn, State, Now) {
     const FireInterval = this.Settings.PrimaryLauncher ? this.Settings.PrimaryLauncher.FireInterval : 0;
     const bStillFiring = Now - State.LastBeamTime <= FireInterval + TickInterval * 1.5;
-    return bStillFiring && Pawn.IsInputPressed(CSInputs4.ATTACK) && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Primary);
+    return bStillFiring && IsInputDown(Pawn, CSInputs4.ATTACK) && IsWeapon(GetHeldWeapon(Pawn), this.Settings.Primary);
   }
   StopBeam(State) {
     if (State.Beam) {
@@ -3103,6 +3163,9 @@ var BoxerClass = class extends PlayerClass {
   Cubes = [];
   constructor() {
     super(BoxerSettings);
+  }
+  GetBallistics(WeaponName) {
+    return WeaponName === this.Settings.Primary ? { Speed: this.Settings.CubeSpeed, UpSpeed: 0, GravityScale: this.Settings.CubeGravityScale } : void 0;
   }
   OnPrimaryFire(Pawn, Slot, Now) {
     const Projectile = LaunchProjectile(Pawn, this.Settings.CubeSpeed, 0, this.Settings.CubeGravityScale, CubeTemplateName, this.Settings.CubeRadius, "box" /* Box */);
@@ -3226,6 +3289,9 @@ var ShockerClass = class extends PlayerClass {
   Balls = [];
   constructor() {
     super(ShockerSettings);
+  }
+  GetBallistics(WeaponName) {
+    return WeaponName === this.Settings.Primary ? { Speed: this.Settings.BallSpeed, UpSpeed: 0, GravityScale: 0 } : void 0;
   }
   OnPrimaryFire(Pawn, Slot, Now) {
     const Ball = { ...LaunchProjectile(Pawn, this.Settings.BallSpeed, 0, 0, ShockBallTemplateName, this.Settings.BallSize), StuckAt: void 0 };
@@ -4439,8 +4505,199 @@ function IsCustomHudLayout2(Ent) {
   return Ent !== void 0 && "SetInputCaptureEnabled" in Ent && typeof Ent.SetInputCaptureEnabled === "function";
 }
 
+// src/bm_bots.ts
+import { Instance as Instance12, Entities as Entities3, CSInputs as CSInputs8 } from "cs_script/point_script";
+var BotMarkerModes = /* @__PURE__ */ new Map(
+  [
+    ["bot_still", 0 /* Still */],
+    ["bot_run", 1 /* Run */],
+    ["bot_jump", 2 /* Jump */]
+  ]
+);
+var BotRunSpeed = 250;
+var BotJumpSpeed = 301;
+var BotSpawnSettleTime = 0.1;
+var BotCombatSettings = {
+  SightRange: 2500,
+  ViewCone: 75,
+  ReactionTime: 0.4,
+  AimError: 3,
+  AimErrorTime: 0.5
+};
+var BotRespawnGap = 0.5;
+var BotDrawInterval = 0.5;
+var GBotAssignments = /* @__PURE__ */ new Map();
+var GBotReadyAt = /* @__PURE__ */ new Map();
+var GBotFighters = /* @__PURE__ */ new Map();
+function TickBots(Now) {
+  const FreeMarkers = FindFreeBotMarkers();
+  ForEachLivePawn((Pawn, Slot) => {
+    const Controller = Pawn.GetPlayerController();
+    if (!Controller || !Controller.IsBot()) {
+      return;
+    }
+    const ReadyAt = GBotReadyAt.get(Slot);
+    if (ReadyAt !== void 0 && Now < ReadyAt) {
+      return;
+    }
+    let Assignment = GBotAssignments.get(Slot);
+    if (!Assignment) {
+      Assignment = ClaimBotMarker(Slot, FreeMarkers);
+      if (!Assignment) {
+        return;
+      }
+    }
+    if (!Assignment.bPlaced) {
+      PlaceBotOnMarker(Pawn, Assignment);
+    }
+    DriveBot(Pawn, Assignment);
+  });
+}
+function ResetBotMode(Slot) {
+  const Assignment = GBotAssignments.get(Slot);
+  if (Assignment) {
+    Assignment.bPlaced = false;
+  }
+  GBotReadyAt.set(Slot, Instance12.GetGameTime() + BotSpawnSettleTime);
+}
+function ForgetBot(Slot) {
+  GBotAssignments.delete(Slot);
+  GBotReadyAt.delete(Slot);
+}
+function FindFreeBotMarkers() {
+  const Claimed = /* @__PURE__ */ new Set();
+  for (const Assignment of GBotAssignments.values()) {
+    Claimed.add(Assignment.Marker);
+  }
+  const FreeMarkers = /* @__PURE__ */ new Map();
+  for (const [MarkerName, Mode] of BotMarkerModes) {
+    for (const Marker of Entities3.FindByName(MarkerName)) {
+      if (Marker.IsValid() && !Claimed.has(Marker)) {
+        FreeMarkers.set(Marker, Mode);
+      }
+    }
+  }
+  return FreeMarkers;
+}
+function ClaimBotMarker(Slot, FreeMarkers) {
+  for (const [Marker, Mode] of FreeMarkers) {
+    FreeMarkers.delete(Marker);
+    const Assignment = { Marker, Mode, Yaw: 0, bPlaced: false };
+    GBotAssignments.set(Slot, Assignment);
+    return Assignment;
+  }
+  return void 0;
+}
+function PlaceBotOnMarker(Pawn, Assignment) {
+  if (!Assignment.Marker.IsValid()) {
+    return;
+  }
+  Assignment.Yaw = Assignment.Marker.GetAbsAngles().yaw;
+  Assignment.bPlaced = true;
+  Pawn.Teleport({ position: Assignment.Marker.GetAbsOrigin(), angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 }, velocity: ZeroVector });
+  Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
+  Pawn.SetHealth(Pawn.GetMaxHealth());
+}
+function DriveBot(Pawn, Assignment) {
+  if (Assignment.Mode === 0 /* Still */ || !Pawn.GetGroundEntity()) {
+    return;
+  }
+  if (Assignment.Mode === 2 /* Jump */) {
+    Pawn.Teleport({ velocity: { x: 0, y: 0, z: BotJumpSpeed } });
+    return;
+  }
+  const Forward = VectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
+  Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
+}
+function TickBotCombat(Pawn, Slot, Now, Definition) {
+  const Controller = Pawn.GetPlayerController();
+  if (!Controller || !Controller.IsBot()) {
+    return;
+  }
+  const Weapons = Definition.GetBotWeapons();
+  if (GBotAssignments.has(Slot) || Weapons.length === 0) {
+    SetBotControl(Slot, void 0);
+    return;
+  }
+  const Fighter = GetOrCreate(GBotFighters, Slot, () => {
+    return { WeaponName: void 0, Target: void 0, SeenAt: 0, Error: { pitch: 0, yaw: 0, roll: 0 }, NextErrorTime: 0, NextDrawTime: 0, LastTickTime: 0, bTap: false };
+  });
+  if (Fighter.WeaponName === void 0 || !Weapons.includes(Fighter.WeaponName) || Now - Fighter.LastTickTime > BotRespawnGap) {
+    Fighter.WeaponName = Weapons[Math.floor(Math.random() * Weapons.length)];
+    Fighter.Target = void 0;
+  }
+  Fighter.LastTickTime = Now;
+  const WeaponName = Fighter.WeaponName ?? Weapons[0];
+  DrawBotWeapon(Pawn, Fighter, WeaponName, Now);
+  const Target = FindBotTarget(Pawn, Fighter.Target);
+  if (Target !== Fighter.Target) {
+    Fighter.Target = Target;
+    Fighter.SeenAt = Now;
+  }
+  if (!Target) {
+    SetBotControl(Slot, { Inputs: 0, WeaponName, Aim: Pawn.GetEyeAngles() });
+    return;
+  }
+  if (Now >= Fighter.NextErrorTime) {
+    Fighter.Error = { pitch: GetRandomError(), yaw: GetRandomError(), roll: 0 };
+    Fighter.NextErrorTime = Now + BotCombatSettings.AimErrorTime;
+  }
+  const Eye = Pawn.GetEyePosition();
+  const AimPoint = GetAimPoint(Eye, GetChestPosition(Target), Target.GetAbsVelocity(), Definition.GetBallistics(WeaponName));
+  const Direct = VectorMath.GetRotation(VectorMath.Subtract(AimPoint, Eye));
+  const Aim = { pitch: Direct.pitch + Fighter.Error.pitch, yaw: Direct.yaw + Fighter.Error.yaw, roll: 0 };
+  Pawn.SetEyeAngles(Aim);
+  const Launcher = WeaponName === Definition.Settings.Primary ? Definition.Settings.PrimaryLauncher : Definition.Settings.SecondaryLauncher;
+  Fighter.bTap = !Fighter.bTap;
+  const bReacted = Now - Fighter.SeenAt >= BotCombatSettings.ReactionTime;
+  const bFire = bReacted && (!Launcher || !Launcher.bFireOnRelease || Fighter.bTap);
+  SetBotControl(Slot, { Inputs: bFire ? CSInputs8.ATTACK : 0, WeaponName, Aim });
+}
+function ForgetBotCombat(Slot) {
+  GBotFighters.delete(Slot);
+  SetBotControl(Slot, void 0);
+}
+function FindBotTarget(Pawn, Current) {
+  const Eye = Pawn.GetEyePosition();
+  const Facing = VectorMath.GetForwardVector(Pawn.GetEyeAngles());
+  const MinFacing = Math.cos(BotCombatSettings.ViewCone * Math.PI / 180);
+  let Best = void 0;
+  let BestDistance = BotCombatSettings.SightRange;
+  ForEachLivePawn((Other) => {
+    if (Other === Pawn || IsTeammate(Other, Pawn)) {
+      return;
+    }
+    const Chest = GetChestPosition(Other);
+    const Offset = VectorMath.Subtract(Chest, Eye);
+    const Distance = VectorMath.Size(Offset);
+    if (Distance >= BestDistance || Other !== Current && VectorMath.Dot(VectorMath.GetSafeNormal(Offset), Facing) < MinFacing) {
+      return;
+    }
+    const Sight = Instance12.TraceLine({ start: Eye, end: Chest, ignorePlayers: true });
+    if (Sight.didHit && !Sight.startedInSolid) {
+      return;
+    }
+    Best = Other;
+    BestDistance = Distance;
+  });
+  return Best;
+}
+function DrawBotWeapon(Pawn, Fighter, WeaponName, Now) {
+  if (Now < Fighter.NextDrawTime) {
+    return;
+  }
+  Fighter.NextDrawTime = Now + BotDrawInterval;
+  const Weapon = Pawn.FindWeapon(WeaponName);
+  if (Weapon && Pawn.GetActiveWeapon() !== Weapon) {
+    Pawn.SwitchToWeapon(Weapon);
+  }
+}
+function GetRandomError() {
+  return (Math.random() * 2 - 1) * BotCombatSettings.AimError;
+}
+
 // src/bm_pickups.ts
-import { Instance as Instance12, Console as Console12, Entities as Entities3 } from "cs_script/point_script";
+import { Instance as Instance13, Console as Console12, Entities as Entities4 } from "cs_script/point_script";
 var HealthKitSettings = {
   Name: "healthkit",
   HealFraction: 0.5,
@@ -4478,7 +4735,7 @@ function TickHealthKits(Now) {
     if (Taker) {
       TakeKit(Kit, Taker, Now);
     } else if (bDebug) {
-      Instance12.DebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
+      Instance13.DebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
     }
   }
 }
@@ -4492,9 +4749,9 @@ function ResetHealthKits() {
   GNextRescanTime = 0;
 }
 function RescanHealthKits() {
-  const Found = new Set(Entities3.FindByName(HealthKitSettings.Name));
+  const Found = new Set(Entities4.FindByName(HealthKitSettings.Name));
   for (const ClassName of KitClassNames) {
-    for (const Ent of Entities3.FindByClass(ClassName)) {
+    for (const Ent of Entities4.FindByClass(ClassName)) {
       if (Ent.GetEntityName().includes(HealthKitSettings.Name)) {
         Found.add(Ent);
       }
@@ -4567,7 +4824,7 @@ function IsModelEntity2(Ent) {
 }
 
 // src/bm_spawnzones.ts
-import { Console as Console13, Entities as Entities4 } from "cs_script/point_script";
+import { Console as Console13, Entities as Entities5 } from "cs_script/point_script";
 var SpawnZoneSettings = {
   TerroristZoneName: "spawnzone_t",
   CounterTerroristZoneName: "spawnzone_ct",
@@ -4648,7 +4905,7 @@ function ScanSpawnZones() {
   GLastScanReport = Report;
 }
 function AddZones(Name, Team) {
-  for (const Ent of Entities4.FindByName(`${Name}*`)) {
+  for (const Ent of Entities5.FindByName(`${Name}*`)) {
     const bKnown = GZones.some((Zone2) => {
       return Zone2.Entity === Ent;
     });
@@ -4657,7 +4914,7 @@ function AddZones(Name, Team) {
     }
     const Zone = { Entity: Ent, Team, Touching: /* @__PURE__ */ new Set() };
     GZones.push(Zone);
-    Entities4.ConnectOutput(
+    Entities5.ConnectOutput(
       {
         target: Ent,
         output: "OnStartTouch",
@@ -4669,7 +4926,7 @@ function AddZones(Name, Team) {
         }
       }
     );
-    Entities4.ConnectOutput(
+    Entities5.ConnectOutput(
       {
         target: Ent,
         output: "OnEndTouch",
@@ -4682,7 +4939,7 @@ function AddZones(Name, Team) {
   }
 }
 function TintBarriers(Name, Team) {
-  for (const Ent of Entities4.FindByName(`${Name}*`)) {
+  for (const Ent of Entities5.FindByName(`${Name}*`)) {
     if (Ent.IsValid() && IsModelEntity(Ent)) {
       Ent.SetColor(GetColorForTeam(Team));
     }
@@ -4772,101 +5029,6 @@ var GameMode = class {
   TickPlayerHud(Pawn, Slot) {
   }
 };
-
-// src/bm_bots.ts
-import { Instance as Instance13, Entities as Entities5 } from "cs_script/point_script";
-var BotMarkerModes = /* @__PURE__ */ new Map(
-  [
-    ["bot_still", 0 /* Still */],
-    ["bot_run", 1 /* Run */],
-    ["bot_jump", 2 /* Jump */]
-  ]
-);
-var BotRunSpeed = 250;
-var BotJumpSpeed = 301;
-var BotSpawnSettleTime = 0.1;
-var GBotAssignments = /* @__PURE__ */ new Map();
-var GBotReadyAt = /* @__PURE__ */ new Map();
-function TickBots(Now) {
-  const FreeMarkers = FindFreeBotMarkers();
-  ForEachLivePawn((Pawn, Slot) => {
-    const Controller = Pawn.GetPlayerController();
-    if (!Controller || !Controller.IsBot()) {
-      return;
-    }
-    const ReadyAt = GBotReadyAt.get(Slot);
-    if (ReadyAt !== void 0 && Now < ReadyAt) {
-      return;
-    }
-    let Assignment = GBotAssignments.get(Slot);
-    if (!Assignment) {
-      Assignment = ClaimBotMarker(Slot, FreeMarkers);
-      if (!Assignment) {
-        return;
-      }
-    }
-    if (!Assignment.bPlaced) {
-      PlaceBotOnMarker(Pawn, Assignment);
-    }
-    DriveBot(Pawn, Assignment);
-  });
-}
-function ResetBotMode(Slot) {
-  const Assignment = GBotAssignments.get(Slot);
-  if (Assignment) {
-    Assignment.bPlaced = false;
-  }
-  GBotReadyAt.set(Slot, Instance13.GetGameTime() + BotSpawnSettleTime);
-}
-function ForgetBot(Slot) {
-  GBotAssignments.delete(Slot);
-  GBotReadyAt.delete(Slot);
-}
-function FindFreeBotMarkers() {
-  const Claimed = /* @__PURE__ */ new Set();
-  for (const Assignment of GBotAssignments.values()) {
-    Claimed.add(Assignment.Marker);
-  }
-  const FreeMarkers = /* @__PURE__ */ new Map();
-  for (const [MarkerName, Mode] of BotMarkerModes) {
-    for (const Marker of Entities5.FindByName(MarkerName)) {
-      if (Marker.IsValid() && !Claimed.has(Marker)) {
-        FreeMarkers.set(Marker, Mode);
-      }
-    }
-  }
-  return FreeMarkers;
-}
-function ClaimBotMarker(Slot, FreeMarkers) {
-  for (const [Marker, Mode] of FreeMarkers) {
-    FreeMarkers.delete(Marker);
-    const Assignment = { Marker, Mode, Yaw: 0, bPlaced: false };
-    GBotAssignments.set(Slot, Assignment);
-    return Assignment;
-  }
-  return void 0;
-}
-function PlaceBotOnMarker(Pawn, Assignment) {
-  if (!Assignment.Marker.IsValid()) {
-    return;
-  }
-  Assignment.Yaw = Assignment.Marker.GetAbsAngles().yaw;
-  Assignment.bPlaced = true;
-  Pawn.Teleport({ position: Assignment.Marker.GetAbsOrigin(), angles: { pitch: 0, yaw: Assignment.Yaw, roll: 0 }, velocity: ZeroVector });
-  Pawn.SetEyeAngles({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
-  Pawn.SetHealth(Pawn.GetMaxHealth());
-}
-function DriveBot(Pawn, Assignment) {
-  if (Assignment.Mode === 0 /* Still */ || !Pawn.GetGroundEntity()) {
-    return;
-  }
-  if (Assignment.Mode === 2 /* Jump */) {
-    Pawn.Teleport({ velocity: { x: 0, y: 0, z: BotJumpSpeed } });
-    return;
-  }
-  const Forward = VectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
-  Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
-}
 
 // src/gamemodes/bm_freeforall.ts
 var GScores = /* @__PURE__ */ new Map();
@@ -5524,6 +5686,7 @@ function Tick() {
       const PlayerClass3 = GClassBySlot.get(Slot);
       if (PlayerClass3 !== void 0) {
         const Definition = ClassDefinitions[PlayerClass3];
+        TickBotCombat(Pawn, Slot, Now, Definition);
         EmptyRealGuns(Pawn);
         const Shot = TickLauncher(Pawn, Slot, Now);
         if (Shot) {
@@ -5649,6 +5812,7 @@ function HandlePlayerDisconnect(Event) {
   ClearPlayer(Event.playerSlot);
   RemoveBuildings(Event.playerSlot);
   ForgetSpawnZonePlayer(Event.playerSlot);
+  ForgetBotCombat(Event.playerSlot);
   for (const Mode of GameModes) {
     Mode.OnPlayerLeave(Event.playerSlot);
   }

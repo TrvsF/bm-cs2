@@ -1,6 +1,6 @@
 import { CSInputs } from "cs_script/point_script";
 import type { CSPlayerPawn } from "cs_script/point_script";
-import { TickInterval, VectorMath, GetTeamColor, GetOrCreate, IsWeapon } from "../bm_core";
+import { TickInterval, VectorMath, GetTeamColor, GetOrCreate, IsInputDown, GetHeldWeapon, GetAimAngles, IsWeapon } from "../bm_core";
 import type { FVector } from "../bm_core";
 import type { FDamageCurve } from "../bm_combat";
 import { SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam } from "../bm_effects";
@@ -144,7 +144,7 @@ export class BeamerClass extends PlayerClass<FBeamerSettings>
 
 		const Beam: FHitscanWeaponSettings = this.Settings.EnergyBeam;
 		const Start: FVector = Pawn.GetEyePosition();
-		const End: FVector = TraceHitscanWeapon(Pawn, Beam, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
+		const End: FVector = TraceHitscanWeapon(Pawn, Beam, Start, VectorMath.GetForwardVector(GetAimAngles(Pawn))).End;
 		const BeamStart: FVector = VectorMath.Subtract(Start, BeamStartDrop);
 		if (State.Beam)
 		{
@@ -186,7 +186,7 @@ export class BeamerClass extends PlayerClass<FBeamerSettings>
 	{
 		const FireInterval: number = this.Settings.PrimaryLauncher ? this.Settings.PrimaryLauncher.FireInterval : 0;
 		const bStillFiring: boolean = Now - State.LastBeamTime <= FireInterval + TickInterval * 1.5;
-		return bStillFiring && Pawn.IsInputPressed(CSInputs.ATTACK) && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Primary);
+		return bStillFiring && IsInputDown(Pawn, CSInputs.ATTACK) && IsWeapon(GetHeldWeapon(Pawn), this.Settings.Primary);
 	}
 
 	private StopBeam(State: FBeamerPlayerState): void

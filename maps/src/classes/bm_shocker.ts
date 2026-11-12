@@ -3,7 +3,7 @@ import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
 import { LogPrefix, VectorMath, GetPawnName } from "../bm_core";
 import type { FVector } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, EmbedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, MakeShootable, Explode } from "../bm_combat";
-import type { FProjectile } from "../bm_combat";
+import type { FProjectile, FBallistics } from "../bm_combat";
 import { GetTraceBuilding } from "../bm_buildings";
 import { PlayerClass, FireHitscanWeapon } from "../bm_classes";
 import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
@@ -121,6 +121,11 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 	constructor()
 	{
 		super(ShockerSettings);
+	}
+
+	public override GetBallistics(WeaponName: string): FBallistics | undefined
+	{
+		return WeaponName === this.Settings.Primary ? { Speed: this.Settings.BallSpeed, UpSpeed: 0, GravityScale: 0 } : undefined;
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void

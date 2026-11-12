@@ -3,7 +3,7 @@ import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
 import { TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPawnName, GetOrCreate, IsPlayerPawn, IsTeammate, IsKnife, ForEachLivePawn } from "../bm_core";
 import type { FVector, FModifyDamageEvent, FModifyDamageResult } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve } from "../bm_combat";
-import type { FProjectile, FDamageCurve } from "../bm_combat";
+import type { FProjectile, FDamageCurve, FBallistics } from "../bm_combat";
 import { DamageTracedBuilding } from "../bm_buildings";
 import { StartSoundOn, StopSound } from "../bm_effects";
 import { BeamStartDrop, PlayerClass, DealShockDamage } from "../bm_classes";
@@ -27,7 +27,6 @@ export interface FMedicSettings extends FClassSettings
 	readonly OverhealDecayPerSec: number;
 	readonly UberSecondsToFill: number;
 	readonly UberDuration: number;
-	// Sound event that loops while the beam is on someone
 	readonly HealSound: string;
 }
 
@@ -114,6 +113,11 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 	constructor()
 	{
 		super(MedicSettings);
+	}
+
+	public override GetBallistics(WeaponName: string): FBallistics | undefined
+	{
+		return { Speed: this.Settings.BoltSpeed, UpSpeed: 0, GravityScale: this.Settings.BoltGravityScale };
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
@@ -411,4 +415,4 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 		}
 		this.GlowingPawns = new Set<CSPlayerPawn>(this.UberedThisTick);
 	}
-}
+}

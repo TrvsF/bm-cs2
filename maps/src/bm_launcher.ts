@@ -1,6 +1,6 @@
 import { Instance, GameRules, CSInputs, CSGearSlot } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { TickInterval } from "./bm_core";
+import { TickInterval, IsInputDown, GetHeldWeapon } from "./bm_core";
 import { SpawnTemporaryTemplate, PlaySoundOn } from "./bm_effects";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -97,7 +97,7 @@ export function TickLauncher(Pawn: CSPlayerPawn, Slot: number, Now: number): FLa
 		return undefined;
 	}
 
-	const Active: CSWeaponBase | undefined = Pawn.GetActiveWeapon();
+	const Active: CSWeaponBase | undefined = GetHeldWeapon(Pawn);
 	let Shot: FLauncherShot | undefined = undefined;
 	for (const State of Launchers)
 	{
@@ -122,7 +122,7 @@ export function TickLauncher(Pawn: CSPlayerPawn, Slot: number, Now: number): FLa
 export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo | undefined
 {
 	const Launchers: FLauncherState[] | undefined = GLaunchers.get(Slot);
-	const Active: CSWeaponBase | undefined = Pawn.GetActiveWeapon();
+	const Active: CSWeaponBase | undefined = GetHeldWeapon(Pawn);
 	if (!Launchers || !Active)
 	{
 		return undefined;
@@ -148,8 +148,8 @@ export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo
 function TickHeldLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): FLauncherShot | undefined
 {
 	const bCanFire: boolean = !Pawn.IsBuyMenuOpen() && !GameRules.IsFreezePeriod();
-	const bMainHeld: boolean = bCanFire && Pawn.IsInputPressed(CSInputs.ATTACK);
-	const bAltFire: boolean = bCanFire && !bMainHeld && State.Settings.AltFireInterval !== undefined && Pawn.IsInputPressed(CSInputs.ATTACK2);
+	const bMainHeld: boolean = bCanFire && IsInputDown(Pawn, CSInputs.ATTACK);
+	const bAltFire: boolean = bCanFire && !bMainHeld && State.Settings.AltFireInterval !== undefined && IsInputDown(Pawn, CSInputs.ATTACK2);
 	if ((bMainHeld || bAltFire) && State.Clip > 0)
 	{
 		State.NextReloadTime = undefined;

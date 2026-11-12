@@ -27,6 +27,7 @@ import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
 import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ShowBuildings, ShowBuildHints, ShowTargetId, ResetClassUi } from "./bm_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo, EmptyRealGuns } from "./bm_launcher";
+import { TickBotCombat, ForgetBotCombat } from "./bm_bots";
 import type { FLauncherShot } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
 import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone, RefreshSpawnZoneTouches } from "./bm_spawnzones";
@@ -98,6 +99,7 @@ function Tick(): void
 			if (PlayerClass !== undefined)
 			{
 				const Definition = ClassDefinitions[PlayerClass];
+				TickBotCombat(Pawn, Slot, Now, Definition);
 				EmptyRealGuns(Pawn);
 				const Shot: FLauncherShot | undefined = TickLauncher(Pawn, Slot, Now);
 				if (Shot)
@@ -270,6 +272,7 @@ function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 	ClearPlayer(Event.playerSlot);
 	RemoveBuildings(Event.playerSlot);
 	ForgetSpawnZonePlayer(Event.playerSlot);
+	ForgetBotCombat(Event.playerSlot);
 	for (const Mode of GameModes)
 	{
 		Mode.OnPlayerLeave(Event.playerSlot);

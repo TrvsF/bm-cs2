@@ -1,9 +1,9 @@
 import { Console, CSGearSlot, CSDamageTypes, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { LogPrefix, VectorMath, GetTeamColor, GetPlayerSlot, GetOrCreate, IsWeapon, IsKnife } from "./bm_core";
+import { LogPrefix, VectorMath, GetTeamColor, GetPlayerSlot, GetOrCreate, GetAimAngles, IsWeapon, IsKnife } from "./bm_core";
 import type { FVector, FRotator, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
-import type { FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
+import type { FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult, FBallistics } from "./bm_combat";
 import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
 import { DamageBuilding } from "./bm_buildings";
@@ -313,6 +313,24 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 		}
 	}
 
+	// The weapons a bot of this class shoots with: by default every one the script fires
+	// WHAT ^
+	public GetBotWeapons(): string[]
+	{
+		const Weapons: string[] = this.Settings.PrimaryLauncher ? [this.Settings.Primary] : [];
+		if (this.Settings.SecondaryLauncher && this.Settings.Secondary !== "" && this.Settings.Secondary !== this.Settings.Primary)
+		{
+			Weapons.push(this.Settings.Secondary);
+		}
+		return Weapons;
+	}
+
+	// Override for weapons that fire projectiles, so bots lead and arc their shots. undefined = lands instantly.
+	public GetBallistics(WeaponName: string): FBallistics | undefined
+	{
+		return undefined;
+	}
+
 	// Called every tick, whether or not anyone is playing this class
 	public TickWorld(Now: number, DeltaTime: number): void
 	{
@@ -392,7 +410,7 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 export function FireHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeaponSettings, Weapon: CSWeaponBase | undefined, Intercept?: (Start: FVector, End: FVector) => FVector | undefined): void
 {
 	const Start: FVector = Shooter.GetEyePosition();
-	const Aim: FRotator = Shooter.GetEyeAngles();
+	const Aim: FRotator = GetAimAngles(Shooter);
 	FireHitscan(Shooter, Settings, Weapon, Start, Aim, VectorMath.Subtract(Start, BeamStartDrop), Intercept);
 
 	const Backwards: FVector = VectorMath.Scale(VectorMath.GetForwardVector(Aim), -1);

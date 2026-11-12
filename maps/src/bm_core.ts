@@ -14,7 +14,7 @@ import type
 	CSInputs,
 } from "cs_script/point_script";
 
-export const bDebug: boolean = true;
+export const bDebug: boolean = false;
 export const TickInterval: number = 1 / 64;
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -55,6 +55,13 @@ interface FPendingTimer
 	Callback: () => void;
 }
 
+export interface FBotControl
+{
+	readonly Inputs: number;
+	readonly WeaponName: string;
+	readonly Aim: FRotator;
+}
+
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 export const INDEX_NONE: number = -1;
@@ -70,6 +77,7 @@ const TerroristColor: FColor = { r: 238, g: 158, b: 153 };
 const CounterTerroristColor: FColor = { r: 163, g: 193, b: 243 };
 
 const GPendingTimers: FPendingTimer[] = [];
+const GBotControls: Map<number, FBotControl> = new Map<number, FBotControl>();
 
 // Timers //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -407,4 +415,36 @@ export function ForEachLivePawn(Visitor: (Pawn: CSPlayerPawn, Slot: number) => v
 			Visitor(Pawn, Slot);
 		}
 	}
+}
+
+// Bots ////////////////////////////////////////////////////////////////////////////////////////////
+
+export function SetBotControl(Slot: number, Control: FBotControl | undefined): void
+{
+	if (Control)
+	{
+		GBotControls.set(Slot, Control);
+	}
+	else
+	{
+		GBotControls.delete(Slot);
+	}
+}
+
+export function IsInputDown(Pawn: CSPlayerPawn, Input: CSInputs): boolean
+{
+	const Control: FBotControl | undefined = GBotControls.get(GetPlayerSlot(Pawn));
+	return Control ? (Control.Inputs & Input) !== 0 : Pawn.IsInputPressed(Input);
+}
+
+export function GetHeldWeapon(Pawn: CSPlayerPawn): CSWeaponBase | undefined
+{
+	const Control: FBotControl | undefined = GBotControls.get(GetPlayerSlot(Pawn));
+	return (Control ? Pawn.FindWeapon(Control.WeaponName) : undefined) ?? Pawn.GetActiveWeapon();
+}
+
+export function GetAimAngles(Pawn: CSPlayerPawn): FRotator
+{
+	const Control: FBotControl | undefined = GBotControls.get(GetPlayerSlot(Pawn));
+	return Control ? Control.Aim : Pawn.GetEyeAngles();
 }

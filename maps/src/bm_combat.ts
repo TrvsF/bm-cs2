@@ -1,6 +1,6 @@
 import { Instance, Console, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult, BaseTraceConfig } from "cs_script/point_script";
-import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, SpawnTemplateEntities, ForEachLivePawn } from "./bm_core";
+import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, GetAimAngles, SpawnTemplateEntities, ForEachLivePawn } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
 import { GetOwnedBuildingEntities, FindBuildingOnLine, ClipTraceToBuildings, DamageBuildingsInRadius } from "./bm_buildings";
@@ -34,6 +34,13 @@ interface FShootable
 	readonly HitRadius: number;
 	readonly Weight: number;
 	readonly OnKnocked: (Push: FVector) => void;
+}
+
+export interface FBallistics
+{
+	readonly Speed: number;
+	readonly UpSpeed: number;
+	readonly GravityScale: number;
 }
 
 export interface FProjectileModel
@@ -114,6 +121,7 @@ const MinGroundNormalZ: number = 0.7;
 const GroundProbeDistance: number = 8;
 const MinFacingSpeed: number = 1;
 const MissingProjectileRadius: number = 3;
+const AimPointPasses: number = 3;
 
 let GShootables: FShootable[] = [];
 
@@ -121,7 +129,7 @@ let GShootables: FShootable[] = [];
 
 export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: number, GravityScale: number, TemplateName: string | undefined, Radius: number = 0, Shape: EProjectileShape = EProjectileShape.Sphere): FProjectile
 {
-	const Direction: FVector = VectorMath.GetForwardVector(Owner.GetEyeAngles());
+	const Direction: FVector = VectorMath.GetForwardVector(GetAimAngles(Owner));
 	const Start: FVector = Owner.GetEyePosition();
 	const Velocity: FVector = VectorMath.Add(VectorMath.Scale(Direction, Speed), { x: 0, y: 0, z: UpSpeed });
 	const Projectile: FProjectile =
@@ -140,6 +148,23 @@ export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: nu
 	PlaceProjectileModels(Projectile, true);
 	TintProjectile(Projectile, GetTeamColor(Owner));
 	return Projectile;
+}
+
+export function GetAimPoint(Start: FVector, Target: FVector, TargetVelocity: FVector, Ballistics: FBallistics | undefined): FVector
+{
+	if (!Ballistics || Ballistics.Speed <= 0)
+	{
+		return Target;
+	}
+	let Lead: FVector = Target;
+	let Time: number = 0;
+	for (let Pass: number = 0; Pass < AimPointPasses; Pass++)
+	{
+		Time = VectorMath.Size(VectorMath.Subtract(Lead, Start)) / Ballistics.Speed;
+		Lead = VectorMath.Add(Target, VectorMath.Scale(TargetVelocity, Time));
+	}
+	const Drop: number = 0.5 * Gravity * Ballistics.GravityScale * Time * Time - Ballistics.UpSpeed * Time;
+	return { x: Lead.x, y: Lead.y, z: Lead.z + Drop };
 }
 
 export function MoveProjectile(Projectile: FProjectile, DeltaTime: number, bHitPlayers: boolean): TraceResult | undefined

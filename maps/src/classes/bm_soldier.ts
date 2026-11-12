@@ -1,6 +1,6 @@
 import type { CSPlayerPawn } from "cs_script/point_script";
 import { LaunchProjectile, StepImpactProjectile, DestroyProjectiles, Explode } from "../bm_combat";
-import type { FProjectile, FDamageFalloff } from "../bm_combat";
+import type { FProjectile, FDamageFalloff, FBallistics } from "../bm_combat";
 import { TF2RocketFalloff, PlayerClass } from "../bm_classes";
 import type { FClassSettings } from "../bm_classes";
 
@@ -64,6 +64,11 @@ export class SoldierClass extends PlayerClass<FSoliderSettings>
 	constructor()
 	{
 		super(SoldierSettings);
+	}
+
+	public override GetBallistics(WeaponName: string): FBallistics | undefined
+	{
+		return { Speed: this.Settings.RocketSpeed, UpSpeed: 0, GravityScale: 0 };
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void

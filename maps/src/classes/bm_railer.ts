@@ -1,5 +1,5 @@
 import type { CSPlayerPawn } from "cs_script/point_script";
-import { VectorMath, GetTeamColor, IsWeapon } from "../bm_core";
+import { VectorMath, GetTeamColor, GetHeldWeapon, GetAimAngles, IsWeapon } from "../bm_core";
 import type { FVector } from "../bm_core";
 import type { FDamageCurve } from "../bm_combat";
 import { SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam } from "../bm_effects";
@@ -142,7 +142,7 @@ export class RailerClass extends PlayerClass<FRailerSettings>
 	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
 	{
 		const Ammo: FLauncherAmmo | undefined = GetLauncherAmmo(Pawn, Slot);
-		const bCharging: boolean = Ammo !== undefined && Ammo.ChargeFraction > 0 && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Secondary);
+		const bCharging: boolean = Ammo !== undefined && Ammo.ChargeFraction > 0 && IsWeapon(GetHeldWeapon(Pawn), this.Settings.Secondary);
 		if (!Ammo || !bCharging)
 		{
 			this.StopChargeBeam(Slot);
@@ -150,7 +150,7 @@ export class RailerClass extends PlayerClass<FRailerSettings>
 		}
 
 		const Start: FVector = Pawn.GetEyePosition();
-		const End: FVector = TraceHitscanWeapon(Pawn, this.Settings.Railgun, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
+		const End: FVector = TraceHitscanWeapon(Pawn, this.Settings.Railgun, Start, VectorMath.GetForwardVector(GetAimAngles(Pawn))).End;
 		const BeamStart: FVector = VectorMath.Subtract(Start, BeamStartDrop);
 		const RefireInterval: number = this.Settings.ChargeBeamRefireStart + (this.Settings.ChargeBeamRefireFull - this.Settings.ChargeBeamRefireStart) * Ammo.ChargeFraction;
 		const Beam: FHeldBeam | undefined = this.ChargeBeams.get(Slot);

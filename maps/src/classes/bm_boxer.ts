@@ -2,7 +2,7 @@ import { Console } from "cs_script/point_script";
 import type { CSPlayerPawn } from "cs_script/point_script";
 import { LogPrefix, VectorMath, GetPawnName, IsTeammate } from "../bm_core";
 import { EProjectileShape, LaunchProjectile, MovePiercingProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve, ApplyKnockback } from "../bm_combat";
-import type { FProjectile, FPiercingProjectile, FPiercingStep, FDamageCurve, FHitscanHit } from "../bm_combat";
+import type { FProjectile, FPiercingProjectile, FPiercingStep, FDamageCurve, FHitscanHit, FBallistics } from "../bm_combat";
 import { DamageTracedBuilding } from "../bm_buildings";
 import { SpawnBloodSplatter } from "../bm_effects";
 import { BeamerShotgunFalloff, PlayerClass, FireHitscanWeapon, DealShockDamage } from "../bm_classes";
@@ -108,6 +108,11 @@ export class BoxerClass extends PlayerClass<FBoxerSettings>
 	constructor()
 	{
 		super(BoxerSettings);
+	}
+
+	public override GetBallistics(WeaponName: string): FBallistics | undefined
+	{
+		return WeaponName === this.Settings.Primary ? { Speed: this.Settings.CubeSpeed, UpSpeed: 0, GravityScale: this.Settings.CubeGravityScale } : undefined;
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
