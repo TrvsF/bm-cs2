@@ -12,14 +12,12 @@ export interface FLauncherSettings
 	readonly ReloadFirstTime: number;
 	readonly ReloadEachTime: number;
 	readonly ChargeTime: number;
-	// Release early to fire with part of the charge; full charge still fires by itself
 	readonly bFireOnRelease?: boolean;
 	readonly DeployTime: number;
 	readonly FireFxTemplate: string;
 	readonly ReloadFxTemplate: string;
 	readonly AltFireInterval?: number;
 	readonly AltFireFxTemplate?: string;
-	// Sound events, played on the player so they move with them. Reload plays as each round goes in
 	readonly FireSound?: string;
 	readonly AltFireSound?: string;
 	readonly ReloadSound?: string;
@@ -314,4 +312,4 @@ function SpawnReloadFx(Pawn: CSPlayerPawn, Settings: FLauncherSettings): void
 			Ent.SetParent(Pawn);
 		}
 	}
-}
+}

@@ -14,7 +14,7 @@ import type
 	CSInputs,
 } from "cs_script/point_script";
 
-export const bDebug: boolean = false;
+export const bDebug: boolean = true;
 export const TickInterval: number = 1 / 64;
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -287,7 +287,6 @@ export function FindEntityByName(Name: string): Entity | undefined
 	return Entities.FindByName(Name)[0];
 }
 
-// undefined when the map has no such template
 export function FindPointTemplate(Name: string): PointTemplate | undefined
 {
 	const Template: Entity | undefined = FindEntityByName(Name);

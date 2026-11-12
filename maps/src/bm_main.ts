@@ -69,7 +69,6 @@ const MainSettings: FMainSettings =
 const DefaultMode: GameMode = new FreeForAllMode();
 const GameModes: readonly GameMode[] = [new PayloadMode(), DefaultMode, new TeamDeathmatchMode()];
 let GActiveMode: GameMode = DefaultMode;
-// Picked in chat, otherwise the map decides
 let GChosenMode: GameMode | undefined = undefined;
 const GClassBySlot: Map<number, EPlayableClass> = new Map<number, EPlayableClass>();
 const GPendingClassBySlot: Map<number, EPlayerClass> = new Map<number, EPlayerClass>();
@@ -472,6 +471,7 @@ function ApplyMatchSettings(): void
 	const Commands: string[] = [];
 
 	Commands.push("sv_infinite_ammo 0");
+	Commands.push("mp_solid_teammates 0");
 
 	if (bDebug)
 	{
@@ -722,7 +722,6 @@ function GetTurretTargetId(Turret: FBuilding): FTargetId
 	return { Name: Name, Health: Math.max(0, Math.ceil(Turret.Health)), MaxHealth: MaxHealth, MaxOverheal: MaxHealth, bTerrorist: Turret.Team === ETeam.Terrorist };
 }
 
-// The turret on the viewer's side the eye line reaches before anything else, whether or not its model is solid to traces
 function FindFriendlyTurret(Viewer: CSPlayerPawn, Eye: FVector, End: FVector, Trace: TraceResult): FBuilding | undefined
 {
 	const IsFriendlyTurret: (Building: FBuilding) => boolean = (Building: FBuilding): boolean =>

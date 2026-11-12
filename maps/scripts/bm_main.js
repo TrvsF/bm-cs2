@@ -3,7 +3,7 @@ import { Instance as Instance15, Console as Console16, GameRules as GameRules4, 
 
 // src/bm_core.ts
 import { Instance, Console, Entities, CSWeaponType } from "cs_script/point_script";
-var bDebug = false;
+var bDebug = true;
 var TickInterval = 1 / 64;
 var INDEX_NONE = -1;
 var LogPrefix = "[BM]";
@@ -4771,6 +4771,7 @@ var FreeForAllMode = class extends GameMode {
   GetMatchCommands() {
     const Commands = [
       "mp_teammates_are_enemies 1",
+      "mp_solid_teammates 1",
       "mp_friendlyfire 1",
       "mp_ignore_round_win_conditions 1",
       "mp_respawn_on_death_t 1",
@@ -5674,6 +5675,7 @@ function ChooseGameMode(Player, Mode) {
 function ApplyMatchSettings() {
   const Commands = [];
   Commands.push("sv_infinite_ammo 0");
+  Commands.push("mp_solid_teammates 0");
   if (bDebug) {
     Commands.push("mp_do_warmup_period 0", "mp_warmuptime 0", "mp_freezetime 0");
     Commands.push("bot_quota_mode fill", `bot_quota ${MainSettings.DebugBotQuota}`, "bot_join_team any");
