@@ -1,6 +1,6 @@
 import { Instance, Console } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, RotationMath, IsFreeForAll, IsModelEntity, GetPawnName, GetPlayerSlot, GetColorForTeam, GetOrCreate, GetAimAngles, IsBotControlled, SpawnTemplateEntities, INDEX_NONE } from "./bm_core";
+import { TickInterval, LogPrefix, VectorMath, RotationMath, IsFreeForAll, IsModelEntity, GetPawnName, GetPlayerSlot, GetColorForTeam, GetOrCreate, GetAimAngles, IsBotControlled, SpawnTemplateEntities, INDEX_NONE, DrawDebugBox, DrawDebugLine, DrawDebugSphere } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
 import { ShowDamageNumber } from "./bm_hud";
@@ -137,6 +137,12 @@ export abstract class BuildingKind<TSettings extends FBuildingSettings = FBuildi
 		return EBotBuildSite.NearEnemies;
 	}
 
+	// Whether enemy bots shoot at it
+	public IsBotTarget(): boolean
+	{
+		return false;
+	}
+
 	public Tick(Building: FBuilding, Now: number, DeltaTime: number): void
 	{
 	}
@@ -266,6 +272,14 @@ export function GetBuildingCenter(Building: FBuilding): FVector
 	return VectorMath.Add(Building.Position, { x: 0, y: 0, z: Building.Kind.Settings.Height / 2 });
 }
 
+export function GetEnemyBuildings(Pawn: CSPlayerPawn): FBuilding[]
+{
+	return GBuildings.filter((Building: FBuilding): boolean =>
+	{
+		return !Building.bRemoved && IsBuildingEnemy(Building, Pawn);
+	});
+}
+
 export function IsBuildingEnemy(Building: FBuilding, Pawn: CSPlayerPawn): boolean
 {
 	return Pawn !== Building.Owner && (IsFreeForAll() || Pawn.GetTeamNumber() !== Building.Team);
@@ -369,7 +383,7 @@ export function DestroyBuilding(Building: FBuilding): void
 	const TemplateName: string = Building.Kind.Settings.DestroyFxTemplate;
 	if (TemplateName === "" || !SpawnTemporaryTemplate(TemplateName, Center, DestroyFxLifetime))
 	{
-		Instance.DebugSphere({ center: Center, radius: Math.max(Building.Kind.Settings.Height, Building.Kind.Settings.HalfWidth), duration: 0.5, color: DestroyedDebugColor });
+		DrawDebugSphere({ center: Center, radius: Math.max(Building.Kind.Settings.Height, Building.Kind.Settings.HalfWidth), duration: 0.5, color: DestroyedDebugColor });
 	}
 	GetOrCreate(GRebuildTimes, Building.OwnerSlot, (): Map<BuildingKind, number> =>
 	{
@@ -612,7 +626,7 @@ export function TickPlacement(Slot: number): void
 		const To: FVector | undefined = Placement.Path[Index];
 		if (From && To)
 		{
-			Instance.DebugLine({ start: From, end: To, duration: TickInterval * 2, color: Color });
+			DrawDebugLine({ start: From, end: To, duration: TickInterval * 2, color: Color });
 		}
 	}
 	DrawBuildingBox(Placement.Position, Placement.Kind.Settings, Color);
@@ -1002,7 +1016,7 @@ function GetModelEntities(Models: readonly FBuildingModel[]): Entity[]
 
 function DrawBuildingBox(Position: FVector, Settings: FBuildingSettings, Color: FColor): void
 {
-	Instance.DebugBox(
+	DrawDebugBox(
 	{
 		mins: VectorMath.Add(Position, { x: -Settings.HalfWidth, y: -Settings.HalfWidth, z: 0 }),
 		maxs: VectorMath.Add(Position, { x: Settings.HalfWidth, y: Settings.HalfWidth, z: Settings.Height }),

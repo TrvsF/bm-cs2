@@ -1,6 +1,6 @@
 import { Instance, Console, Entities } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPrecache, PointTemplate, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, UpVector, FindPointTemplate, GetChestPosition, GetPlayerSlot, SetTimer } from "./bm_core";
+import { TickInterval, LogPrefix, VectorMath, UpVector, FindPointTemplate, GetChestPosition, GetPlayerSlot, SetTimer, DrawDebugLine } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -297,7 +297,7 @@ export function SpawnBeam(TemplateName: string, EndMarkerName: string, Start: FV
 	const Spawned: Entity[] | undefined = SpawnBeamCopy(TemplateName, EndMarkerName, Start, End);
 	if (!Spawned)
 	{
-		Instance.DebugLine({ start: Start, end: End, duration: Lifetime, color: FallbackColor });
+		DrawDebugLine({ start: Start, end: End, duration: Lifetime, color: FallbackColor });
 		return;
 	}
 	SetTimer(Lifetime, (): void =>
@@ -372,7 +372,7 @@ export function MoveHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector): voi
 	}
 	else
 	{
-		Instance.DebugLine({ start: Start, end: End, duration: Beam.RefireInterval, color: Beam.FallbackColor });
+		DrawDebugLine({ start: Start, end: End, duration: Beam.RefireInterval, color: Beam.FallbackColor });
 	}
 }
 
@@ -390,7 +390,7 @@ function PlaceHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector, bTeleport:
 {
 	if (Beam.Entities.length === 0)
 	{
-		Instance.DebugLine({ start: Start, end: End, duration: TickInterval * 2, color: Beam.FallbackColor });
+		DrawDebugLine({ start: Start, end: End, duration: TickInterval * 2, color: Beam.FallbackColor });
 		return;
 	}
 

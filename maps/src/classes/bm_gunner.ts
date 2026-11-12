@@ -1,6 +1,6 @@
 import { Instance, CSInputs, CSGearSlot } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult } from "cs_script/point_script";
-import { TickInterval, VectorMath, GetChestPosition, GetTeamColor, GetOrCreate, IsKnife, ConsumePress, GetHeldWeapon, ForEachLivePawn } from "../bm_core";
+import { TickInterval, VectorMath, GetChestPosition, GetTeamColor, GetOrCreate, IsKnife, ConsumePress, GetHeldWeapon, ForEachLivePawn, DrawDebugLine } from "../bm_core";
 import type { FVector, FRotator, FHeldInputs } from "../bm_core";
 import { BuildingKind, GetOwnedBuildings, GetBuildingEntities, IsBuildingEnemy, TurnBuilding, TickBuildTool, CancelPlacement, GetPlacingKind, IsRepairingBuilding } from "../bm_buildings";
 import type { FBuilding, FBuildingSettings, FBuildKeys } from "../bm_buildings";
@@ -162,6 +162,11 @@ export class TurretKind extends BuildingKind<FTurretSettings>
 {
 	private States: Map<FBuilding, FTurretState> = new Map<FBuilding, FTurretState>();
 
+	public override IsBotTarget(): boolean
+	{
+		return true;
+	}
+
 	public override OnPlaced(Building: FBuilding, Now: number): void
 	{
 		this.States.set(Building, { ArmedAt: Now + this.Settings.ArmTime, NextFireTime: Now + this.Settings.ArmTime });
@@ -185,7 +190,7 @@ export class TurretKind extends BuildingKind<FTurretSettings>
 		const Chest: FVector = GetChestPosition(Target);
 		const Aim: FRotator = VectorMath.GetRotation(VectorMath.Subtract(Chest, Muzzle));
 		TurnBuilding(Building, Aim.yaw);
-		Instance.DebugLine({ start: Muzzle, end: Chest, duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
+		DrawDebugLine({ start: Muzzle, end: Chest, duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
 		if (Now < State.NextFireTime)
 		{
 			return;

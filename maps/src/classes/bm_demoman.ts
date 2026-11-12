@@ -1,6 +1,6 @@
 import { Instance, CSInputs } from "cs_script/point_script";
 import type { CSPlayerPawn } from "cs_script/point_script";
-import { bDebug, TickInterval, GetTeamColor, GetOrCreate } from "../bm_core";
+import { bDebug, TickInterval, GetTeamColor, GetOrCreate, DrawDebugSphere } from "../bm_core";
 import { VectorMath } from "../bm_core";
 import type { FVector, FColor } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, MakeShootable, Explode } from "../bm_combat";
@@ -228,7 +228,7 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 			const bArmed: boolean = Now >= Sticky.ArmedAt;
 			if (Sticky.Models.length === 0)
 			{
-				Instance.DebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: bArmed ? GetTeamColor(Pawn) : UnarmedStickyColor });
+				DrawDebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: bArmed ? GetTeamColor(Pawn) : UnarmedStickyColor });
 			}
 			else if (bArmed && !Sticky.bTintedArmed)
 			{

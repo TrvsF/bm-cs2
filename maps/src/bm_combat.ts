@@ -1,6 +1,6 @@
 import { Instance, Console, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult, BaseTraceConfig } from "cs_script/point_script";
-import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, GetAimAngles, SpawnTemplateEntities, ForEachLivePawn } from "./bm_core";
+import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, GetAimAngles, SpawnTemplateEntities, ForEachLivePawn, DrawDebugBox, DrawDebugSphere } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
 import { GetOwnedBuildingEntities, FindBuildingOnLine, ClipTraceToBuildings, DamageBuildingsInRadius } from "./bm_buildings";
@@ -215,10 +215,10 @@ export function DrawMissingProjectile(Projectile: FProjectile, Color: FColor = G
 	if (Projectile.Shape === EProjectileShape.Box)
 	{
 		const Extent: FVector = GetBoxExtent(Radius);
-		Instance.DebugBox({ mins: VectorMath.Subtract(Projectile.Position, Extent), maxs: VectorMath.Add(Projectile.Position, Extent), duration: TickInterval * 2, color: Color });
+		DrawDebugBox({ mins: VectorMath.Subtract(Projectile.Position, Extent), maxs: VectorMath.Add(Projectile.Position, Extent), duration: TickInterval * 2, color: Color });
 		return;
 	}
-	Instance.DebugSphere({ center: Projectile.Position, radius: Radius, duration: TickInterval * 2, color: Color });
+	DrawDebugSphere({ center: Projectile.Position, radius: Radius, duration: TickInterval * 2, color: Color });
 }
 
 export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): CSPlayerPawn | undefined
@@ -583,7 +583,7 @@ export function SpawnExplosionFx(Position: FVector, Radius: number, FxTemplate: 
 	const Fx: Entity[] | undefined = SpawnTemporaryTemplate(FxTemplate, Origin, ExplosionFxLifetime) ?? SpawnTemporaryTemplate(ExplosionTemplateName, Origin, ExplosionFxLifetime);
 	if (!Fx)
 	{
-		Instance.DebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
+		DrawDebugSphere({ center: Origin, radius: Radius, duration: 0.3, color: ExplosionDebugColor });
 	}
 	SpawnScorchMark(Position);
 }

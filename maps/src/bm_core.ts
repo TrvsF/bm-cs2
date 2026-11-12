@@ -78,6 +78,7 @@ const CounterTerroristColor: FColor = { r: 163, g: 193, b: 243 };
 
 const GPendingTimers: FPendingTimer[] = [];
 const GBotControls: Map<number, FBotControl> = new Map<number, FBotControl>();
+let bDebugDraw: boolean = false;
 
 // Timers //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -414,6 +415,38 @@ export function ForEachLivePawn(Visitor: (Pawn: CSPlayerPawn, Slot: number) => v
 		{
 			Visitor(Pawn, Slot);
 		}
+	}
+}
+
+// Debug drawing ///////////////////////////////////////////////////////////////////////////////////
+
+export function ToggleDebugDraw(): boolean
+{
+	bDebugDraw = !bDebugDraw;
+	return bDebugDraw;
+}
+
+export function DrawDebugLine(Config: { start: FVector, end: FVector, duration?: number, color?: FColor }): void
+{
+	if (bDebugDraw)
+	{
+		Instance.DebugLine(Config);
+	}
+}
+
+export function DrawDebugSphere(Config: { center: FVector, radius: number, duration?: number, color?: FColor }): void
+{
+	if (bDebugDraw)
+	{
+		Instance.DebugSphere(Config);
+	}
+}
+
+export function DrawDebugBox(Config: { mins: FVector, maxs: FVector, duration?: number, color?: FColor }): void
+{
+	if (bDebugDraw)
+	{
+		Instance.DebugBox(Config);
 	}
 }
 

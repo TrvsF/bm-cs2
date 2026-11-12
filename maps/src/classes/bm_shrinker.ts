@@ -1,6 +1,6 @@
 import { Instance, Console, CSInputs, CSDamageTypes, CSDamageFlags } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, GetHeldWeapon, ForEachLivePawn } from "../bm_core";
+import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, GetHeldWeapon, ForEachLivePawn, DrawDebugLine } from "../bm_core";
 import type { FVector, FColor, FHeldInputs } from "../bm_core";
 import { Explode, SpawnExplosionFx } from "../bm_combat";
 import { SpawnTemporaryTemplate, PlaySoundOn } from "../bm_effects";
@@ -296,7 +296,7 @@ export class TeleporterKind extends BuildingKind<FTeleporterSettings>
 		{
 			return;
 		}
-		Instance.DebugLine({ start: GetBuildingCenter(Building), end: GetBuildingCenter(Exit), duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
+		DrawDebugLine({ start: GetBuildingCenter(Building), end: GetBuildingCenter(Exit), duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
 		if (Now < State.ReadyAt)
 		{
 			return;

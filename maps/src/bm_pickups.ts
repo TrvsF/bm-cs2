@@ -1,6 +1,6 @@
 import { Instance, Console, Entities } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, BaseModelEntity } from "cs_script/point_script";
-import { bDebug, LogPrefix, TickInterval, ForEachLivePawn } from "./bm_core";
+import { bDebug, LogPrefix, TickInterval, ForEachLivePawn, DrawDebugSphere } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
 
@@ -86,7 +86,7 @@ export function TickHealthKits(Now: number): void
 		// }
 		else if (bDebug)
 		{
-			Instance.DebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
+			DrawDebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
 		}
 	}
 }
@@ -219,4 +219,4 @@ function SpawnKitFx(TemplateName: string, Kit: FHealthKit): void
 function IsModelEntity(Ent: Entity): Ent is BaseModelEntity
 {
 	return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
-}
+}

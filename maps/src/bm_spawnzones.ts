@@ -1,6 +1,6 @@
 import { Console, Entities } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn } from "cs_script/point_script";
-import { LogPrefix, ETeam, VectorMath, IsModelEntity, IsPlayerPawn, GetPlayerSlot, GetColorForTeam, ForEachLivePawn, INDEX_NONE } from "./bm_core";
+import { LogPrefix, ETeam, VectorMath, IsPlayerPawn, GetPlayerSlot, ForEachLivePawn, INDEX_NONE } from "./bm_core";
 import type { FVector } from "./bm_core";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -9,8 +9,6 @@ export interface FSpawnZoneSettings
 {
 	readonly TerroristZoneName: string;
 	readonly CounterTerroristZoneName: string;
-	readonly TerroristBarrierName: string;
-	readonly CounterTerroristBarrierName: string;
 	readonly PushOutSpeed: number;
 }
 
@@ -33,8 +31,6 @@ export const SpawnZoneSettings: FSpawnZoneSettings =
 {
 	TerroristZoneName: "spawnzone_t",
 	CounterTerroristZoneName: "spawnzone_ct",
-	TerroristBarrierName: "barrier_t",
-	CounterTerroristBarrierName: "barrier_ct",
 	PushOutSpeed: 250,
 };
 
@@ -126,10 +122,6 @@ function ScanSpawnZones(): void
 	});
 	AddZones(SpawnZoneSettings.TerroristZoneName, ETeam.Terrorist);
 	AddZones(SpawnZoneSettings.CounterTerroristZoneName, ETeam.CounterTerrorist);
-	AddZones(SpawnZoneSettings.TerroristBarrierName, ETeam.Terrorist);
-	AddZones(SpawnZoneSettings.CounterTerroristBarrierName, ETeam.CounterTerrorist);
-	TintBarriers(SpawnZoneSettings.TerroristBarrierName, ETeam.Terrorist);
-	TintBarriers(SpawnZoneSettings.CounterTerroristBarrierName, ETeam.CounterTerrorist);
 
 	const TerroristZones: number = CountZones(ETeam.Terrorist);
 	const CounterTerroristZones: number = CountZones(ETeam.CounterTerrorist);
@@ -151,7 +143,7 @@ function AddZones(Name: string, Team: ETeam): void
 		{
 			return Zone.Entity === Ent;
 		});
-		if (bKnown || !Ent.IsValid() || !Ent.GetClassName().startsWith("trigger_"))
+		if (bKnown || !Ent.IsValid())
 		{
 			continue;
 		}
@@ -181,17 +173,6 @@ function AddZones(Name: string, Team: ETeam): void
 			},
 		});
 		RefreshTouches(Zone);
-	}
-}
-
-function TintBarriers(Name: string, Team: ETeam): void
-{
-	for (const Ent of Entities.FindByName(`${Name}*`))
-	{
-		if (Ent.IsValid() && IsModelEntity(Ent))
-		{
-			Ent.SetColor(GetColorForTeam(Team));
-		}
 	}
 }
 

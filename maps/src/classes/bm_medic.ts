@@ -1,6 +1,6 @@
 import { Instance, Console, CSInputs } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPawnName, GetOrCreate, IsPlayerPawn, IsTeammate, IsKnife, ForEachLivePawn } from "../bm_core";
+import { TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPawnName, GetOrCreate, IsPlayerPawn, IsTeammate, IsKnife, ForEachLivePawn, DrawDebugLine } from "../bm_core";
 import type { FVector, FModifyDamageEvent, FModifyDamageResult } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve } from "../bm_combat";
 import type { FProjectile, FDamageCurve, FBallistics } from "../bm_combat";
@@ -181,7 +181,7 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 				State.UberCharge = Math.min(100, State.UberCharge + ChargeRate * DeltaTime);
 			}
 			// Placeholder beam (tools mode only). Swap for an env_beam for real servers.
-			Instance.DebugLine(
+			DrawDebugLine(
 			{
 				start: VectorMath.Subtract(Pawn.GetEyePosition(), BeamStartDrop),
 				end: GetChestPosition(Target),

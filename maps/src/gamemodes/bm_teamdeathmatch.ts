@@ -2,14 +2,15 @@ import { Instance, Console, GameRules, CSRoundEndReason } from "cs_script/point_
 import type { CSPlayerController } from "cs_script/point_script";
 import { ETeam, INDEX_NONE, LogPrefix, GetOrCreate, ForEachPlayer } from "../bm_core";
 import { GameMode } from "../bm_gamemode";
-import { ShowTeamLeaderboard, ShowTeamLeaderboardYou } from "../bm_ui";
-import type { FLeaderboardRow, FTeamLeaderboard } from "../bm_ui";
+import { ShowLeaderboard, ShowLeaderboardYou } from "../bm_ui";
+import type { FLeaderboardRow } from "../bm_ui";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
 export interface FTeamDeathmatchSettings
 {
 	readonly KillsToWin: number;
+	readonly LeaderboardRows: number;
 }
 
 interface FPlayerScore
@@ -23,6 +24,7 @@ interface FPlayerScore
 export const TeamDeathmatchSettings: FTeamDeathmatchSettings =
 {
 	KillsToWin: 100,
+	LeaderboardRows: 3,
 };
 
 const GScores: Map<number, FPlayerScore> = new Map<number, FPlayerScore>();
@@ -48,6 +50,8 @@ export class TeamDeathmatchMode extends GameMode
 			"mp_teammates_are_enemies 0",
 			"mp_friendlyfire 0",
 			"mp_ignore_round_win_conditions 1",
+			"mp_match_can_clinch 0",
+			"mp_halftime 0",
 			"mp_respawn_on_death_t 1",
 			"mp_respawn_on_death_ct 1",
 			"mp_use_respawn_waves 0",
@@ -61,13 +65,18 @@ export class TeamDeathmatchMode extends GameMode
 
 	public override OnDeactivated(): void
 	{
-		ShowTeamLeaderboard(undefined);
+		ShowLeaderboard(undefined);
 	}
 
 	public override OnRoundStart(): void
 	{
 		GScores.clear();
 		GTeamKills.clear();
+		// The scoreboard's team score counts this round's kills
+		for (const Team of [ETeam.Terrorist, ETeam.CounterTerrorist])
+		{
+			GameRules.AddTeamScore(Team, -GameRules.GetTeamScore(Team));
+		}
 		GWinner = undefined;
 		GbRoundEnded = false;
 	}
@@ -94,6 +103,7 @@ export class TeamDeathmatchMode extends GameMode
 		GetScore(AttackerSlot).Kills++;
 		const TeamKills: number = (GTeamKills.get(Team) ?? 0) + 1;
 		GTeamKills.set(Team, TeamKills);
+		GameRules.AddTeamScore(Team, 1);
 		if (TeamKills >= TeamDeathmatchSettings.KillsToWin)
 		{
 			GWinner = Team;
@@ -112,13 +122,13 @@ export class TeamDeathmatchMode extends GameMode
 			EndRound(GWinner);
 		}
 
-		const Board: FTeamLeaderboard = BuildLeaderboard();
-		ShowTeamLeaderboard(Board);
+		const Rows: FLeaderboardRow[] = BuildLeaderboard();
+		ShowLeaderboard(Rows, TeamDeathmatchSettings.LeaderboardRows);
 		ForEachPlayer((Controller: CSPlayerController, Slot: number): void =>
 		{
 			if (!Controller.IsBot())
 			{
-				ShowTeamLeaderboardYou(Slot, Board);
+				ShowLeaderboardYou(Slot, Rows, TeamDeathmatchSettings.LeaderboardRows);
 			}
 		});
 	}
@@ -134,7 +144,6 @@ function EndRound(Winner: ETeam): void
 	GbRoundEnded = true;
 	const bTerrorists: boolean = Winner === ETeam.Terrorist;
 	Console.Log(`${LogPrefix} ${bTerrorists ? "terrorists" : "counter-terrorists"} reached ${TeamDeathmatchSettings.KillsToWin} kills and win`);
-	GameRules.AddTeamScore(Winner, 1);
 	GameRules.TerminateRound(bTerrorists ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
 }
 
@@ -146,27 +155,21 @@ function GetScore(Slot: number): FPlayerScore
 	});
 }
 
-function BuildLeaderboard(): FTeamLeaderboard
+function BuildLeaderboard(): FLeaderboardRow[]
 {
-	const Terrorists: FLeaderboardRow[] = [];
-	const CounterTerrorists: FLeaderboardRow[] = [];
+	const Rows: FLeaderboardRow[] = [];
 	ForEachPlayer((Controller: CSPlayerController, Slot: number): void =>
 	{
 		const Team: number = Controller.GetTeamNumber();
-		const Rows: FLeaderboardRow[] | undefined = Team === ETeam.Terrorist ? Terrorists : Team === ETeam.CounterTerrorist ? CounterTerrorists : undefined;
+		if (Team !== ETeam.Terrorist && Team !== ETeam.CounterTerrorist)
+		{
+			return;
+		}
 		const Score: FPlayerScore | undefined = GScores.get(Slot);
-		Rows?.push({ Slot: Slot, Name: Controller.GetPlayerName(), Kills: Score ? Score.Kills : 0, Damage: Score ? Math.round(Score.Damage) : 0 });
+		Rows.push({ Slot: Slot, Name: Controller.GetPlayerName(), Kills: Score ? Score.Kills : 0, Damage: Score ? Math.round(Score.Damage) : 0 });
 	});
-	return {
-		KillsToWin: TeamDeathmatchSettings.KillsToWin,
-		TerroristKills: GTeamKills.get(ETeam.Terrorist) ?? 0,
-		CounterTerroristKills: GTeamKills.get(ETeam.CounterTerrorist) ?? 0,
-		Terrorists: Terrorists.sort(CompareRows),
-		CounterTerrorists: CounterTerrorists.sort(CompareRows),
-	};
-}
-
-function CompareRows(A: FLeaderboardRow, B: FLeaderboardRow): number
-{
-	return B.Kills - A.Kills || B.Damage - A.Damage || A.Slot - B.Slot;
+	return Rows.sort((A: FLeaderboardRow, B: FLeaderboardRow): number =>
+	{
+		return B.Damage - A.Damage || B.Kills - A.Kills || A.Slot - B.Slot;
+	});
 }

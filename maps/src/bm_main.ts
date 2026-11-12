@@ -1,6 +1,6 @@
 import { Instance, Console, GameRules, Entities, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
-import { bDebug, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
+import { bDebug, ToggleDebugDraw, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
 import type
 {
 	FPlayerChatEvent,
@@ -184,6 +184,10 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 	else if (Command === "start")
 	{
 		EndWarmupNow(Player);
+	}
+	else if (Command === "debugdraw")
+	{
+		Console.Log(`${LogPrefix} debug drawing ${ToggleDebugDraw() ? "on" : "off"}`);
 	}
 	else if (Command === "spawntest" && bDebug)
 	{
