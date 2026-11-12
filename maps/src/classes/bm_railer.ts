@@ -6,8 +6,8 @@ import { SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam } from "../bm_effects";
 import type { FHeldBeam } from "../bm_effects";
 import { GetLauncherAmmo } from "../bm_launcher";
 import type { FLauncherAmmo } from "../bm_launcher";
-import { BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon } from "../bm_classes";
-import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
+import { BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon, GetHitscanBotShot } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -127,6 +127,11 @@ export class RailerClass extends PlayerClass<FRailerSettings>
 	constructor()
 	{
 		super(RailerSettings);
+	}
+
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return GetHitscanBotShot(WeaponName === this.Settings.Primary ? this.Settings.PPsh : this.Settings.Railgun);
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void

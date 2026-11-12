@@ -74,6 +74,16 @@ export interface FHitscanWeaponSettings
 	readonly ImpactLifetime: number;
 }
 
+// What one shot of a weapon does, for bots to rate their targets with
+export interface FBotShot
+{
+	readonly Damage: number;
+	readonly Spread: number;
+	readonly Range: number;
+	readonly Falloff: FDamageCurve;
+	readonly BlastRadius: number;
+}
+
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 export const TF2RocketFalloff: FDamageFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
@@ -92,6 +102,7 @@ const PlayableClasses: readonly EPlayableClass[] = Object.values(EPlayerClass).f
 });
 
 const MaxBeamHits: number = 8;
+const ProjectileBotRange: number = 4096;
 const DefaultHealth: number = 100;
 const DefaultSizeScale: number = 1.0;
 const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
@@ -331,6 +342,18 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 		return undefined;
 	}
 
+	// Override so bots know what a weapon does. undefined = they fire it at anything they see.
+	public GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return undefined;
+	}
+
+	// Override for a class that builds: the weapon its bots hold to build with
+	public GetBotBuildTool(Pawn: CSPlayerPawn): CSWeaponBase | undefined
+	{
+		return undefined;
+	}
+
 	// Called every tick, whether or not anyone is playing this class
 	public TickWorld(Now: number, DeltaTime: number): void
 	{
@@ -461,6 +484,16 @@ export function FireHitscan(Attacker: CSPlayerPawn, Settings: FHitscanWeaponSett
 		}
 	}
 	return DamageTotal;
+}
+
+export function GetHitscanBotShot(Settings: FHitscanWeaponSettings): FBotShot
+{
+	return { Damage: Settings.Damage * Settings.Pellets, Spread: Settings.Spread, Range: Settings.Range, Falloff: Settings.Falloff, BlastRadius: 0 };
+}
+
+export function GetProjectileBotShot(Damage: number, BlastRadius: number, Falloff: FDamageCurve = []): FBotShot
+{
+	return { Damage: Damage, Spread: 0, Range: ProjectileBotRange, Falloff: Falloff, BlastRadius: BlastRadius };
 }
 
 export function TraceHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeaponSettings, Start: FVector, Direction: FVector): FHitscanResult

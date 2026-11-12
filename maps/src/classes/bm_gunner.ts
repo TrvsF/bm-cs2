@@ -1,11 +1,11 @@
-import { Instance, CSInputs } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { TickInterval, VectorMath, GetChestPosition, GetTeamColor, GetOrCreate, IsKnife, ConsumePress, ForEachLivePawn } from "../bm_core";
+import { Instance, CSInputs, CSGearSlot } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult } from "cs_script/point_script";
+import { TickInterval, VectorMath, GetChestPosition, GetTeamColor, GetOrCreate, IsKnife, ConsumePress, GetHeldWeapon, ForEachLivePawn } from "../bm_core";
 import type { FVector, FRotator, FHeldInputs } from "../bm_core";
 import { BuildingKind, GetOwnedBuildings, GetBuildingEntities, IsBuildingEnemy, TurnBuilding, TickBuildTool, CancelPlacement, GetPlacingKind, IsRepairingBuilding } from "../bm_buildings";
 import type { FBuilding, FBuildingSettings, FBuildKeys } from "../bm_buildings";
-import { BeamerShotgunFalloff, PlayerClass, FireHitscanWeapon, FireHitscan } from "../bm_classes";
-import type { FClassSettings, FHitscanWeaponSettings, FHudCounter } from "../bm_classes";
+import { BeamerShotgunFalloff, PlayerClass, FireHitscanWeapon, FireHitscan, GetHitscanBotShot } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings, FHudCounter, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -243,6 +243,16 @@ export class GunnerClass extends PlayerClass<FGunnerSettings>
 		super(GunnerSettings);
 	}
 
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return GetHitscanBotShot(this.Settings.Shotgun);
+	}
+
+	public override GetBotBuildTool(Pawn: CSPlayerPawn): CSWeaponBase | undefined
+	{
+		return Pawn.FindWeaponBySlot(CSGearSlot.KNIFE);
+	}
+
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
 		FireHitscanWeapon(Pawn, this.Settings.Shotgun, Pawn.FindWeapon(this.Settings.Primary));
@@ -259,7 +269,7 @@ export class GunnerClass extends PlayerClass<FGunnerSettings>
 
 	public override GetBuildKeys(Pawn: CSPlayerPawn): FBuildKeys | undefined
 	{
-		return IsKnife(Pawn.GetActiveWeapon()) ? this.BuildKeys : undefined;
+		return IsKnife(GetHeldWeapon(Pawn)) ? this.BuildKeys : undefined;
 	}
 
 	public override ClearPlayer(Slot: number): void

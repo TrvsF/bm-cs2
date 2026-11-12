@@ -1,6 +1,6 @@
 import { Instance, Console } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, RotationMath, IsFreeForAll, IsModelEntity, GetPawnName, GetPlayerSlot, GetColorForTeam, GetOrCreate, SpawnTemplateEntities, INDEX_NONE } from "./bm_core";
+import { TickInterval, LogPrefix, VectorMath, RotationMath, IsFreeForAll, IsModelEntity, GetPawnName, GetPlayerSlot, GetColorForTeam, GetOrCreate, GetAimAngles, IsBotControlled, SpawnTemplateEntities, INDEX_NONE } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
 import { ShowDamageNumber } from "./bm_hud";
@@ -66,6 +66,14 @@ export enum EBuildHint
 	Cooldown = "Cooldown",
 }
 
+// Where a bot puts a kind of building
+export enum EBotBuildSite
+{
+	NearEnemies,
+	AtSpawn,
+	AwayFromSpawn,
+}
+
 export interface FBuildKey
 {
 	readonly Label: string;
@@ -122,6 +130,11 @@ export abstract class BuildingKind<TSettings extends FBuildingSettings = FBuildi
 
 	public OnPlaced(Building: FBuilding, Now: number): void
 	{
+	}
+
+	public GetBotSite(): EBotBuildSite
+	{
+		return EBotBuildSite.NearEnemies;
 	}
 
 	public Tick(Building: FBuilding, Now: number, DeltaTime: number): void
@@ -496,7 +509,7 @@ function GetRebuildWait(Slot: number, Kind: BuildingKind, Now: number): number
 	return Math.max(0, (GRebuildTimes.get(Slot)?.get(Kind) ?? 0) - Now);
 }
 
-function GetNextToBuild(Slot: number, Kinds: readonly BuildingKind[]): BuildingKind | undefined
+export function GetNextToBuild(Slot: number, Kinds: readonly BuildingKind[]): BuildingKind | undefined
 {
 	return Kinds.find((Kind: BuildingKind): boolean =>
 	{
@@ -518,8 +531,9 @@ function UseBuildKey(Pawn: CSPlayerPawn, Slot: number, Kinds: readonly BuildingK
 	}
 
 	const Eye: FVector = Pawn.GetEyePosition();
-	const Reach: FVector = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), PickUpRange));
-	const InView: FBuildingHit | undefined = TraceBuildings(Eye, Reach, 0, (Building: FBuilding): boolean =>
+	const Reach: FVector = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(GetAimAngles(Pawn)), PickUpRange));
+	// Bots never pick their buildings back up
+	const InView: FBuildingHit | undefined = IsBotControlled(Pawn) ? undefined : TraceBuildings(Eye, Reach, 0, (Building: FBuilding): boolean =>
 	{
 		return Building.OwnerSlot === Slot && Kinds.includes(Building.Kind);
 	});
@@ -678,7 +692,7 @@ function UpdatePlacementSpot(Placement: FPlacement): void
 {
 	const Settings: FBuildingSettings = Placement.Kind.Settings;
 	const Owner: CSPlayerPawn = Placement.Owner;
-	const Aim: FRotator = Owner.GetEyeAngles();
+	const Aim: FRotator = GetAimAngles(Owner);
 	const Ignored: Entity[] = [Owner, ...GetModelEntities(Placement.Preview)];
 
 	let Position: FVector = Owner.GetEyePosition();
@@ -995,4 +1009,4 @@ function DrawBuildingBox(Position: FVector, Settings: FBuildingSettings, Color: 
 		duration: TickInterval * 2,
 		color: Color,
 	});
-}
+}

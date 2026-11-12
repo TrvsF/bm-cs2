@@ -221,7 +221,7 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 	ForgetSpawnZoneHistory(Slot);
 	RefreshSpawnZoneTouches();
 	GActiveMode.OnPlayerSpawn(Pawn, Slot);
-	AssignRandomBotClass(Pawn, Slot);
+	QueueRandomBotClass(Pawn, Slot);
 	const bHadClass: boolean = GClassBySlot.has(Slot);
 	ApplyPendingClass(Slot);
 	RefreshClassUi(Pawn, Slot);
@@ -623,6 +623,16 @@ function AssignRandomBotClass(Pawn: CSPlayerPawn, Slot: number): boolean
 	const PlayerClass: EPlayableClass = PickRandomClass();
 	GClassBySlot.set(Slot, PlayerClass);
 	return true;
+}
+
+// Bots come back as a different class every life
+function QueueRandomBotClass(Pawn: CSPlayerPawn, Slot: number): void
+{
+	const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
+	if (Controller && Controller.IsBot() && !GPendingClassBySlot.has(Slot))
+	{
+		GPendingClassBySlot.set(Slot, PickRandomClass());
+	}
 }
 
 function TickBotClasses(): void

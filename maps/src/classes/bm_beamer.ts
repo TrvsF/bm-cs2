@@ -5,8 +5,8 @@ import type { FVector } from "../bm_core";
 import type { FDamageCurve } from "../bm_combat";
 import { SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam } from "../bm_effects";
 import type { FHeldBeam } from "../bm_effects";
-import { BeamerShotgunFalloff, BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon } from "../bm_classes";
-import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
+import { BeamerShotgunFalloff, BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon, GetHitscanBotShot } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -116,6 +116,11 @@ export class BeamerClass extends PlayerClass<FBeamerSettings>
 	constructor()
 	{
 		super(BeamerSettings);
+	}
+
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return GetHitscanBotShot(WeaponName === this.Settings.Primary ? this.Settings.EnergyBeam : this.Settings.Shotgun);
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void

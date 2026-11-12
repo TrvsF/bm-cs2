@@ -5,8 +5,8 @@ import { VectorMath } from "../bm_core";
 import type { FVector, FColor } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, MakeShootable, Explode } from "../bm_combat";
 import type { FProjectile, FBouncingProjectile, FBounceSettings, FDamageFalloff, FBallistics } from "../bm_combat";
-import { TF2PipeFalloff, PlayerClass } from "../bm_classes";
-import type { FClassSettings, FHudCounter } from "../bm_classes";
+import { TF2PipeFalloff, PlayerClass, GetProjectileBotShot } from "../bm_classes";
+import type { FClassSettings, FHudCounter, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -148,6 +148,13 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 		return WeaponName === this.Settings.Primary
 			? { Speed: this.Settings.StickyLaunchSpeed, UpSpeed: this.Settings.StickyLaunchUp, GravityScale: 1 }
 			: { Speed: this.Settings.PipeLaunchSpeed, UpSpeed: this.Settings.PipeLaunchUp, GravityScale: 1 };
+	}
+
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return WeaponName === this.Settings.Primary
+			? GetProjectileBotShot(this.Settings.StickyDamage, this.Settings.StickyRadius)
+			: GetProjectileBotShot(this.Settings.PipeDamage, this.Settings.PipeRadius);
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number, ChargeFraction: number): void

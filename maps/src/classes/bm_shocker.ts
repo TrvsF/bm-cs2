@@ -5,8 +5,8 @@ import type { FVector } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, EmbedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, MakeShootable, Explode } from "../bm_combat";
 import type { FProjectile, FBallistics } from "../bm_combat";
 import { GetTraceBuilding } from "../bm_buildings";
-import { PlayerClass, FireHitscanWeapon } from "../bm_classes";
-import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
+import { PlayerClass, FireHitscanWeapon, GetHitscanBotShot, GetProjectileBotShot } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -126,6 +126,13 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 	public override GetBallistics(WeaponName: string): FBallistics | undefined
 	{
 		return WeaponName === this.Settings.Primary ? { Speed: this.Settings.BallSpeed, UpSpeed: 0, GravityScale: 0 } : undefined;
+	}
+
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return WeaponName === this.Settings.Primary
+			? GetProjectileBotShot(this.Settings.BallDamage, this.Settings.BallRadius)
+			: GetHitscanBotShot(this.Settings.ShockBeam);
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void

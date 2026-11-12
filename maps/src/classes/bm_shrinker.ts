@@ -1,10 +1,10 @@
 import { Instance, Console, CSInputs, CSDamageTypes, CSDamageFlags } from "cs_script/point_script";
-import type { CSPlayerPawn } from "cs_script/point_script";
-import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, ForEachLivePawn } from "../bm_core";
+import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
+import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, GetHeldWeapon, ForEachLivePawn } from "../bm_core";
 import type { FVector, FColor, FHeldInputs } from "../bm_core";
 import { Explode, SpawnExplosionFx } from "../bm_combat";
 import { SpawnTemporaryTemplate, PlaySoundOn } from "../bm_effects";
-import { BuildingKind, FindOwnedBuilding, IsBuildingEnemy, IsStandingOn, GetBuildingCenter, TickBuildTool, CancelPlacement, RemoveBuilding, DestroyBuilding } from "../bm_buildings";
+import { BuildingKind, EBotBuildSite, FindOwnedBuilding, IsBuildingEnemy, IsStandingOn, GetBuildingCenter, TickBuildTool, CancelPlacement, RemoveBuilding, DestroyBuilding } from "../bm_buildings";
 import type { FBuilding, FBuildingSettings, FBuildKeys } from "../bm_buildings";
 import { PlayerClass } from "../bm_classes";
 import type { FClassSettings, FHudCounter } from "../bm_classes";
@@ -264,6 +264,11 @@ export class TeleporterKind extends BuildingKind<FTeleporterSettings>
 		this.bEntrance = bEntrance;
 	}
 
+	public override GetBotSite(): EBotBuildSite
+	{
+		return this.bEntrance ? EBotBuildSite.AtSpawn : EBotBuildSite.AwayFromSpawn;
+	}
+
 	public override OnPlaced(Building: FBuilding, Now: number): void
 	{
 		this.States.set(Building, { ReadyAt: Now });
@@ -381,7 +386,7 @@ export class ShrinkerClass extends PlayerClass<FShrinkerSettings>
 		TickBuildTool(Pawn, Slot, this.GetBuildKeys(Pawn), bLeftPressed, bRightPressed, Now);
 
 		const bWasShrunk: boolean = State.bWantsShrunk;
-		if (bRightPressed && IsKnife(Pawn.GetActiveWeapon()))
+		if (bRightPressed && IsKnife(GetHeldWeapon(Pawn)))
 		{
 			this.ToggleShrink(State);
 		}
@@ -395,7 +400,12 @@ export class ShrinkerClass extends PlayerClass<FShrinkerSettings>
 
 	public override GetBuildKeys(Pawn: CSPlayerPawn): FBuildKeys | undefined
 	{
-		return IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Primary) ? this.BuildKeys : undefined;
+		return IsWeapon(GetHeldWeapon(Pawn), this.Settings.Primary) ? this.BuildKeys : undefined;
+	}
+
+	public override GetBotBuildTool(Pawn: CSPlayerPawn): CSWeaponBase | undefined
+	{
+		return Pawn.FindWeapon(this.Settings.Primary);
 	}
 
 	public override ClearPlayer(Slot: number): void
@@ -454,4 +464,4 @@ export class ShrinkerClass extends PlayerClass<FShrinkerSettings>
 			return { Charge: MaxShrinkCharge, bWantsShrunk: false, ShrinkAlpha: 0, Held: { Mask: 0 } };
 		});
 	}
-}
+}

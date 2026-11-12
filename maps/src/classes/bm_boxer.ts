@@ -5,8 +5,8 @@ import { EProjectileShape, LaunchProjectile, MovePiercingProjectile, IsProjectil
 import type { FProjectile, FPiercingProjectile, FPiercingStep, FDamageCurve, FHitscanHit, FBallistics } from "../bm_combat";
 import { DamageTracedBuilding } from "../bm_buildings";
 import { SpawnBloodSplatter } from "../bm_effects";
-import { BeamerShotgunFalloff, PlayerClass, FireHitscanWeapon, DealShockDamage } from "../bm_classes";
-import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
+import { BeamerShotgunFalloff, PlayerClass, FireHitscanWeapon, DealShockDamage, GetHitscanBotShot, GetProjectileBotShot } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -113,6 +113,13 @@ export class BoxerClass extends PlayerClass<FBoxerSettings>
 	public override GetBallistics(WeaponName: string): FBallistics | undefined
 	{
 		return WeaponName === this.Settings.Primary ? { Speed: this.Settings.CubeSpeed, UpSpeed: 0, GravityScale: this.Settings.CubeGravityScale } : undefined;
+	}
+
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return WeaponName === this.Settings.Primary
+			? GetProjectileBotShot(this.Settings.CubeDamage, this.Settings.CubeRadius, this.Settings.CubeFalloff)
+			: GetHitscanBotShot(this.Settings.Shotgun);
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void

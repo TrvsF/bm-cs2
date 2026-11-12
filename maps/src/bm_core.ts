@@ -58,7 +58,7 @@ interface FPendingTimer
 export interface FBotControl
 {
 	readonly Inputs: number;
-	readonly WeaponName: string;
+	readonly Weapon: CSWeaponBase | undefined;
 	readonly Aim: FRotator;
 }
 
@@ -182,7 +182,7 @@ export interface FHeldInputs
 
 export function ConsumePress(Pawn: CSPlayerPawn, Held: FHeldInputs, Input: CSInputs): boolean
 {
-	const bDown: boolean = Pawn.IsInputPressed(Input);
+	const bDown: boolean = IsInputDown(Pawn, Input);
 	const bWasDown: boolean = (Held.Mask & Input) !== 0;
 	Held.Mask = bDown ? Held.Mask | Input : Held.Mask & ~Input;
 	return bDown && !bWasDown;
@@ -431,6 +431,11 @@ export function SetBotControl(Slot: number, Control: FBotControl | undefined): v
 	}
 }
 
+export function IsBotControlled(Pawn: CSPlayerPawn): boolean
+{
+	return GBotControls.has(GetPlayerSlot(Pawn));
+}
+
 export function IsInputDown(Pawn: CSPlayerPawn, Input: CSInputs): boolean
 {
 	const Control: FBotControl | undefined = GBotControls.get(GetPlayerSlot(Pawn));
@@ -440,7 +445,7 @@ export function IsInputDown(Pawn: CSPlayerPawn, Input: CSInputs): boolean
 export function GetHeldWeapon(Pawn: CSPlayerPawn): CSWeaponBase | undefined
 {
 	const Control: FBotControl | undefined = GBotControls.get(GetPlayerSlot(Pawn));
-	return (Control ? Pawn.FindWeapon(Control.WeaponName) : undefined) ?? Pawn.GetActiveWeapon();
+	return (Control ? Control.Weapon : undefined) ?? Pawn.GetActiveWeapon();
 }
 
 export function GetAimAngles(Pawn: CSPlayerPawn): FRotator

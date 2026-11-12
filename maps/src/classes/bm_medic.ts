@@ -6,8 +6,8 @@ import { LaunchProjectile, MoveProjectile, IsProjectileExpired, DrawMissingProje
 import type { FProjectile, FDamageCurve, FBallistics } from "../bm_combat";
 import { DamageTracedBuilding } from "../bm_buildings";
 import { StartSoundOn, StopSound } from "../bm_effects";
-import { BeamStartDrop, PlayerClass, DealShockDamage } from "../bm_classes";
-import type { FClassSettings, FHudCounter } from "../bm_classes";
+import { BeamStartDrop, PlayerClass, DealShockDamage, GetProjectileBotShot } from "../bm_classes";
+import type { FClassSettings, FHudCounter, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -118,6 +118,11 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 	public override GetBallistics(WeaponName: string): FBallistics | undefined
 	{
 		return { Speed: this.Settings.BoltSpeed, UpSpeed: 0, GravityScale: this.Settings.BoltGravityScale };
+	}
+
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return GetProjectileBotShot(this.Settings.BoltDamage, 0, this.Settings.BoltRampUp);
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
