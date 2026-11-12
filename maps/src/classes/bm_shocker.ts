@@ -1,9 +1,10 @@
-import { Console } from "cs_script/point_script";
-import type { CSPlayerPawn } from "cs_script/point_script";
+import { Instance, Console } from "cs_script/point_script";
+import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
 import { LogPrefix, VectorMath, GetPawnName } from "../bm_core";
 import type { FVector } from "../bm_core";
-import { LaunchProjectile, StepImpactProjectile, DestroyProjectile, DestroyProjectiles, Explode } from "../bm_combat";
+import { LaunchProjectile, MoveProjectile, EmbedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, MakeShootable, Explode } from "../bm_combat";
 import type { FProjectile } from "../bm_combat";
+import { GetTraceBuilding } from "../bm_buildings";
 import { PlayerClass, FireHitscanWeapon } from "../bm_classes";
 import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
 
@@ -18,6 +19,11 @@ export interface FShockerSettings extends FClassSettings
 	readonly BallRadius: number;
 	readonly BallKnockback: number;
 	readonly BallLifetime: number;
+	readonly BallStuckLifetime: number;
+	readonly BallStickDepth: number;
+	readonly BallStuckHitRadius: number;
+	readonly BallWeight: number;
+	readonly BallKnockedGravityScale: number;
 	readonly BallFxTemplate: string;
 	readonly ComboDamage: number;
 	readonly ComboRadius: number;
@@ -27,6 +33,7 @@ export interface FShockerSettings extends FClassSettings
 
 export interface FShockBall extends FProjectile
 {
+	StuckAt: number | undefined;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,11 +97,16 @@ export const ShockerSettings: FShockerSettings =
 	BallRadius: 80,
 	BallKnockback: 500,
 	BallLifetime: 5,
+	BallStuckLifetime: 6,
+	BallStickDepth: 0,
+	BallStuckHitRadius: 16,
+	BallWeight: 0.5,
+	BallKnockedGravityScale: 1,
 	BallFxTemplate: "shock_ball_explode_template",
 
-	ComboDamage: 160,
+	ComboDamage: 125,
 	ComboRadius: 240,
-	ComboKnockback: 900,
+	ComboKnockback: 300,
 	ComboFxTemplate: "shock_combo_template",
 };
 
@@ -113,7 +125,12 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
-		this.Balls.push(LaunchProjectile(Pawn, this.Settings.BallSpeed, 0, 0, ShockBallTemplateName, this.Settings.BallSize));
+		const Ball: FShockBall = { ...LaunchProjectile(Pawn, this.Settings.BallSpeed, 0, 0, ShockBallTemplateName, this.Settings.BallSize), StuckAt: undefined };
+		this.Balls.push(Ball);
+		MakeShootable(Ball, this.Settings.BallStuckHitRadius, this.Settings.BallWeight, (Push: FVector): void =>
+		{
+			this.KnockBall(Ball, Push);
+		});
 	}
 
 	public override OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
@@ -128,10 +145,7 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 	{
 		this.Balls = this.Balls.filter((Ball: FShockBall): boolean =>
 		{
-			return StepImpactProjectile(Ball, Now, DeltaTime, this.Settings.BallLifetime, (): void =>
-			{
-				Explode(Ball.Position, Ball.Owner, this.Settings.BallRadius, this.Settings.BallDamage, this.Settings.BallKnockback, undefined, this.Settings.BallFxTemplate);
-			});
+			return this.StepBall(Ball, Now, DeltaTime);
 		});
 	}
 
@@ -139,6 +153,64 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 	{
 		DestroyProjectiles(this.Balls);
 		this.Balls = [];
+	}
+
+	private StepBall(Ball: FShockBall, Now: number, DeltaTime: number): boolean
+	{
+		if (Ball.bDestroyed)
+		{
+			return false;
+		}
+		if (Ball.StuckAt !== undefined)
+		{
+			if (!Ball.Owner.IsValid() || Now - Ball.StuckAt >= this.Settings.BallStuckLifetime)
+			{
+				this.ExplodeBall(Ball);
+				return false;
+			}
+			if (Ball.Models.length === 0)
+			{
+				DrawMissingProjectile(Ball);
+			}
+			return true;
+		}
+
+		if (IsProjectileExpired(Ball, Now, this.Settings.BallLifetime))
+		{
+			DestroyProjectile(Ball);
+			return false;
+		}
+		const Hit: TraceResult | undefined = MoveProjectile(Ball, DeltaTime, true);
+		if (!Hit)
+		{
+			DrawMissingProjectile(Ball);
+			return true;
+		}
+		if (!GetTraceBuilding(Hit) && (Hit.hitEntity === undefined || Hit.hitEntity.IsWorld()))
+		{
+			EmbedProjectile(Ball, Hit, this.Settings.BallStickDepth);
+			Ball.StuckAt = Now;
+			return true;
+		}
+		this.ExplodeBall(Ball);
+		return false;
+	}
+
+	private KnockBall(Ball: FShockBall, Push: FVector): void
+	{
+		if (Ball.StuckAt !== undefined)
+		{
+			Ball.StuckAt = undefined;
+			Ball.SpawnedAt = Instance.GetGameTime();
+		}
+		Ball.Velocity = VectorMath.Add(Ball.Velocity, Push);
+		Ball.GravityScale = this.Settings.BallKnockedGravityScale;
+	}
+
+	private ExplodeBall(Ball: FShockBall): void
+	{
+		DestroyProjectile(Ball);
+		Explode(Ball.Position, Ball.Owner, this.Settings.BallRadius, this.Settings.BallDamage, this.Settings.BallKnockback, undefined, this.Settings.BallFxTemplate);
 	}
 
 	private DetonateBallOnBeam(Shooter: CSPlayerPawn, Start: FVector, End: FVector): FVector | undefined
@@ -149,7 +221,8 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 		{
 			const Closest: FVector = VectorMath.ClosestPointOnSegment(Ball.Position, Start, End);
 			const Distance: number = VectorMath.Size(VectorMath.Subtract(Closest, Start));
-			if (Ball.Owner === Shooter && VectorMath.Size(VectorMath.Subtract(Ball.Position, Closest)) <= Ball.Radius && Distance < ComboDistance)
+			const HitRadius: number = Ball.StuckAt !== undefined ? this.Settings.BallStuckHitRadius : Ball.Radius;
+			if (Ball.Owner === Shooter && VectorMath.Size(VectorMath.Subtract(Ball.Position, Closest)) <= HitRadius && Distance < ComboDistance)
 			{
 				Combo = Ball;
 				ComboDistance = Distance;

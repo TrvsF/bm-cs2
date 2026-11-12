@@ -1,8 +1,9 @@
 import { Instance, CSInputs } from "cs_script/point_script";
 import type { CSPlayerPawn } from "cs_script/point_script";
 import { bDebug, TickInterval, GetTeamColor, GetOrCreate } from "../bm_core";
-import type { FColor } from "../bm_core";
-import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, Explode } from "../bm_combat";
+import { VectorMath } from "../bm_core";
+import type { FVector, FColor } from "../bm_core";
+import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, MakeShootable, Explode } from "../bm_combat";
 import type { FProjectile, FBouncingProjectile, FBounceSettings, FDamageFalloff } from "../bm_combat";
 import { TF2PipeFalloff, PlayerClass } from "../bm_classes";
 import type { FClassSettings, FHudCounter } from "../bm_classes";
@@ -31,6 +32,8 @@ export interface FDemoSettings extends FClassSettings
 	readonly StickyKnockback: number;
 	readonly StickyFalloff: FDamageFalloff | undefined;
 	readonly StickyFalloffTime: number;
+	readonly StickyShootRadius: number;
+	readonly StickyWeight: number;
 }
 
 export interface FPipe extends FBouncingProjectile
@@ -99,6 +102,8 @@ export const DemoSettings: FDemoSettings =
 	StickyKnockback: 450,
 	StickyFalloff: TF2StickyFalloff,
 	StickyFalloffTime: 5,
+	StickyShootRadius: 12,
+	StickyWeight: 1,
 	PipeLaunchSpeed: 1337,
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
@@ -143,6 +148,11 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 			bTintedArmed: false,
 		};
 		TintProjectile(Sticky, UnarmedStickyColor);
+		MakeShootable(Sticky, this.Settings.StickyShootRadius, this.Settings.StickyWeight, (Push: FVector): void =>
+		{
+			Sticky.Velocity = Sticky.bStuck ? Push : VectorMath.Add(Sticky.Velocity, Push);
+			Sticky.bStuck = false;
+		});
 
 		const State: FDemoPlayerState = this.GetPlayerState(Slot);
 		State.Stickies.push(Sticky);
@@ -181,6 +191,10 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
 	{
 		const State: FDemoPlayerState = this.GetPlayerState(Slot);
+		State.Stickies = State.Stickies.filter((Sticky: FStickyBomb): boolean =>
+		{
+			return !Sticky.bDestroyed;
+		});
 		for (const Sticky of State.Stickies)
 		{
 			if (!Sticky.bStuck && MoveProjectile(Sticky, DeltaTime, false))
@@ -286,4 +300,4 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 		const Damage: number = this.Settings.PipeDamage * (Pipe.bTouchedWorld ? this.Settings.PipeRolledDamageScale : 1);
 		Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
 	}
-}
+}

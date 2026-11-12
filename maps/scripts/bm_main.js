@@ -1,5 +1,5 @@
 // src/bm_main.ts
-import { Instance as Instance15, Console as Console16, GameRules as GameRules4, Entities as Entities7, CSDamageTypes as CSDamageTypes4, CSDamageFlags as CSDamageFlags4, CSGearSlot as CSGearSlot4 } from "cs_script/point_script";
+import { Instance as Instance16, Console as Console16, GameRules as GameRules4, Entities as Entities7, CSDamageTypes as CSDamageTypes4, CSDamageFlags as CSDamageFlags4, CSGearSlot as CSGearSlot4 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance, Console, Entities, CSWeaponType } from "cs_script/point_script";
@@ -1328,6 +1328,7 @@ var MinGroundNormalZ2 = 0.7;
 var GroundProbeDistance = 8;
 var MinFacingSpeed = 1;
 var MissingProjectileRadius = 3;
+var GShootables = [];
 function LaunchProjectile(Owner, Speed, UpSpeed, GravityScale, TemplateName, Radius = 0, Shape = "sphere" /* Sphere */) {
   const Direction = VectorMath.GetForwardVector(Owner.GetEyeAngles());
   const Start = Owner.GetEyePosition();
@@ -1341,7 +1342,8 @@ function LaunchProjectile(Owner, Speed, UpSpeed, GravityScale, TemplateName, Rad
     Velocity,
     GravityScale,
     SpawnedAt: Instance5.GetGameTime(),
-    Models: TemplateName !== void 0 ? SpawnProjectileModels(TemplateName, Start) : []
+    Models: TemplateName !== void 0 ? SpawnProjectileModels(TemplateName, Start) : [],
+    bDestroyed: false
   };
   PlaceProjectileModels(Projectile, true);
   TintProjectile(Projectile, GetTeamColor(Owner));
@@ -1367,6 +1369,12 @@ function StepImpactProjectile(Projectile, Now, DeltaTime, Lifetime, OnImpact) {
   }
   DrawMissingProjectile(Projectile);
   return true;
+}
+function EmbedProjectile(Projectile, Hit, Depth) {
+  const Contact = VectorMath.Subtract(Hit.end, VectorMath.Scale(Hit.normal, Projectile.Radius));
+  const Embedded = VectorMath.Add(Contact, VectorMath.Scale(VectorMath.GetSafeNormal(Projectile.Velocity), Depth));
+  PlaceProjectileModels({ ...Projectile, Position: Embedded }, false);
+  Projectile.Velocity = { x: 0, y: 0, z: 0 };
 }
 function IsProjectileExpired(Projectile, Now, Lifetime) {
   return !Projectile.Owner.IsValid() || Now - Projectile.SpawnedAt > Lifetime;
@@ -1511,12 +1519,50 @@ function GetIgnoredEntities(Projectile) {
   return IgnoredEntities;
 }
 function DestroyProjectile(Projectile) {
+  Projectile.bDestroyed = true;
   for (const Model of Projectile.Models) {
     if (Model.Ent.IsValid()) {
       Model.Ent.Remove();
     }
   }
   Projectile.Models = [];
+}
+function MakeShootable(Projectile, HitRadius, Weight, OnKnocked) {
+  GShootables.push({ Projectile, HitRadius, Weight, OnKnocked });
+}
+function GetEnemyShootables(Shooter) {
+  GShootables = GShootables.filter((Shootable) => {
+    return !Shootable.Projectile.bDestroyed;
+  });
+  return GShootables.filter((Shootable) => {
+    const Owner = Shootable.Projectile.Owner;
+    return Owner.IsValid() && Owner !== Shooter && !IsTeammate(Owner, Shooter);
+  });
+}
+function ShootDownProjectiles(Shooter, Start, End) {
+  for (const Shootable of GetEnemyShootables(Shooter)) {
+    const Position = Shootable.Projectile.Position;
+    if (VectorMath.Size(VectorMath.Subtract(Position, VectorMath.ClosestPointOnSegment(Position, Start, End))) <= Shootable.HitRadius) {
+      DestroyProjectile(Shootable.Projectile);
+      Console5.Log(`${LogPrefix} ${GetPawnName(Shooter)} shot down a projectile of ${GetPawnName(Shootable.Projectile.Owner)}`);
+    }
+  }
+}
+function KnockProjectiles(Origin, Attacker, Radius, Damage, Knockback) {
+  for (const Shootable of GetEnemyShootables(Attacker)) {
+    const Offset = VectorMath.Subtract(Shootable.Projectile.Position, Origin);
+    const Distance = VectorMath.Size(Offset);
+    if (Distance > Radius) {
+      continue;
+    }
+    const Sight = Instance5.TraceLine({ start: Origin, end: Shootable.Projectile.Position, ignorePlayers: true });
+    if (Sight.didHit && !Sight.startedInSolid) {
+      continue;
+    }
+    const Away = Distance > 1 ? VectorMath.GetSafeNormal(Offset) : UpVector;
+    const Speed = Damage * (1 - 0.5 * (Distance / Radius)) * Knockback / (StandingKnockbackHeight * Shootable.Weight);
+    Shootable.OnKnocked(VectorMath.Scale(VectorMath.GetSafeNormal(VectorMath.Add(Away, GroundedKnockbackLift)), Speed));
+  }
 }
 function DestroyProjectiles(Projectiles) {
   for (const Projectile of Projectiles) {
@@ -1562,6 +1608,7 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff, Fx
     return 0;
   }
   DamageBuildingsInRadius(Origin, Radius, Damage, Attacker);
+  KnockProjectiles(Origin, Attacker, Radius, Damage, Knockback);
   let DamageTotal = 0;
   ForEachLivePawn((Victim) => {
     const Target = GetChestPosition(Victim);
@@ -1670,6 +1717,7 @@ function TraceHitscan(Shooter, Start, End, MaxHits) {
     }
   }
   const Building = FindBuildingOnLine(Shooter, Start, StopPoint, WorldTrace);
+  ShootDownProjectiles(Shooter, Start, Building ? Building.Point : StopPoint);
   if (!Building) {
     return { Hits, End: StopPoint, HitBuilding: void 0 };
   }
@@ -2307,6 +2355,8 @@ var DemoSettings = {
   StickyKnockback: 450,
   StickyFalloff: TF2StickyFalloff,
   StickyFalloffTime: 5,
+  StickyShootRadius: 12,
+  StickyWeight: 1,
   PipeLaunchSpeed: 1337,
   PipeLaunchUp: 150,
   PipeRadius: 160,
@@ -2340,6 +2390,10 @@ var DemomanClass = class extends PlayerClass {
       bTintedArmed: false
     };
     TintProjectile(Sticky, UnarmedStickyColor);
+    MakeShootable(Sticky, this.Settings.StickyShootRadius, this.Settings.StickyWeight, (Push) => {
+      Sticky.Velocity = Sticky.bStuck ? Push : VectorMath.Add(Sticky.Velocity, Push);
+      Sticky.bStuck = false;
+    });
     const State = this.GetPlayerState(Slot);
     State.Stickies.push(Sticky);
     if (!bDebug) {
@@ -2366,6 +2420,9 @@ var DemomanClass = class extends PlayerClass {
   }
   TickPlayer(Pawn, Slot, Now, DeltaTime) {
     const State = this.GetPlayerState(Slot);
+    State.Stickies = State.Stickies.filter((Sticky) => {
+      return !Sticky.bDestroyed;
+    });
     for (const Sticky of State.Stickies) {
       if (!Sticky.bStuck && MoveProjectile(Sticky, DeltaTime, false)) {
         Sticky.bStuck = true;
@@ -3099,7 +3156,7 @@ var BoxerClass = class extends PlayerClass {
 };
 
 // src/classes/bm_shocker.ts
-import { Console as Console9 } from "cs_script/point_script";
+import { Instance as Instance9, Console as Console9 } from "cs_script/point_script";
 var ShockerSettings = {
   DisplayName: "Shocker",
   PickFxTemplate: "shocker_pick_template",
@@ -3153,10 +3210,15 @@ var ShockerSettings = {
   BallRadius: 80,
   BallKnockback: 500,
   BallLifetime: 5,
+  BallStuckLifetime: 6,
+  BallStickDepth: 0,
+  BallStuckHitRadius: 16,
+  BallWeight: 0.5,
+  BallKnockedGravityScale: 1,
   BallFxTemplate: "shock_ball_explode_template",
-  ComboDamage: 160,
+  ComboDamage: 125,
   ComboRadius: 240,
-  ComboKnockback: 900,
+  ComboKnockback: 300,
   ComboFxTemplate: "shock_combo_template"
 };
 var ShockBallTemplateName = "shock_ball_template";
@@ -3166,7 +3228,11 @@ var ShockerClass = class extends PlayerClass {
     super(ShockerSettings);
   }
   OnPrimaryFire(Pawn, Slot, Now) {
-    this.Balls.push(LaunchProjectile(Pawn, this.Settings.BallSpeed, 0, 0, ShockBallTemplateName, this.Settings.BallSize));
+    const Ball = { ...LaunchProjectile(Pawn, this.Settings.BallSpeed, 0, 0, ShockBallTemplateName, this.Settings.BallSize), StuckAt: void 0 };
+    this.Balls.push(Ball);
+    MakeShootable(Ball, this.Settings.BallStuckHitRadius, this.Settings.BallWeight, (Push) => {
+      this.KnockBall(Ball, Push);
+    });
   }
   OnSecondaryFire(Pawn, Slot, Now) {
     FireHitscanWeapon(Pawn, this.Settings.ShockBeam, Pawn.FindWeapon(this.Settings.Secondary), (Start, End) => {
@@ -3175,14 +3241,55 @@ var ShockerClass = class extends PlayerClass {
   }
   TickWorld(Now, DeltaTime) {
     this.Balls = this.Balls.filter((Ball) => {
-      return StepImpactProjectile(Ball, Now, DeltaTime, this.Settings.BallLifetime, () => {
-        Explode(Ball.Position, Ball.Owner, this.Settings.BallRadius, this.Settings.BallDamage, this.Settings.BallKnockback, void 0, this.Settings.BallFxTemplate);
-      });
+      return this.StepBall(Ball, Now, DeltaTime);
     });
   }
   OnRoundStart() {
     DestroyProjectiles(this.Balls);
     this.Balls = [];
+  }
+  StepBall(Ball, Now, DeltaTime) {
+    if (Ball.bDestroyed) {
+      return false;
+    }
+    if (Ball.StuckAt !== void 0) {
+      if (!Ball.Owner.IsValid() || Now - Ball.StuckAt >= this.Settings.BallStuckLifetime) {
+        this.ExplodeBall(Ball);
+        return false;
+      }
+      if (Ball.Models.length === 0) {
+        DrawMissingProjectile(Ball);
+      }
+      return true;
+    }
+    if (IsProjectileExpired(Ball, Now, this.Settings.BallLifetime)) {
+      DestroyProjectile(Ball);
+      return false;
+    }
+    const Hit = MoveProjectile(Ball, DeltaTime, true);
+    if (!Hit) {
+      DrawMissingProjectile(Ball);
+      return true;
+    }
+    if (!GetTraceBuilding(Hit) && (Hit.hitEntity === void 0 || Hit.hitEntity.IsWorld())) {
+      EmbedProjectile(Ball, Hit, this.Settings.BallStickDepth);
+      Ball.StuckAt = Now;
+      return true;
+    }
+    this.ExplodeBall(Ball);
+    return false;
+  }
+  KnockBall(Ball, Push) {
+    if (Ball.StuckAt !== void 0) {
+      Ball.StuckAt = void 0;
+      Ball.SpawnedAt = Instance9.GetGameTime();
+    }
+    Ball.Velocity = VectorMath.Add(Ball.Velocity, Push);
+    Ball.GravityScale = this.Settings.BallKnockedGravityScale;
+  }
+  ExplodeBall(Ball) {
+    DestroyProjectile(Ball);
+    Explode(Ball.Position, Ball.Owner, this.Settings.BallRadius, this.Settings.BallDamage, this.Settings.BallKnockback, void 0, this.Settings.BallFxTemplate);
   }
   DetonateBallOnBeam(Shooter, Start, End) {
     let Combo = void 0;
@@ -3190,7 +3297,8 @@ var ShockerClass = class extends PlayerClass {
     for (const Ball of this.Balls) {
       const Closest = VectorMath.ClosestPointOnSegment(Ball.Position, Start, End);
       const Distance = VectorMath.Size(VectorMath.Subtract(Closest, Start));
-      if (Ball.Owner === Shooter && VectorMath.Size(VectorMath.Subtract(Ball.Position, Closest)) <= Ball.Radius && Distance < ComboDistance) {
+      const HitRadius = Ball.StuckAt !== void 0 ? this.Settings.BallStuckHitRadius : Ball.Radius;
+      if (Ball.Owner === Shooter && VectorMath.Size(VectorMath.Subtract(Ball.Position, Closest)) <= HitRadius && Distance < ComboDistance) {
         Combo = Ball;
         ComboDistance = Distance;
       }
@@ -3210,7 +3318,7 @@ var ShockerClass = class extends PlayerClass {
 };
 
 // src/classes/bm_shrinker.ts
-import { Instance as Instance9, Console as Console10, CSInputs as CSInputs5, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2 } from "cs_script/point_script";
+import { Instance as Instance10, Console as Console10, CSInputs as CSInputs5, CSDamageTypes as CSDamageTypes3, CSDamageFlags as CSDamageFlags2 } from "cs_script/point_script";
 var ShrinkerSettings = {
   DisplayName: "Shrinker",
   PickFxTemplate: "shrinker_pick_template",
@@ -3380,7 +3488,7 @@ var TeleporterKind = class extends BuildingKind {
     if (!this.bEntrance || !Exit || !State) {
       return;
     }
-    Instance9.DebugLine({ start: GetBuildingCenter(Building), end: GetBuildingCenter(Exit), duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
+    Instance10.DebugLine({ start: GetBuildingCenter(Building), end: GetBuildingCenter(Exit), duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
     if (Now < State.ReadyAt) {
       return;
     }
@@ -3497,7 +3605,7 @@ var ShrinkerClass = class extends PlayerClass {
 };
 
 // src/classes/bm_gunner.ts
-import { Instance as Instance10, CSInputs as CSInputs6 } from "cs_script/point_script";
+import { Instance as Instance11, CSInputs as CSInputs6 } from "cs_script/point_script";
 var GunnerSettings = {
   DisplayName: "Builder",
   PickFxTemplate: "gunner_pick_template",
@@ -3623,7 +3731,7 @@ var TurretKind = class extends BuildingKind {
     const Chest = GetChestPosition(Target);
     const Aim = VectorMath.GetRotation(VectorMath.Subtract(Chest, Muzzle));
     TurnBuilding(Building, Aim.yaw);
-    Instance10.DebugLine({ start: Muzzle, end: Chest, duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
+    Instance11.DebugLine({ start: Muzzle, end: Chest, duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
     if (Now < State.NextFireTime) {
       return;
     }
@@ -3647,7 +3755,7 @@ var TurretKind = class extends BuildingKind {
       if (Distance > TargetDistance) {
         return;
       }
-      const Sight = Instance10.TraceLine({ start: Muzzle, end: Chest, ignorePlayers: true, ignoreEntity: Ignored });
+      const Sight = Instance11.TraceLine({ start: Muzzle, end: Chest, ignorePlayers: true, ignoreEntity: Ignored });
       if (Sight.didHit && !Sight.startedInSolid) {
         return;
       }
@@ -4332,7 +4440,7 @@ function IsCustomHudLayout2(Ent) {
 }
 
 // src/bm_pickups.ts
-import { Instance as Instance11, Console as Console12, Entities as Entities3 } from "cs_script/point_script";
+import { Instance as Instance12, Console as Console12, Entities as Entities3 } from "cs_script/point_script";
 var HealthKitSettings = {
   Name: "healthkit",
   HealFraction: 0.5,
@@ -4370,7 +4478,7 @@ function TickHealthKits(Now) {
     if (Taker) {
       TakeKit(Kit, Taker, Now);
     } else if (bDebug) {
-      Instance11.DebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
+      Instance12.DebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
     }
   }
 }
@@ -4666,7 +4774,7 @@ var GameMode = class {
 };
 
 // src/bm_bots.ts
-import { Instance as Instance12, Entities as Entities5 } from "cs_script/point_script";
+import { Instance as Instance13, Entities as Entities5 } from "cs_script/point_script";
 var BotMarkerModes = /* @__PURE__ */ new Map(
   [
     ["bot_still", 0 /* Still */],
@@ -4708,7 +4816,7 @@ function ResetBotMode(Slot) {
   if (Assignment) {
     Assignment.bPlaced = false;
   }
-  GBotReadyAt.set(Slot, Instance12.GetGameTime() + BotSpawnSettleTime);
+  GBotReadyAt.set(Slot, Instance13.GetGameTime() + BotSpawnSettleTime);
 }
 function ForgetBot(Slot) {
   GBotAssignments.delete(Slot);
@@ -4838,7 +4946,7 @@ function BuildLeaderboard() {
 }
 
 // src/gamemodes/bm_payload.ts
-import { Instance as Instance13, Console as Console14, GameRules as GameRules2, Entities as Entities6, CSRoundEndReason, CSDamageFlags as CSDamageFlags3 } from "cs_script/point_script";
+import { Instance as Instance14, Console as Console14, GameRules as GameRules2, Entities as Entities6, CSRoundEndReason, CSDamageFlags as CSDamageFlags3 } from "cs_script/point_script";
 var PayloadSettings = {
   CartName: "payload_cart",
   PathPrefix: "payload_path_",
@@ -4906,7 +5014,7 @@ var PayloadMode = class extends GameMode {
     PlaceCart(true);
   }
   OnDeactivated() {
-    for (const Controller of Instance13.GetAllPlayerControllers()) {
+    for (const Controller of Instance14.GetAllPlayerControllers()) {
       ShowPayload(Controller.GetPlayerSlot(), void 0);
     }
   }
@@ -5265,16 +5373,16 @@ function DrawTrack(Track) {
     const From = Track.Points[Index - 1];
     const To = Track.Points[Index];
     if (From && To) {
-      Instance13.DebugLine({ start: From, end: To, duration: TickInterval * 2, color: TrackDebugColor });
+      Instance14.DebugLine({ start: From, end: To, duration: TickInterval * 2, color: TrackDebugColor });
     }
   }
   for (const CheckpointDistance of Track.Checkpoints) {
-    Instance13.DebugSphere({ center: GetTrackPosition(Track, CheckpointDistance), radius: 16, duration: TickInterval * 2, color: CheckpointDebugColor });
+    Instance14.DebugSphere({ center: GetTrackPosition(Track, CheckpointDistance), radius: 16, duration: TickInterval * 2, color: CheckpointDebugColor });
   }
 }
 
 // src/gamemodes/bm_teamdeathmatch.ts
-import { Instance as Instance14, Console as Console15, GameRules as GameRules3, CSRoundEndReason as CSRoundEndReason2 } from "cs_script/point_script";
+import { Instance as Instance15, Console as Console15, GameRules as GameRules3, CSRoundEndReason as CSRoundEndReason2 } from "cs_script/point_script";
 var TeamDeathmatchSettings = {
   KillsToWin: 100
 };
@@ -5321,7 +5429,7 @@ var TeamDeathmatchMode = class extends GameMode {
     if (AttackerSlot === INDEX_NONE || !IsCounting()) {
       return;
     }
-    const Team = Instance14.GetPlayerController(AttackerSlot)?.GetTeamNumber();
+    const Team = Instance15.GetPlayerController(AttackerSlot)?.GetTeamNumber();
     if (Team !== 2 /* Terrorist */ && Team !== 3 /* CounterTerrorist */) {
       return;
     }
@@ -5402,8 +5510,8 @@ var GClassBySlot = /* @__PURE__ */ new Map();
 var GPendingClassBySlot = /* @__PURE__ */ new Map();
 var GLastThinkTime = 0;
 function Tick() {
-  const Now = Instance15.GetGameTime();
-  Instance15.SetNextThink(Now + TickInterval);
+  const Now = Instance16.GetGameTime();
+  Instance16.SetNextThink(Now + TickInterval);
   const DeltaTime = Math.min(MainSettings.MaxDeltaTime, Math.max(0, Now - GLastThinkTime)) || TickInterval;
   GLastThinkTime = Now;
   try {
@@ -5444,21 +5552,21 @@ function BeginPlay() {
   PrecacheSounds();
   SelectGameMode();
   ApplyMatchSettings();
-  Instance15.OnPlayerChat(HandlePlayerChat);
-  Instance15.OnPlayerReset(HandlePlayerReset);
-  Instance15.OnPlayerKill(HandlePlayerKill);
-  Instance15.OnPlayerDisconnect(HandlePlayerDisconnect);
-  Instance15.OnRoundStart(HandleRoundStart);
-  Instance15.OnRoundEnd(HandleRoundEnd);
-  Instance15.OnGunFire(HandleGunFire);
-  Instance15.OnKnifeAttack(HandleKnifeAttack);
-  Instance15.OnWeaponPickup(HandleWeaponPickup);
-  Instance15.OnWeaponDrop(HandleWeaponDrop);
-  Instance15.OnPlayerDamage(HandlePlayerDamage);
-  Instance15.OnModifyPlayerDamage(HandleModifyPlayerDamage);
-  Instance15.OnCustomHudClicked(HandleCustomHudClicked);
-  Instance15.SetThink(Tick);
-  Instance15.SetNextThink(Instance15.GetGameTime());
+  Instance16.OnPlayerChat(HandlePlayerChat);
+  Instance16.OnPlayerReset(HandlePlayerReset);
+  Instance16.OnPlayerKill(HandlePlayerKill);
+  Instance16.OnPlayerDisconnect(HandlePlayerDisconnect);
+  Instance16.OnRoundStart(HandleRoundStart);
+  Instance16.OnRoundEnd(HandleRoundEnd);
+  Instance16.OnGunFire(HandleGunFire);
+  Instance16.OnKnifeAttack(HandleKnifeAttack);
+  Instance16.OnWeaponPickup(HandleWeaponPickup);
+  Instance16.OnWeaponDrop(HandleWeaponDrop);
+  Instance16.OnPlayerDamage(HandlePlayerDamage);
+  Instance16.OnModifyPlayerDamage(HandleModifyPlayerDamage);
+  Instance16.OnCustomHudClicked(HandleCustomHudClicked);
+  Instance16.SetThink(Tick);
+  Instance16.SetNextThink(Instance16.GetGameTime());
   Console16.Log(`${LogPrefix} loaded${bDebug ? " DEBUG mode!" : ""}`);
 }
 BeginPlay();
@@ -5576,9 +5684,9 @@ function HandleGunFire(Event) {
   }
   const Definition = ClassDefinitions[PlayerClass3];
   if (IsWeapon(Weapon, Definition.Settings.Primary) && !Definition.Settings.PrimaryLauncher) {
-    Definition.OnPrimaryFire(Pawn, Slot, Instance15.GetGameTime(), 0);
+    Definition.OnPrimaryFire(Pawn, Slot, Instance16.GetGameTime(), 0);
   } else if (IsWeapon(Weapon, Definition.Settings.Secondary) && !Definition.Settings.SecondaryLauncher) {
-    Definition.OnSecondaryFire(Pawn, Slot, Instance15.GetGameTime(), 0);
+    Definition.OnSecondaryFire(Pawn, Slot, Instance16.GetGameTime(), 0);
   }
 }
 function HandleKnifeAttack(Event) {
@@ -5590,7 +5698,7 @@ function HandleKnifeAttack(Event) {
   }
   const RepairPerHit = ClassDefinitions[PlayerClass3].Settings.RepairPerHit;
   if (RepairPerHit !== void 0) {
-    RepairBuildingInReach(Pawn, Slot, RepairPerHit, Instance15.GetGameTime());
+    RepairBuildingInReach(Pawn, Slot, RepairPerHit, Instance16.GetGameTime());
   }
 }
 function HandleWeaponPickup(Event) {
@@ -5819,9 +5927,9 @@ function TickPlayerHud() {
       ShowHealth(Slot, Pawn);
       ShowAmmo(Slot, GetLauncherAmmo(Pawn, Slot));
       ShowCounter(Slot, PlayerClass3 !== void 0 ? ClassDefinitions[PlayerClass3].GetHudCounter(Slot) : void 0);
-      ShowBuildings(Slot, GetBuildingHudRows(Slot, Instance15.GetGameTime()));
+      ShowBuildings(Slot, GetBuildingHudRows(Slot, Instance16.GetGameTime()));
       const BuildKeys = PlayerClass3 !== void 0 ? ClassDefinitions[PlayerClass3].GetBuildKeys(Pawn) : void 0;
-      ShowBuildHints(Slot, BuildKeys ? GetBuildHints(Slot, BuildKeys, Instance15.GetGameTime()) : void 0);
+      ShowBuildHints(Slot, BuildKeys ? GetBuildHints(Slot, BuildKeys, Instance16.GetGameTime()) : void 0);
       ShowTargetId(Slot, FindTargetId(Pawn, Slot));
       GActiveMode.TickPlayerHud(Pawn, Slot);
     }
@@ -5835,7 +5943,7 @@ function FindTargetId(Pawn, Slot) {
   }
   const Eye = Pawn.GetEyePosition();
   const End = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), MainSettings.TargetIdRange));
-  const Trace = Instance15.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn });
+  const Trace = Instance16.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn });
   const Turret = FindFriendlyTurret(Pawn, Eye, End, Trace);
   return Turret ? GetTurretTargetId(Turret) : GetPawnTargetId(Trace.hitEntity, Pawn);
 }

@@ -25,6 +25,15 @@ export interface FProjectile
 	GravityScale: number;
 	SpawnedAt: number;
 	Models: FProjectileModel[];
+	bDestroyed: boolean;
+}
+
+interface FShootable
+{
+	readonly Projectile: FProjectile;
+	readonly HitRadius: number;
+	readonly Weight: number;
+	readonly OnKnocked: (Push: FVector) => void;
 }
 
 export interface FProjectileModel
@@ -106,6 +115,8 @@ const GroundProbeDistance: number = 8;
 const MinFacingSpeed: number = 1;
 const MissingProjectileRadius: number = 3;
 
+let GShootables: FShootable[] = [];
+
 // Projectile //////////////////////////////////////////////////////////////////////////////////////
 
 export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: number, GravityScale: number, TemplateName: string | undefined, Radius: number = 0, Shape: EProjectileShape = EProjectileShape.Sphere): FProjectile
@@ -124,6 +135,7 @@ export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: nu
 		GravityScale: GravityScale,
 		SpawnedAt: Instance.GetGameTime(),
 		Models: TemplateName !== undefined ? SpawnProjectileModels(TemplateName, Start) : [],
+		bDestroyed: false,
 	};
 	PlaceProjectileModels(Projectile, true);
 	TintProjectile(Projectile, GetTeamColor(Owner));
@@ -157,6 +169,14 @@ export function StepImpactProjectile(Projectile: FProjectile, Now: number, Delta
 	DrawMissingProjectile(Projectile);
 
 	return true;
+}
+
+export function EmbedProjectile(Projectile: FProjectile, Hit: TraceResult, Depth: number): void
+{
+	const Contact: FVector = VectorMath.Subtract(Hit.end, VectorMath.Scale(Hit.normal, Projectile.Radius));
+	const Embedded: FVector = VectorMath.Add(Contact, VectorMath.Scale(VectorMath.GetSafeNormal(Projectile.Velocity), Depth));
+	PlaceProjectileModels({ ...Projectile, Position: Embedded }, false);
+	Projectile.Velocity = { x: 0, y: 0, z: 0 };
 }
 
 export function IsProjectileExpired(Projectile: FProjectile, Now: number, Lifetime: number): boolean
@@ -353,6 +373,7 @@ function GetIgnoredEntities(Projectile: FProjectile): Entity[]
 
 export function DestroyProjectile(Projectile: FProjectile): void
 {
+	Projectile.bDestroyed = true;
 	for (const Model of Projectile.Models)
 	{
 		if (Model.Ent.IsValid())
@@ -361,6 +382,58 @@ export function DestroyProjectile(Projectile: FProjectile): void
 		}
 	}
 	Projectile.Models = [];
+}
+
+export function MakeShootable(Projectile: FProjectile, HitRadius: number, Weight: number, OnKnocked: (Push: FVector) => void): void
+{
+	GShootables.push({ Projectile: Projectile, HitRadius: HitRadius, Weight: Weight, OnKnocked: OnKnocked });
+}
+
+function GetEnemyShootables(Shooter: CSPlayerPawn): FShootable[]
+{
+	GShootables = GShootables.filter((Shootable: FShootable): boolean =>
+	{
+		return !Shootable.Projectile.bDestroyed;
+	});
+	return GShootables.filter((Shootable: FShootable): boolean =>
+	{
+		const Owner: CSPlayerPawn = Shootable.Projectile.Owner;
+		return Owner.IsValid() && Owner !== Shooter && !IsTeammate(Owner, Shooter);
+	});
+}
+
+function ShootDownProjectiles(Shooter: CSPlayerPawn, Start: FVector, End: FVector): void
+{
+	for (const Shootable of GetEnemyShootables(Shooter))
+	{
+		const Position: FVector = Shootable.Projectile.Position;
+		if (VectorMath.Size(VectorMath.Subtract(Position, VectorMath.ClosestPointOnSegment(Position, Start, End))) <= Shootable.HitRadius)
+		{
+			DestroyProjectile(Shootable.Projectile);
+			Console.Log(`${LogPrefix} ${GetPawnName(Shooter)} shot down a projectile of ${GetPawnName(Shootable.Projectile.Owner)}`);
+		}
+	}
+}
+
+function KnockProjectiles(Origin: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number): void
+{
+	for (const Shootable of GetEnemyShootables(Attacker))
+	{
+		const Offset: FVector = VectorMath.Subtract(Shootable.Projectile.Position, Origin);
+		const Distance: number = VectorMath.Size(Offset);
+		if (Distance > Radius)
+		{
+			continue;
+		}
+		const Sight: TraceResult = Instance.TraceLine({ start: Origin, end: Shootable.Projectile.Position, ignorePlayers: true });
+		if (Sight.didHit && !Sight.startedInSolid)
+		{
+			continue;
+		}
+		const Away: FVector = Distance > 1 ? VectorMath.GetSafeNormal(Offset) : UpVector;
+		const Speed: number = Damage * (1 - 0.5 * (Distance / Radius)) * Knockback / (StandingKnockbackHeight * Shootable.Weight);
+		Shootable.OnKnocked(VectorMath.Scale(VectorMath.GetSafeNormal(VectorMath.Add(Away, GroundedKnockbackLift)), Speed));
+	}
 }
 
 export function DestroyProjectiles(Projectiles: readonly FProjectile[]): void
@@ -427,6 +500,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		return 0;
 	}
 	DamageBuildingsInRadius(Origin, Radius, Damage, Attacker);
+	KnockProjectiles(Origin, Attacker, Radius, Damage, Knockback);
 
 	let DamageTotal: number = 0;
 	ForEachLivePawn((Victim: CSPlayerPawn): void =>
@@ -573,6 +647,7 @@ export function TraceHitscan(Shooter: CSPlayerPawn, Start: FVector, End: FVector
 		}
 	}
 	const Building: FBuildingHit | undefined = FindBuildingOnLine(Shooter, Start, StopPoint, WorldTrace);
+	ShootDownProjectiles(Shooter, Start, Building ? Building.Point : StopPoint);
 	if (!Building)
 	{
 		return { Hits: Hits, End: StopPoint, HitBuilding: undefined };
@@ -667,4 +742,4 @@ export function ApplyBulletFalloff(Event: FModifyDamageEvent, Falloff: FDamageFa
 	Console.Log(`${LogPrefix} ${GetPawnName(Attacker)} Damaged (Bullet) ${GetPawnName(Event.player)} : ${Damage}d : ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)}`);
 
 	return { damage: Damage };
-}
+}
