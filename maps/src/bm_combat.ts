@@ -3,7 +3,7 @@ import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult, BaseTraceConfig }
 import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, GetAimAngles, SpawnTemplateEntities, ForEachLivePawn, DrawDebugBox, DrawDebugSphere } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
-import { GetOwnedBuildingEntities, FindBuildingOnLine, ClipTraceToBuildings, DamageBuildingsInRadius } from "./bm_buildings";
+import { GetOwnedBuildingEntities, FindBuildingOnLine, ClipTraceToBuildings, GetTraceBuilding, DamageBuildingsInRadius } from "./bm_buildings";
 import type { FBuilding, FBuildingHit } from "./bm_buildings";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -221,7 +221,8 @@ export function DrawMissingProjectile(Projectile: FProjectile, Color: FColor = G
 	DrawDebugSphere({ center: Projectile.Position, radius: Radius, duration: TickInterval * 2, color: Color });
 }
 
-export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): CSPlayerPawn | undefined
+// Returns whether it ran into a player or (with bHitPlayers) an enemy building, rather than bouncing
+export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): boolean
 {
 	if (Projectile.GroundNormal)
 	{
@@ -231,14 +232,19 @@ export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTim
 	const Hit: TraceResult | undefined = MoveProjectile(Projectile, DeltaTime, bHitPlayers);
 	if (!Hit)
 	{
-		return undefined;
+		return false;
 	}
-	if (IsPlayerPawn(Hit.hitEntity))
+	if (IsDirectHit(Hit, bHitPlayers))
 	{
-		return Hit.hitEntity;
+		return true;
 	}
 	BounceProjectile(Projectile, Hit.normal, Bounce);
-	return undefined;
+	return false;
+}
+
+function IsDirectHit(Hit: TraceResult, bHitPlayers: boolean): boolean
+{
+	return IsPlayerPawn(Hit.hitEntity) || (bHitPlayers && GetTraceBuilding(Hit) !== undefined);
 }
 
 export function MovePiercingProjectile(Projectile: FPiercingProjectile, DeltaTime: number): FPiercingStep
@@ -276,7 +282,7 @@ export function MovePiercingProjectile(Projectile: FPiercingProjectile, DeltaTim
 	return { NewHits: NewHits, WorldHit: WorldHit };
 }
 
-function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): CSPlayerPawn | undefined
+function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): boolean
 {
 	const Pull: FVector = { x: 0, y: 0, z: -Gravity * Projectile.GravityScale * DeltaTime };
 	const Rolling: FVector = VectorMath.ProjectOnPlane(VectorMath.Add(Projectile.Velocity, Pull), Ground);
@@ -285,10 +291,10 @@ function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaT
 	Projectile.Velocity = Speed > 0 ? VectorMath.Scale(Rolling, SlowedSpeed / Speed) : ZeroVector;
 
 	const Hit: TraceResult | undefined = SlowedSpeed > 0 ? SweepProjectile(Projectile, DeltaTime, bHitPlayers) : undefined;
-	if (Hit && IsPlayerPawn(Hit.hitEntity))
+	if (Hit && IsDirectHit(Hit, bHitPlayers))
 	{
 		PlaceProjectileModels(Projectile, false);
-		return Hit.hitEntity;
+		return true;
 	}
 	if (Hit)
 	{
@@ -296,7 +302,7 @@ function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaT
 	}
 	FollowGround(Projectile);
 	PlaceProjectileModels(Projectile, false);
-	return undefined;
+	return false;
 }
 
 function BounceProjectile(Projectile: FBouncingProjectile, Normal: FVector, Bounce: FBounceSettings): void

@@ -1,6 +1,6 @@
 import { Instance, CSInputs } from "cs_script/point_script";
 import type { CSPlayerPawn } from "cs_script/point_script";
-import { bDebug, TickInterval, GetTeamColor, GetOrCreate, DrawDebugSphere } from "../bm_core";
+import { bDebug, TickInterval, GetTeamColor, GetOrCreate, IsTeammate, IsInputDown, ForEachLivePawn, DrawDebugSphere } from "../bm_core";
 import { VectorMath } from "../bm_core";
 import type { FVector, FColor } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, MakeShootable, Explode } from "../bm_combat";
@@ -50,7 +50,6 @@ export interface FStickyBomb extends FProjectile
 interface FDemoPlayerState
 {
 	Stickies: FStickyBomb[];
-	bDetonateHeld: boolean;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,6 +123,7 @@ export const DemoSettings: FDemoSettings =
 const StickyTemplateName: string = "sticky_template";
 const PipeTemplateName: string = "pipe_template";
 const UnarmedStickyColor: FColor = { r: 240, g: 240, b: 240 };
+const BotStickyTriggerScale: number = 0.6;
 
 // Demoman /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -137,10 +137,29 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 		super(DemoSettings);
 	}
 
-	// pipes only 4 those fuckers
-	public override GetBotWeapons(): string[]
+	// A bot sets its stickies off once an enemy is well inside the blast of an armed one
+	public override GetBotInputs(Pawn: CSPlayerPawn, Slot: number, Now: number, Enemy: CSPlayerPawn | undefined): number
 	{
-		return [this.Settings.Secondary];
+		const State: FDemoPlayerState | undefined = this.PlayerStates.get(Slot);
+		if (!State)
+		{
+			return 0;
+		}
+		const Reach: number = this.Settings.StickyRadius * BotStickyTriggerScale;
+		let bTrigger: boolean = false;
+		ForEachLivePawn((Other: CSPlayerPawn): void =>
+		{
+			if (bTrigger || Other === Pawn || IsTeammate(Other, Pawn))
+			{
+				return;
+			}
+			const Spot: FVector = Other.GetAbsOrigin();
+			bTrigger = State.Stickies.some((Sticky: FStickyBomb): boolean =>
+			{
+				return Now >= Sticky.ArmedAt && VectorMath.Size(VectorMath.Subtract(Sticky.Position, Spot)) <= Reach;
+			});
+		});
+		return bTrigger ? this.Settings.StickyDetonateKey : 0;
 	}
 
 	public override GetBallistics(WeaponName: string): FBallistics | undefined
@@ -237,10 +256,8 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 			}
 		}
 
-		const bDown: boolean = Pawn.IsInputPressed(this.Settings.StickyDetonateKey);
-		const bPressed: boolean = bDown && !State.bDetonateHeld;
-		State.bDetonateHeld = bDown;
-		if (!bPressed)
+		// Held, not pressed: stickies still arming when the key went down go off as soon as they are armed
+		if (!IsInputDown(Pawn, this.Settings.StickyDetonateKey))
 		{
 			return;
 		}
@@ -292,7 +309,7 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 	{
 		return GetOrCreate(this.PlayerStates, Slot, (): FDemoPlayerState =>
 		{
-			return { Stickies: [], bDetonateHeld: false };
+			return { Stickies: [] };
 		});
 	}
 

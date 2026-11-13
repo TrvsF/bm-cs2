@@ -154,6 +154,7 @@ export const ShrinkerSettings: FShrinkerSettings =
 };
 
 const MaxShrinkCharge: number = 100;
+const BotShrinkCharge: number = 50;
 const UnarmedTrapColor: FColor = { r: 255, g: 255, b: 255 };
 const TeleportFxLifetime: number = 3;
 const ArrivalLift: number = 2;
@@ -406,6 +407,28 @@ export class ShrinkerClass extends PlayerClass<FShrinkerSettings>
 	public override GetBotBuildTool(Pawn: CSPlayerPawn): CSWeaponBase | undefined
 	{
 		return Pawn.FindWeapon(this.Settings.Primary);
+	}
+
+	public override IsBotStabber(): boolean
+	{
+		return true;
+	}
+
+	// A bot shrinks while it is after somebody and grows back when it isn't. It needs no key for that, whatever it is holding.
+	public override GetBotInputs(Pawn: CSPlayerPawn, Slot: number, Now: number, Enemy: CSPlayerPawn | undefined): number
+	{
+		const State: FShrinkerPlayerState = this.GetPlayerState(Slot);
+		const bWanted: boolean = Enemy !== undefined && (State.bWantsShrunk || State.Charge >= BotShrinkCharge);
+		const bWasShrunk: boolean = State.bWantsShrunk;
+		if (bWanted !== bWasShrunk)
+		{
+			this.ToggleShrink(State);
+		}
+		if (State.bWantsShrunk !== bWasShrunk)
+		{
+			PlaySoundOn(State.bWantsShrunk ? this.Settings.ShrinkSound : this.Settings.GrowSound, Pawn);
+		}
+		return 0;
 	}
 
 	public override ClearPlayer(Slot: number): void

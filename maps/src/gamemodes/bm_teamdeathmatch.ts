@@ -11,6 +11,8 @@ export interface FTeamDeathmatchSettings
 {
 	readonly KillsToWin: number;
 	readonly LeaderboardRows: number;
+	// Bots fill each team up to this many players
+	readonly TeamSize: number;
 }
 
 interface FPlayerScore
@@ -25,6 +27,7 @@ export const TeamDeathmatchSettings: FTeamDeathmatchSettings =
 {
 	KillsToWin: 100,
 	LeaderboardRows: 3,
+	TeamSize: 8,
 };
 
 const GScores: Map<number, FPlayerScore> = new Map<number, FPlayerScore>();
@@ -60,6 +63,11 @@ export class TeamDeathmatchMode extends GameMode
 			"mp_roundtime_defuse 60",
 			"mp_roundtime_hostage 60",
 			"bot_stop 0",
+			"bot_quota_mode fill",
+			`bot_quota ${TeamDeathmatchSettings.TeamSize * 2}`,
+			"bot_join_team any",
+			"mp_autoteambalance 1",
+			"mp_limitteams 1",
 		];
 	}
 

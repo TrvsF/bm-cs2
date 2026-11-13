@@ -1,10 +1,10 @@
-import { Instance, Console, GameRules, Entities, CSInputs } from "cs_script/point_script";
+import { Instance, Console, GameRules, Entities, CSInputs, CSGearSlot } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, TraceResult, PlayerTraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, ZeroVector, VectorMath, IsTeammate, GetChestPosition, GetOrCreate, SetBotControl, ForEachLivePawn } from "./bm_core";
+import { TickInterval, LogPrefix, ZeroVector, GetPlayerSlot, VectorMath, IsTeammate, GetChestPosition, GetOrCreate, SetBotControl, ForEachLivePawn } from "./bm_core";
 import type { FVector, FRotator } from "./bm_core";
 import { GetAimPoint, EvaluateDamageCurve } from "./bm_combat";
 import type { FBallistics } from "./bm_combat";
-import type { PlayerClass, FClassSettings, FBotShot } from "./bm_classes";
+import type { PlayerClass, FClassSettings, FBotShot, FHudCounter } from "./bm_classes";
 import type { FLauncherSettings } from "./bm_launcher";
 import { EBuildHint, EBotBuildSite, GetBuildHints, GetPlacingKind, GetNextToBuild, GetEnemyBuildings, GetBuildingCenter } from "./bm_buildings";
 import type { BuildingKind, FBuilding, FBuildKey, FBuildKeys, FBuildHint, FBuildHints } from "./bm_buildings";
@@ -55,6 +55,22 @@ export interface FBotCombatSettings
 	readonly RoamSpeed: number;
 	readonly RoamProbe: number;
 	readonly RoamSteerInterval: number;
+	// A healer bot walks up to within HealFollowDistance of its patient, and picks another once it is HealLeashRange away
+	readonly HealFollowDistance: number;
+	readonly HealLeashRange: number;
+	// Blast and recoil jumps: a moving bot hops, aims down behind itself and fires a weapon that throws its shooter
+	readonly JumpMinSpeed: number;
+	readonly JumpSpeed: number;
+	readonly JumpHoldTime: number;
+	readonly JumpBlastPitch: number;
+	readonly JumpRecoilPitch: number;
+	readonly JumpMinHealth: number;
+	// It only jumps with this much clear way ahead and ground to land on
+	readonly JumpClearDistance: number;
+	readonly JumpLandDrop: number;
+	// For classes whose bots knife: it walks to the spot StabBehindDistance behind its target's back, and stops pushing within StabArriveDistance of it
+	readonly StabBehindDistance: number;
+	readonly StabArriveDistance: number;
 }
 
 interface FBotBuildJob
@@ -76,6 +92,8 @@ export interface FBotPersonality
 	readonly ChaseSpeed: number;
 	// Always walks towards the nearest enemy, not just when it has been camping
 	readonly bHunts: boolean;
+	// Seconds between blast or recoil jumps, give or take half. 0 = never jumps.
+	readonly JumpInterval: number;
 }
 
 interface FBotPick
@@ -109,6 +127,11 @@ interface FBotFighter
 	RoamUntil: number;
 	RoamYaw: number;
 	NextSteerTime: number;
+	Patient: CSPlayerPawn | undefined;
+	NextJumpTime: number;
+	JumpUntil: number;
+	JumpYaw: number;
+	JumpWeaponName: string;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -149,16 +172,29 @@ export const BotCombatSettings: FBotCombatSettings =
 	RoamSpeed: 250,
 	RoamProbe: 80,
 	RoamSteerInterval: 0.25,
+	HealFollowDistance: 200,
+	HealLeashRange: 1500,
+	JumpMinSpeed: 150,
+	JumpSpeed: 290,
+	JumpHoldTime: 0.3,
+	JumpBlastPitch: 70,
+	JumpRecoilPitch: 45,
+	JumpMinHealth: 0.6,
+	JumpClearDistance: 350,
+	JumpLandDrop: 300,
+	StabBehindDistance: 40,
+	StabArriveDistance: 16,
 };
 export const BotPersonalities: FBotPersonality[] =
 [
-	{ Name: "aggressive", MinRatingScale: 0.5, ReactionScale: 0.5, AimErrorScale: 1.5, ChaseSpeed: 250, bHunts: true },
-	{ Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false },
-	{ Name: "careful", MinRatingScale: 2, ReactionScale: 1.25, AimErrorScale: 0.5, ChaseSpeed: 0, bHunts: false },
+	{ Name: "aggressive", MinRatingScale: 0.5, ReactionScale: 0.5, AimErrorScale: 1.5, ChaseSpeed: 250, bHunts: true, JumpInterval: 4 },
+	{ Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 9 },
+	{ Name: "careful", MinRatingScale: 2, ReactionScale: 1.25, AimErrorScale: 0.5, ChaseSpeed: 0, bHunts: false, JumpInterval: 0 },
 ];
-const FallbackPersonality: FBotPersonality = { Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false };
+const FallbackPersonality: FBotPersonality = { Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 9 };
 const ChaseStopDistance: number = 150;
 const RoamStepHeight: number = 18;
+const BotJumpRetryInterval: number = 0.5;
 const RoamTurns: readonly number[] = [0, 35, -35, 70, -70, 110, -110, 150, -150];
 const BotTargetRadius: number = 16;
 const UnratedInterval: number = 1;
@@ -169,6 +205,9 @@ const GBotAssignments: Map<number, FBotAssignment> = new Map<number, FBotAssignm
 const GBotReadyAt: Map<number, number> = new Map<number, number>();
 const GBotFighters: Map<number, FBotFighter> = new Map<number, FBotFighter>();
 const GBotPersonalities: Map<number, FBotPersonality> = new Map<number, FBotPersonality>();
+const GBotHealers: Map<number, number> = new Map<number, number>();
+// Keys the bot's class wants held this tick, on top of whatever the bot itself presses
+let GBotClassInputs: number = 0;
 
 // Bots ////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -308,7 +347,8 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 		return {
 			WeaponName: undefined, Target: undefined, SeenAt: 0, Error: { pitch: 0, yaw: 0, roll: 0 }, NextErrorTime: 0, NextDrawTime: 0, LastTickTime: 0, bTap: false,
 			BuildAim: { pitch: 0, yaw: 0, roll: 0 }, NextBuildTime: 0, SpawnSpot: Pawn.GetAbsOrigin(), EnemySpot: undefined, EnemySeenAt: 0,
-			CampSpot: Pawn.GetAbsOrigin(), NextCampCheckTime: 0, RoamUntil: 0, RoamYaw: 0, NextSteerTime: 0,
+			CampSpot: Pawn.GetAbsOrigin(), NextCampCheckTime: 0, RoamUntil: 0, RoamYaw: 0, NextSteerTime: 0, Patient: undefined,
+			NextJumpTime: 0, JumpUntil: 0, JumpYaw: 0, JumpWeaponName: "",
 		};
 	});
 	if (Now - Fighter.LastTickTime > BotRespawnGap)
@@ -321,8 +361,12 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 		Fighter.CampSpot = Fighter.SpawnSpot;
 		Fighter.NextCampCheckTime = Now + BotCombatSettings.CampCheckInterval;
 		Fighter.RoamUntil = 0;
+		Fighter.Patient = undefined;
+		Fighter.JumpUntil = 0;
+		Fighter.NextJumpTime = Now + BotCombatSettings.CampCheckInterval;
 	}
 	Fighter.LastTickTime = Now;
+	GBotClassInputs = 0;
 
 	if (GameRules.IsFreezePeriod())
 	{
@@ -331,6 +375,14 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 		return;
 	}
 
+	if (TickBotJump(Pawn, Slot, Now, Definition, Fighter))
+	{
+		return;
+	}
+	if (Definition.IsBotHealer() && TickBotHealer(Pawn, Slot, Now, Definition, Fighter))
+	{
+		return;
+	}
 	const Personality: FBotPersonality = GetBotPersonality(Slot, Controller);
 	const Pick: FBotPick | undefined = FindBotTarget(Pawn, Fighter, Definition, Weapons, Personality);
 	if ((Pick ? Pick.Target : undefined) !== Fighter.Target)
@@ -343,6 +395,12 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 		Fighter.WeaponName = Pick.WeaponName !== "" ? Pick.WeaponName : undefined;
 		Fighter.EnemySpot = Pick.Feet;
 		Fighter.EnemySeenAt = Now;
+	}
+	const Enemy: CSPlayerPawn | undefined = Pick && !("Kind" in Pick.Target) ? Pick.Target : undefined;
+	GBotClassInputs = Definition.GetBotInputs(Pawn, Slot, Now, Enemy);
+	if (Enemy && Definition.IsBotStabber() && TickBotStab(Pawn, Slot, Now, Fighter, Enemy))
+	{
+		return;
 	}
 	const bChasing: boolean = Pick !== undefined && ChaseBotTarget(Pawn, Pick, Personality);
 	if (Pick && Pick.Rating >= BotCombatSettings.MinRating * Personality.MinRatingScale)
@@ -361,6 +419,7 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 	{
 		Pawn.SetEyeAngles(VectorMath.GetRotation(VectorMath.Subtract(Pick.Spot, Pawn.GetEyePosition())));
 	}
+	StartBotJump(Pawn, Now, Definition, Fighter, Weapons, Personality);
 	if (!bChasing && Tool && TickBotBuilding(Pawn, Slot, Now, Definition, Fighter, Tool))
 	{
 		return;
@@ -369,11 +428,121 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 	IdleBot(Pawn, Slot, Fighter, Weapons);
 }
 
+function ControlBot(Slot: number, Inputs: number, Weapon: CSWeaponBase | undefined, Aim: FRotator): void
+{
+	SetBotControl(Slot, { Inputs: Inputs | GBotClassInputs, Weapon: Weapon, Aim: Aim });
+}
+
+// Jumping /////////////////////////////////////////////////////////////////////////////////////////
+
+// A bot on the move with a weapon that throws its shooter (a rocket's blast, a shotgun's recoil) and room ahead starts a jump
+function StartBotJump(Pawn: CSPlayerPawn, Now: number, Definition: PlayerClass<FClassSettings>, Fighter: FBotFighter, Weapons: string[], Personality: FBotPersonality): void
+{
+	if (Personality.JumpInterval <= 0 || Now < Fighter.NextJumpTime || !Pawn.GetGroundEntity())
+	{
+		return;
+	}
+	const Velocity: FVector = Pawn.GetAbsVelocity();
+	const Heading: FVector = { x: Velocity.x, y: Velocity.y, z: 0 };
+	if (VectorMath.Size(Heading) < BotCombatSettings.JumpMinSpeed)
+	{
+		return;
+	}
+	// The weapon it already has out comes first: another one takes time to draw
+	const Held: string | undefined = Fighter.WeaponName;
+	const Ordered: string[] = Held !== undefined && Weapons.includes(Held) ? [Held, ...Weapons] : Weapons;
+	const WeaponName: string | undefined = Ordered.find((Name: string): boolean =>
+	{
+		const Shot: FBotShot | undefined = Definition.GetBotShot(Name);
+		return Shot !== undefined && Shot.SelfPush > 0;
+	});
+	const Shot: FBotShot | undefined = WeaponName !== undefined ? Definition.GetBotShot(WeaponName) : undefined;
+	if (WeaponName === undefined || !Shot)
+	{
+		return;
+	}
+	Fighter.NextJumpTime = Now + BotJumpRetryInterval;
+	if (Shot.BlastRadius > 0 && Pawn.GetHealth() < Pawn.GetMaxHealth() * BotCombatSettings.JumpMinHealth)
+	{
+		return;
+	}
+
+	const Direction: FVector = VectorMath.GetSafeNormal(Heading);
+	const Start: FVector = VectorMath.Add(Pawn.GetAbsOrigin(), { x: 0, y: 0, z: RoamStepHeight });
+	const Ahead: FVector = VectorMath.Add(Start, VectorMath.Scale(Direction, BotCombatSettings.JumpClearDistance));
+	if (Instance.TracePlayer({ start: Start, end: Ahead, player: Pawn }).didHit)
+	{
+		return;
+	}
+	const Landing: TraceResult = Instance.TraceLine({ start: Ahead, end: VectorMath.Subtract(Ahead, { x: 0, y: 0, z: BotCombatSettings.JumpLandDrop }), ignorePlayers: true });
+	if (!Landing.didHit)
+	{
+		return;
+	}
+
+	Fighter.NextJumpTime = Now + Personality.JumpInterval * (0.5 + Math.random());
+	Fighter.JumpUntil = Now + BotCombatSettings.JumpHoldTime;
+	Fighter.JumpYaw = VectorMath.GetRotation(Direction).yaw;
+	Fighter.JumpWeaponName = WeaponName;
+	Pawn.Teleport({ velocity: { x: Velocity.x, y: Velocity.y, z: BotCombatSettings.JumpSpeed } });
+}
+
+// Mid-jump: fires down and behind, so the blast or the recoil throws it up and onwards. Its real view isn't turned.
+function TickBotJump(Pawn: CSPlayerPawn, Slot: number, Now: number, Definition: PlayerClass<FClassSettings>, Fighter: FBotFighter): boolean
+{
+	if (Now >= Fighter.JumpUntil)
+	{
+		return false;
+	}
+	const Shot: FBotShot | undefined = Definition.GetBotShot(Fighter.JumpWeaponName);
+	const Weapon: CSWeaponBase | undefined = Pawn.FindWeapon(Fighter.JumpWeaponName);
+	if (!Shot || !Weapon)
+	{
+		Fighter.JumpUntil = 0;
+		return false;
+	}
+	DrawBotWeapon(Pawn, Fighter, Weapon, Now);
+	const Pitch: number = Shot.BlastRadius > 0 ? BotCombatSettings.JumpBlastPitch : BotCombatSettings.JumpRecoilPitch;
+	const Launcher: FLauncherSettings | undefined = GetBotLauncher(Definition, Fighter.JumpWeaponName);
+	Fighter.bTap = !Fighter.bTap;
+	const bFire: boolean = !Launcher || !Launcher.bFireOnRelease || Fighter.bTap;
+	ControlBot(Slot, bFire ? CSInputs.ATTACK : 0, Weapon, { pitch: Pitch, yaw: Fighter.JumpYaw + 180, roll: 0 });
+	return true;
+}
+
+// Stabbing ////////////////////////////////////////////////////////////////////////////////////////
+
+// Knife out, it makes for the spot behind its target's back and faces them. The swinging is left to the game's own bot.
+function TickBotStab(Pawn: CSPlayerPawn, Slot: number, Now: number, Fighter: FBotFighter, Target: CSPlayerPawn): boolean
+{
+	const Knife: CSWeaponBase | undefined = Pawn.FindWeaponBySlot(CSGearSlot.KNIFE);
+	if (!Knife)
+	{
+		return false;
+	}
+	const Origin: FVector = Pawn.GetAbsOrigin();
+	const TargetOrigin: FVector = Target.GetAbsOrigin();
+	const TargetFacing: FVector = VectorMath.GetForwardVector({ pitch: 0, yaw: Target.GetEyeAngles().yaw, roll: 0 });
+	const Goal: FVector = VectorMath.Subtract(TargetOrigin, VectorMath.Scale(TargetFacing, BotCombatSettings.StabBehindDistance));
+	if (VectorMath.Size(VectorMath.Subtract(Goal, Origin)) > BotCombatSettings.StabArriveDistance && Pawn.GetGroundEntity())
+	{
+		SteerBot(Pawn, Now, Fighter, Goal);
+	}
+	const Aim: FRotator = VectorMath.GetRotation(VectorMath.Subtract(GetChestPosition(Target), Pawn.GetEyePosition()));
+	Pawn.SetEyeAngles(Aim);
+	DrawBotWeapon(Pawn, Fighter, Knife, Now);
+	Fighter.NextCampCheckTime = Now + BotCombatSettings.CampCheckInterval;
+	Fighter.CampSpot = Origin;
+
+	ControlBot(Slot, 0, Knife, Aim);
+	return true;
+}
+
 // Nothing worth shooting or building: it counts as holding its gun, but the game's AI is left to what is really in its hands
 function IdleBot(Pawn: CSPlayerPawn, Slot: number, Fighter: FBotFighter, Weapons: string[]): void
 {
 	const WeaponName: string | undefined = Fighter.WeaponName ?? Weapons[0];
-	SetBotControl(Slot, { Inputs: 0, Weapon: WeaponName !== undefined ? Pawn.FindWeapon(WeaponName) : undefined, Aim: Pawn.GetEyeAngles() });
+	ControlBot(Slot, 0, WeaponName !== undefined ? Pawn.FindWeapon(WeaponName) : undefined, Pawn.GetEyeAngles());
 }
 
 // Gets a bot that has hung about one spot (or an aggressive one, always) walking towards the nearest enemy
@@ -394,18 +563,86 @@ function RoamBot(Pawn: CSPlayerPawn, Now: number, Fighter: FBotFighter, Personal
 		return;
 	}
 
+	const Goal: FVector | undefined = FindNearestEnemySpot(Pawn);
+	if (Goal)
+	{
+		SteerBot(Pawn, Now, Fighter, Goal);
+	}
+}
+
+function SteerBot(Pawn: CSPlayerPawn, Now: number, Fighter: FBotFighter, Goal: FVector): void
+{
 	if (Now >= Fighter.NextSteerTime)
 	{
-		const Goal: FVector | undefined = FindNearestEnemySpot(Pawn);
-		if (!Goal)
-		{
-			return;
-		}
 		Fighter.NextSteerTime = Now + BotCombatSettings.RoamSteerInterval;
-		Fighter.RoamYaw = FindOpenYaw(Pawn, VectorMath.GetRotation(VectorMath.Subtract(Goal, Origin)).yaw);
+		Fighter.RoamYaw = FindOpenYaw(Pawn, VectorMath.GetRotation(VectorMath.Subtract(Goal, Pawn.GetAbsOrigin())).yaw);
 	}
 	const Direction: FVector = VectorMath.GetForwardVector({ pitch: 0, yaw: Fighter.RoamYaw, roll: 0 });
 	Pawn.Teleport({ velocity: { x: Direction.x * BotCombatSettings.RoamSpeed, y: Direction.y * BotCombatSettings.RoamSpeed, z: Pawn.GetAbsVelocity().z } });
+}
+
+// Healing /////////////////////////////////////////////////////////////////////////////////////////
+
+function TickBotHealer(Pawn: CSPlayerPawn, Slot: number, Now: number, Definition: PlayerClass<FClassSettings>, Fighter: FBotFighter): boolean
+{
+	GBotHealers.set(Slot, Now);
+	const Tool: CSWeaponBase | undefined = Pawn.FindWeaponBySlot(CSGearSlot.KNIFE);
+	const Patient: CSPlayerPawn | undefined = FindBotPatient(Pawn, Now, Fighter);
+	Fighter.Patient = Patient;
+	if (!Tool || !Patient)
+	{
+		return false;
+	}
+
+	const Eye: FVector = Pawn.GetEyePosition();
+	const Offset: FVector = VectorMath.Subtract(GetChestPosition(Patient), Eye);
+	if (VectorMath.Size(Offset) > BotCombatSettings.HealFollowDistance && Pawn.GetGroundEntity())
+	{
+		SteerBot(Pawn, Now, Fighter, Patient.GetAbsOrigin());
+	}
+	const Aim: FRotator = VectorMath.GetRotation(Offset);
+	Pawn.SetEyeAngles(Aim);
+	DrawBotWeapon(Pawn, Fighter, Tool, Now);
+
+	// Its charge (the class's HUD counter) is used as soon as it is full and the patient has been hurt
+	const Charge: FHudCounter | undefined = Definition.GetHudCounter(Slot);
+	const bUseCharge: boolean = Charge !== undefined && Charge.Max > 0 && Charge.Count >= Charge.Max && Patient.GetHealth() < Patient.GetMaxHealth();
+	ControlBot(Slot, CSInputs.ATTACK | (bUseCharge ? CSInputs.ATTACK2 : 0), Tool, Aim);
+	return true;
+}
+
+function IsBotHealer(Pawn: CSPlayerPawn, Now: number): boolean
+{
+	return Now - (GBotHealers.get(GetPlayerSlot(Pawn)) ?? -Infinity) < BotRespawnGap;
+}
+
+function FindBotPatient(Pawn: CSPlayerPawn, Now: number, Fighter: FBotFighter): CSPlayerPawn | undefined
+{
+	const Origin: FVector = Pawn.GetAbsOrigin();
+	const Current: CSPlayerPawn | undefined = Fighter.Patient;
+	if (Current && Current.IsValid() && Current.IsAlive() && IsTeammate(Current, Pawn) && !IsBotHealer(Current, Now) && VectorMath.Size(VectorMath.Subtract(Current.GetAbsOrigin(), Origin)) <= BotCombatSettings.HealLeashRange)
+	{
+		return Current;
+	}
+	let Best: CSPlayerPawn | undefined = undefined;
+	let BestHealth: number = Infinity;
+	let BestDistance: number = Infinity;
+	ForEachLivePawn((Other: CSPlayerPawn): void =>
+	{
+		if (Other === Pawn || !IsTeammate(Other, Pawn) || IsBotHealer(Other, Now))
+		{
+			return;
+		}
+		const Distance: number = VectorMath.Size(VectorMath.Subtract(Other.GetAbsOrigin(), Origin));
+		const Health: number = Math.min(1, Other.GetHealth() / Math.max(1, Other.GetMaxHealth()));
+		if (Distance <= BotCombatSettings.HealLeashRange && (Health < BestHealth || (Health === BestHealth && Distance < BestDistance)))
+		{
+			Best = Other;
+			BestHealth = Health;
+			BestDistance = Distance;
+		}
+	});
+	return Best;
 }
 
 function FindNearestEnemySpot(Pawn: CSPlayerPawn): FVector | undefined
@@ -450,6 +687,7 @@ export function ForgetBotCombat(Slot: number): void
 {
 	GBotFighters.delete(Slot);
 	GBotPersonalities.delete(Slot);
+	GBotHealers.delete(Slot);
 	SetBotControl(Slot, undefined);
 }
 
@@ -588,7 +826,7 @@ function AttackBotTarget(Pawn: CSPlayerPawn, Slot: number, Now: number, Definiti
 	Fighter.bTap = !Fighter.bTap;
 	const bReacted: boolean = Now - Fighter.SeenAt >= BotCombatSettings.ReactionTime * Personality.ReactionScale;
 	const bFire: boolean = bReacted && (!Launcher || !Launcher.bFireOnRelease || Fighter.bTap);
-	SetBotControl(Slot, { Inputs: bFire ? CSInputs.ATTACK : 0, Weapon: Weapon, Aim: Aim });
+	ControlBot(Slot, bFire ? CSInputs.ATTACK : 0, Weapon, Aim);
 }
 
 // Building ////////////////////////////////////////////////////////////////////////////////////////
@@ -596,7 +834,7 @@ function AttackBotTarget(Pawn: CSPlayerPawn, Slot: number, Now: number, Definiti
 // With its build tool out, taps a build key to start a building and again to put it down, throwing it somewhere else when the spot is no good
 function TickBotBuilding(Pawn: CSPlayerPawn, Slot: number, Now: number, Definition: PlayerClass<FClassSettings>, Fighter: FBotFighter, Tool: CSWeaponBase): boolean
 {
-	SetBotControl(Slot, { Inputs: 0, Weapon: Tool, Aim: Fighter.BuildAim });
+	ControlBot(Slot, 0, Tool, Fighter.BuildAim);
 	const Keys: FBuildKeys | undefined = Definition.GetBuildKeys(Pawn);
 	if (!Keys)
 	{
@@ -621,7 +859,7 @@ function TickBotBuilding(Pawn: CSPlayerPawn, Slot: number, Now: number, Definiti
 	}
 	const bBlocked: boolean = Job.State === EBuildHint.Blocked;
 	Fighter.NextBuildTime = Now + (bBlocked ? BotCombatSettings.BuildRetryInterval : BotCombatSettings.BuildInterval);
-	SetBotControl(Slot, { Inputs: bBlocked ? 0 : Job.Input, Weapon: Tool, Aim: Fighter.BuildAim });
+	ControlBot(Slot, bBlocked ? 0 : Job.Input, Tool, Fighter.BuildAim);
 	return true;
 }
 

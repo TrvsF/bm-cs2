@@ -82,6 +82,8 @@ export interface FBotShot
 	readonly Range: number;
 	readonly Falloff: FDamageCurve;
 	readonly BlastRadius: number;
+	// How hard firing it throws its own shooter (recoil, or its own blast). Above 0, bots jump with it.
+	readonly SelfPush: number;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -348,6 +350,24 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 		return undefined;
 	}
 
+	// Override to have the class's bots hold extra keys this tick (set off their bombs, use an ability). Enemy = who the bot is after, if anyone.
+	public GetBotInputs(Pawn: CSPlayerPawn, Slot: number, Now: number, Enemy: CSPlayerPawn | undefined): number
+	{
+		return 0;
+	}
+
+	// Override for a class whose bots should get behind enemies and knife them instead of shooting
+	public IsBotStabber(): boolean
+	{
+		return false;
+	}
+
+	// Override for a class whose bots should follow and heal teammates (melee out, attack held) instead of fighting
+	public IsBotHealer(): boolean
+	{
+		return false;
+	}
+
 	// Override for a class that builds: the weapon its bots hold to build with
 	public GetBotBuildTool(Pawn: CSPlayerPawn): CSWeaponBase | undefined
 	{
@@ -488,12 +508,12 @@ export function FireHitscan(Attacker: CSPlayerPawn, Settings: FHitscanWeaponSett
 
 export function GetHitscanBotShot(Settings: FHitscanWeaponSettings): FBotShot
 {
-	return { Damage: Settings.Damage * Settings.Pellets, Spread: Settings.Spread, Range: Settings.Range, Falloff: Settings.Falloff, BlastRadius: 0 };
+	return { Damage: Settings.Damage * Settings.Pellets, Spread: Settings.Spread, Range: Settings.Range, Falloff: Settings.Falloff, BlastRadius: 0, SelfPush: Settings.SelfKnockback };
 }
 
-export function GetProjectileBotShot(Damage: number, BlastRadius: number, Falloff: FDamageCurve = []): FBotShot
+export function GetProjectileBotShot(Damage: number, BlastRadius: number, Falloff: FDamageCurve = [], SelfPush: number = 0): FBotShot
 {
-	return { Damage: Damage, Spread: 0, Range: ProjectileBotRange, Falloff: Falloff, BlastRadius: BlastRadius };
+	return { Damage: Damage, Spread: 0, Range: ProjectileBotRange, Falloff: Falloff, BlastRadius: BlastRadius, SelfPush: SelfPush };
 }
 
 export function TraceHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeaponSettings, Start: FVector, Direction: FVector): FHitscanResult

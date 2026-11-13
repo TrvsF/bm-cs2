@@ -73,7 +73,7 @@ export class SoldierClass extends PlayerClass<FSoliderSettings>
 
 	public override GetBotShot(WeaponName: string): FBotShot | undefined
 	{
-		return GetProjectileBotShot(this.Settings.RocketDamage, this.Settings.RocketRadius);
+		return GetProjectileBotShot(this.Settings.RocketDamage, this.Settings.RocketRadius, [], this.Settings.RocketKnockback);
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
