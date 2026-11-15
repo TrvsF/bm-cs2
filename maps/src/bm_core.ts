@@ -368,11 +368,6 @@ export function IsKnife(Weapon: CSWeaponBase | undefined): boolean
 	return Data !== undefined && Data.GetType() === CSWeaponType.KNIFE;
 }
 
-export function SpawnFromTemplate(TemplateName: string, Position: FVector): Entity | undefined
-{
-	return FindPointTemplate(TemplateName)?.ForceSpawn(Position)?.[0];
-}
-
 export function SpawnTemplateEntities(TemplateName: string, Position: FVector, Rotation: FRotator | undefined): Entity[]
 {
 	const Template: PointTemplate | undefined = FindPointTemplate(TemplateName);

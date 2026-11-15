@@ -1,4 +1,4 @@
-import { Instance, Console, Entities } from "cs_script/point_script";
+import { Console, Entities } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, BaseModelEntity } from "cs_script/point_script";
 import { bDebug, LogPrefix, TickInterval, ForEachLivePawn, DrawDebugSphere } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";

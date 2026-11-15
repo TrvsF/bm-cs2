@@ -27,7 +27,7 @@ import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
 import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ShowBuildings, ShowBuildHints, ShowTargetId, ResetClassUi } from "./bm_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo, EmptyRealGuns } from "./bm_launcher";
-import { TickBotCombat, ForgetBotCombat } from "./bm_bots";
+import { TickBotCombat, ForgetBotCombat } from "./bm_botcombat";
 import type { FLauncherShot } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
 import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone, RefreshSpawnZoneTouches } from "./bm_spawnzones";
@@ -96,7 +96,12 @@ function Tick(): void
 		ForEachLivePawn((Pawn: CSPlayerPawn, Slot: number): void =>
 		{
 			const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
-			if (PlayerClass !== undefined)
+			if (PlayerClass === undefined)
+			{
+				return;
+			}
+			// One player's error mustn't cost everyone else their tick
+			try
 			{
 				const Definition = ClassDefinitions[PlayerClass];
 				TickBotCombat(Pawn, Slot, Now, Definition);
@@ -107,6 +112,10 @@ function Tick(): void
 					Definition.OnLauncherFired(Pawn, Slot, Now, Shot);
 				}
 				Definition.TickPlayer(Pawn, Slot, Now, DeltaTime);
+			}
+			catch (Exception: unknown)
+			{
+				Console.Log(`${LogPrefix} error ticking ${GetPawnName(Pawn)}: ${String(Exception)}`);
 			}
 		});
 		for (const Definition of Object.values(ClassDefinitions))

@@ -1,7 +1,7 @@
-import { Instance, Console, CSDamageTypes, CSWeaponType } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult, BaseTraceConfig } from "cs_script/point_script";
+import { Instance, Console, CSDamageTypes } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, TraceResult, BaseTraceConfig } from "cs_script/point_script";
 import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, GetAimAngles, SpawnTemplateEntities, ForEachLivePawn, DrawDebugBox, DrawDebugSphere } from "./bm_core";
-import type { FVector, FRotator, FRotationMatrix, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
+import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
 import { GetOwnedBuildingEntities, FindBuildingOnLine, ClipTraceToBuildings, GetTraceBuilding, DamageBuildingsInRadius } from "./bm_buildings";
 import type { FBuilding, FBuildingHit } from "./bm_buildings";
@@ -748,29 +748,4 @@ export function GetHeightAboveGround(Pawn: CSPlayerPawn, MaxDistance: number): n
 		return MaxDistance;
 	}
 	return Trace.startedInSolid ? 0 : Math.max(0, Start.z - Trace.end.z - GroundTraceLift.z);
-}
-
-export function ApplyBulletFalloff(Event: FModifyDamageEvent, Falloff: FDamageFalloff | undefined): FModifyDamageResult
-{
-	const Attacker: Entity | undefined = Event.attacker;
-	const Weapon: CSWeaponBase | undefined = Event.weapon;
-	const bIsBullet: boolean = (Event.damageTypes & (CSDamageTypes.BULLET | CSDamageTypes.BUCKSHOT)) !== 0;
-	if (!Falloff || !Weapon || !bIsBullet || !IsPlayerPawn(Attacker) || Attacker === Event.player)
-	{
-		return;
-	}
-	if (Weapon.GetData().GetType() === CSWeaponType.KNIFE)
-	{
-		return;
-	}
-
-	// CS2 already scaled the damage by RangeModifier ^ (distance / 500), so undo that first
-	const BulletTravel: number = VectorMath.Size(VectorMath.Subtract(GetChestPosition(Event.player), Attacker.GetEyePosition()));
-	const CsRangeScale: number = Math.pow(Weapon.GetData().GetRangeModifier(), BulletTravel / 500);
-	const RangeScale: number = GetRangeDamageScale(Attacker, Event.player, Falloff);
-	const Damage: number = Math.max(1, Math.round((Event.damage / CsRangeScale) * RangeScale));
-
-	Console.Log(`${LogPrefix} ${GetPawnName(Attacker)} Damaged (Bullet) ${GetPawnName(Event.player)} : ${Damage}d : ${Math.round(BulletTravel)}u x${RangeScale.toFixed(2)}`);
-
-	return { damage: Damage };
 }

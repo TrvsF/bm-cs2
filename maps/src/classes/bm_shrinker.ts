@@ -1,4 +1,4 @@
-import { Instance, Console, CSInputs, CSDamageTypes, CSDamageFlags } from "cs_script/point_script";
+import { Console, CSInputs, CSDamageTypes, CSDamageFlags } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
 import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, GetHeldWeapon, ForEachLivePawn, DrawDebugLine } from "../bm_core";
 import type { FVector, FColor, FHeldInputs } from "../bm_core";
@@ -414,8 +414,7 @@ export class ShrinkerClass extends PlayerClass<FShrinkerSettings>
 		return true;
 	}
 
-	// A bot shrinks while it is after somebody and grows back when it isn't. It needs no key for that, whatever it is holding.
-	public override GetBotInputs(Pawn: CSPlayerPawn, Slot: number, Now: number, Enemy: CSPlayerPawn | undefined): number
+	public override TickBot(Pawn: CSPlayerPawn, Slot: number, Now: number, Enemy: CSPlayerPawn | undefined): number
 	{
 		const State: FShrinkerPlayerState = this.GetPlayerState(Slot);
 		const bWanted: boolean = Enemy !== undefined && (State.bWantsShrunk || State.Charge >= BotShrinkCharge);
