@@ -1,4 +1,12 @@
 import type { CSPlayerPawn } from "cs_script/point_script";
+import type { FVector } from "./bm_core";
+
+// Where a mode wants a player to be: a cart to push or block, a point to hold. Within Radius of Position counts as being on it.
+export interface FBotObjective
+{
+	readonly Position: FVector;
+	readonly Radius: number;
+}
 
 export abstract class GameMode
 {
@@ -51,6 +59,12 @@ export abstract class GameMode
 	// Called on every mode when a player leaves, so none of them keep stale state
 	public OnPlayerLeave(Slot: number): void
 	{
+	}
+
+	// What this mode would have a bot on this player's team look after right now, if anything
+	public GetBotObjective(Pawn: CSPlayerPawn): FBotObjective | undefined
+	{
+		return undefined;
 	}
 
 	public Tick(Now: number, DeltaTime: number): void

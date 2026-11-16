@@ -3,11 +3,13 @@ import type { CSPlayerPawn, CSPlayerController, CSWeaponBase, TraceResult, Playe
 import { TickInterval, LogPrefix, ZeroVector, GetPlayerSlot, VectorMath, IsTeammate, GetChestPosition, GetOrCreate, SetBotControl, ForEachLivePawn } from "./bm_core";
 import type { FVector, FRotator } from "./bm_core";
 import { GetAimPoint, EvaluateDamageCurve } from "./bm_combat";
-import type { PlayerClass, FClassSettings, FBotShot, FHudCounter } from "./bm_classes";
+import type { PlayerClass, FClassSettings, FBotShot, FBotTrickShot, FHudCounter } from "./bm_classes";
 import type { FLauncherSettings } from "./bm_launcher";
 import { EBuildHint, EBotBuildSite, GetBuildHints, GetPlacingKind, GetNextToBuild, GetEnemyBuildings, GetBuildingCenter } from "./bm_buildings";
 import type { BuildingKind, FBuilding, FBuildKey, FBuildKeys, FBuildHint, FBuildHints } from "./bm_buildings";
 import { IsMarkerBot } from "./bm_bots";
+import { FindNearestHealthKit } from "./bm_pickups";
+import type { FBotObjective } from "./bm_gamemode";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,6 +38,19 @@ export interface FBotCombatSettings
 	readonly RoamSpeed: number;
 	readonly RoamProbe: number;
 	readonly RoamSteerInterval: number;
+	// A bot that has to turn off its line to get round something keeps to the new heading this long before looking again
+	readonly RoamDetourTime: number;
+	// A bot being walked somewhere that has moved less than StuckDistance in StuckCheckInterval is stuck,
+	// and is left to the game's own bot AI (which knows the nav mesh) for StuckPauseTime
+	readonly StuckCheckInterval: number;
+	readonly StuckDistance: number;
+	readonly StuckPauseTime: number;
+	// How often a bot decides again whether to look after the mode's objective, and the furthest from it one of those bots will hang back
+	readonly ObjectiveThinkInterval: number;
+	readonly ObjectiveStandoff: number;
+	// A bot below this fraction of its health, with nobody to fight, goes for a health kit within this range
+	readonly KitHealth: number;
+	readonly KitRange: number;
 	readonly HealFollowDistance: number;
 	readonly HealLeashRange: number;
 	readonly JumpSpawnDelay: number;
@@ -68,6 +83,8 @@ export interface FBotPersonality
 	readonly ChaseSpeed: number;
 	readonly bHunts: boolean;
 	readonly JumpInterval: number;
+	// How likely it is, each time it decides, to go and look after the objective
+	readonly ObjectiveChance: number;
 }
 
 interface FBotPick
@@ -101,6 +118,13 @@ interface FBotFighter
 	RoamUntil: number;
 	RoamYaw: number;
 	NextSteerTime: number;
+	LastSteerTime: number;
+	StuckSpot: FVector;
+	NextStuckCheckTime: number;
+	SteerPausedUntil: number;
+	bOnObjective: boolean;
+	ObjectiveStandoff: number;
+	NextObjectiveThinkTime: number;
 	Patient: CSPlayerPawn | undefined;
 	NextJumpTime: number;
 	JumpUntil: number;
@@ -135,6 +159,14 @@ export const BotCombatSettings: FBotCombatSettings =
 	RoamSpeed: 250,
 	RoamProbe: 80,
 	RoamSteerInterval: 0.25,
+	RoamDetourTime: 1,
+	StuckCheckInterval: 1.5,
+	StuckDistance: 100,
+	StuckPauseTime: 6,
+	ObjectiveThinkInterval: 8,
+	ObjectiveStandoff: 500,
+	KitHealth: 0.6,
+	KitRange: 1200,
 	HealFollowDistance: 200,
 	HealLeashRange: 1500,
 	JumpSpawnDelay: 1.5,
@@ -152,11 +184,11 @@ export const BotCombatSettings: FBotCombatSettings =
 };
 export const BotPersonalities: FBotPersonality[] =
 [
-	{ Name: "aggressive", MinRatingScale: 0.5, ReactionScale: 0.5, AimErrorScale: 1.5, ChaseSpeed: 250, bHunts: true, JumpInterval: 2 },
-	{ Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 4 },
-	{ Name: "careful", MinRatingScale: 2, ReactionScale: 1.25, AimErrorScale: 0.5, ChaseSpeed: 0, bHunts: false, JumpInterval: 8 },
+	{ Name: "aggressive", MinRatingScale: 0.5, ReactionScale: 0.5, AimErrorScale: 1.5, ChaseSpeed: 250, bHunts: true, JumpInterval: 2, ObjectiveChance: 0.4 },
+	{ Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 4, ObjectiveChance: 0.7 },
+	{ Name: "careful", MinRatingScale: 2, ReactionScale: 1.25, AimErrorScale: 0.5, ChaseSpeed: 0, bHunts: false, JumpInterval: 8, ObjectiveChance: 0.5 },
 ];
-const FallbackPersonality: FBotPersonality = { Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 4 };
+const FallbackPersonality: FBotPersonality = { Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 4, ObjectiveChance: 0.7 };
 const ChaseStopDistance: number = 150;
 const RoamStepHeight: number = 18;
 const BotJumpRetryInterval: number = 0.5;
@@ -174,7 +206,7 @@ let GBotClassInputs: number = 0;
 
 // Combat //////////////////////////////////////////////////////////////////////////////////////////
 
-export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Definition: PlayerClass<FClassSettings>): void
+export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Definition: PlayerClass<FClassSettings>, Objective: FBotObjective | undefined = undefined): void
 {
 	const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
 	if (!Controller || !Controller.IsBot())
@@ -194,7 +226,7 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 		return {
 			WeaponName: undefined, Target: undefined, SeenAt: 0, Error: { pitch: 0, yaw: 0, roll: 0 }, NextErrorTime: 0, NextDrawTime: 0, LastTickTime: 0, bTap: false,
 			BuildAim: { pitch: 0, yaw: 0, roll: 0 }, NextBuildTime: 0, SpawnSpot: Pawn.GetAbsOrigin(), EnemySpot: undefined, EnemySeenAt: 0,
-			CampSpot: Pawn.GetAbsOrigin(), NextCampCheckTime: 0, RoamUntil: 0, RoamYaw: 0, NextSteerTime: 0, Patient: undefined,
+			CampSpot: Pawn.GetAbsOrigin(), NextCampCheckTime: 0, RoamUntil: 0, RoamYaw: 0, NextSteerTime: 0, LastSteerTime: 0, StuckSpot: Pawn.GetAbsOrigin(), NextStuckCheckTime: 0, SteerPausedUntil: 0, bOnObjective: false, ObjectiveStandoff: 0, NextObjectiveThinkTime: 0, Patient: undefined,
 			NextJumpTime: 0, JumpUntil: 0, JumpYaw: 0, JumpWeaponName: "",
 		};
 	});
@@ -208,6 +240,8 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 		Fighter.CampSpot = Fighter.SpawnSpot;
 		Fighter.NextCampCheckTime = Now + BotCombatSettings.CampCheckInterval;
 		Fighter.RoamUntil = 0;
+		Fighter.NextObjectiveThinkTime = 0;
+		Fighter.SteerPausedUntil = 0;
 		Fighter.Patient = undefined;
 		Fighter.JumpUntil = 0;
 		Fighter.NextJumpTime = Now + BotCombatSettings.JumpSpawnDelay;
@@ -245,6 +279,14 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 	}
 	const Enemy: CSPlayerPawn | undefined = Pick && !("Kind" in Pick.Target) ? Pick.Target : undefined;
 	GBotClassInputs = Definition.TickBot(Pawn, Slot, Now, Enemy);
+	const TrickShot: FBotTrickShot | undefined = Definition.GetBotTrickShot(Pawn, Now);
+	if (TrickShot)
+	{
+		const Aim: FRotator = VectorMath.GetRotation(VectorMath.Subtract(TrickShot.Spot, Pawn.GetEyePosition()));
+		Pawn.SetEyeAngles(Aim);
+		ControlBot(Slot, CSInputs.ATTACK, Pawn.FindWeapon(TrickShot.WeaponName), Aim);
+		return;
+	}
 	if (Enemy && Definition.IsBotStabber() && TickBotStab(Pawn, Slot, Now, Fighter, Enemy))
 	{
 		return;
@@ -264,7 +306,7 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 	}
 	if (!bChasing)
 	{
-		RoamBot(Pawn, Now, Fighter, Personality);
+		RoamBot(Pawn, Now, Fighter, Personality, Objective);
 	}
 	if (Pick && bChasing)
 	{
@@ -396,10 +438,29 @@ function IdleBot(Pawn: CSPlayerPawn, Slot: number, Fighter: FBotFighter, Weapons
 	ControlBot(Slot, 0, WeaponName !== undefined ? Pawn.FindWeapon(WeaponName) : undefined, Pawn.GetEyeAngles());
 }
 
-// Gets a bot that has hung about one spot (or an aggressive one, always) walking towards the nearest enemy
-function RoamBot(Pawn: CSPlayerPawn, Now: number, Fighter: FBotFighter, Personality: FBotPersonality): void
+// Gets a bot with nobody to fight walking: to the mode's objective when it's looking after that, otherwise
+// (once it has hung about one spot, or always for an aggressive one) towards the nearest enemy
+function RoamBot(Pawn: CSPlayerPawn, Now: number, Fighter: FBotFighter, Personality: FBotPersonality, Objective: FBotObjective | undefined): void
 {
 	const Origin: FVector = Pawn.GetAbsOrigin();
+	const Kit: FVector | undefined = Pawn.GetHealth() < Pawn.GetMaxHealth() * BotCombatSettings.KitHealth ? FindNearestHealthKit(Origin, BotCombatSettings.KitRange) : undefined;
+	if (Kit)
+	{
+		if (Pawn.GetGroundEntity())
+		{
+			SteerBot(Pawn, Now, Fighter, Kit);
+		}
+		return;
+	}
+	if (Objective && IsBotOnObjective(Now, Fighter, Personality, Objective))
+	{
+		// Near enough is where it stops, so they stand about the objective rather than all piling onto it
+		if (Pawn.GetGroundEntity() && Math.hypot(Objective.Position.x - Origin.x, Objective.Position.y - Origin.y) > Fighter.ObjectiveStandoff)
+		{
+			SteerBot(Pawn, Now, Fighter, Objective.Position);
+		}
+		return;
+	}
 	if (Now >= Fighter.NextCampCheckTime)
 	{
 		if (VectorMath.Size(VectorMath.Subtract(Origin, Fighter.CampSpot)) < BotCombatSettings.CampRadius)
@@ -421,12 +482,49 @@ function RoamBot(Pawn: CSPlayerPawn, Now: number, Fighter: FBotFighter, Personal
 	}
 }
 
+// Every so often each bot decides afresh whether the objective is its job, and how close to it to stand
+function IsBotOnObjective(Now: number, Fighter: FBotFighter, Personality: FBotPersonality, Objective: FBotObjective): boolean
+{
+	if (Now >= Fighter.NextObjectiveThinkTime)
+	{
+		Fighter.NextObjectiveThinkTime = Now + BotCombatSettings.ObjectiveThinkInterval;
+		Fighter.bOnObjective = Math.random() < Personality.ObjectiveChance;
+		const Inside: number = Objective.Radius * 0.5;
+		Fighter.ObjectiveStandoff = Inside + Math.random() * Math.max(0, BotCombatSettings.ObjectiveStandoff - Inside);
+	}
+	return Fighter.bOnObjective;
+}
+
 function SteerBot(Pawn: CSPlayerPawn, Now: number, Fighter: FBotFighter, Goal: FVector): void
 {
+	const Origin: FVector = Pawn.GetAbsOrigin();
+	if (Now < Fighter.SteerPausedUntil)
+	{
+		return;
+	}
+	// Getting nowhere (wedged in a corner, most likely): hands off for a while
+	if (Now - Fighter.LastSteerTime > BotCombatSettings.RoamSteerInterval)
+	{
+		Fighter.StuckSpot = Origin;
+		Fighter.NextStuckCheckTime = Now + BotCombatSettings.StuckCheckInterval;
+	}
+	Fighter.LastSteerTime = Now;
+	if (Now >= Fighter.NextStuckCheckTime)
+	{
+		const bStuck: boolean = VectorMath.Size(VectorMath.Subtract(Origin, Fighter.StuckSpot)) < BotCombatSettings.StuckDistance;
+		Fighter.StuckSpot = Origin;
+		Fighter.NextStuckCheckTime = Now + BotCombatSettings.StuckCheckInterval;
+		if (bStuck)
+		{
+			Fighter.SteerPausedUntil = Now + BotCombatSettings.StuckPauseTime;
+			return;
+		}
+	}
 	if (Now >= Fighter.NextSteerTime)
 	{
-		Fighter.NextSteerTime = Now + BotCombatSettings.RoamSteerInterval;
-		Fighter.RoamYaw = FindOpenYaw(Pawn, VectorMath.GetRotation(VectorMath.Subtract(Goal, Pawn.GetAbsOrigin())).yaw);
+		const WantedYaw: number = VectorMath.GetRotation(VectorMath.Subtract(Goal, Origin)).yaw;
+		Fighter.RoamYaw = FindOpenYaw(Pawn, WantedYaw);
+		Fighter.NextSteerTime = Now + (Fighter.RoamYaw === WantedYaw ? BotCombatSettings.RoamSteerInterval : BotCombatSettings.RoamDetourTime);
 	}
 	const Direction: FVector = VectorMath.GetForwardVector({ pitch: 0, yaw: Fighter.RoamYaw, roll: 0 });
 	Pawn.Teleport({ velocity: { x: Direction.x * BotCombatSettings.RoamSpeed, y: Direction.y * BotCombatSettings.RoamSpeed, z: Pawn.GetAbsVelocity().z } });

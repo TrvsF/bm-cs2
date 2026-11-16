@@ -1,12 +1,12 @@
 import { Instance, Console } from "cs_script/point_script";
 import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { LogPrefix, VectorMath, GetPawnName, IsPlayerPawn } from "../bm_core";
+import { LogPrefix, VectorMath, GetPawnName, IsPlayerPawn, IsTeammate, GetChestPosition, ForEachLivePawn } from "../bm_core";
 import type { FVector } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, EmbedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, MakeShootable, Explode } from "../bm_combat";
 import type { FProjectile } from "../bm_combat";
 import { GetTraceBuilding } from "../bm_buildings";
 import { PlayerClass, FireHitscanWeapon, GetHitscanBotShot, GetProjectileBotShot } from "../bm_classes";
-import type { FClassSettings, FHitscanWeaponSettings, FBotShot } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings, FBotShot, FBotTrickShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -117,6 +117,9 @@ const ShockBallTemplateName: string = "shock_ball_template";
 
 // Shocker /////////////////////////////////////////////////////////////////////////////////////////
 
+// A bot sets off the combo once an enemy is within this much of its blast radius
+const BotComboTriggerScale: number = 0.6;
+
 export class ShockerClass extends PlayerClass<FShockerSettings>
 {
 	private Balls: FShockBall[] = [];
@@ -131,6 +134,31 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 		return WeaponName === this.Settings.Primary
 			? GetProjectileBotShot(this.Settings.BallDamage, this.Settings.BallRadius, { Speed: this.Settings.BallSpeed, UpSpeed: 0, GravityScale: 0 })
 			: GetHitscanBotShot(this.Settings.ShockBeam);
+	}
+
+	// A bot shoots one of its own balls with the beam once the combo would catch an enemy and not itself
+	public override GetBotTrickShot(Pawn: CSPlayerPawn, Now: number): FBotTrickShot | undefined
+	{
+		const Eye: FVector = Pawn.GetEyePosition();
+		const Reach: number = this.Settings.ComboRadius * BotComboTriggerScale;
+		for (const Ball of this.Balls)
+		{
+			if (Ball.Owner !== Pawn || VectorMath.Size(VectorMath.Subtract(Ball.Position, Eye)) <= this.Settings.ComboRadius)
+			{
+				continue;
+			}
+			let bEnemyNear: boolean = false;
+			ForEachLivePawn((Other: CSPlayerPawn): void =>
+			{
+				bEnemyNear ||= Other !== Pawn && !IsTeammate(Other, Pawn) && VectorMath.Size(VectorMath.Subtract(GetChestPosition(Other), Ball.Position)) <= Reach;
+			});
+			const Sight: TraceResult | undefined = bEnemyNear ? Instance.TraceLine({ start: Eye, end: Ball.Position, ignorePlayers: true }) : undefined;
+			if (Sight && (!Sight.didHit || VectorMath.Size(VectorMath.Subtract(Sight.end, Ball.Position)) <= this.Settings.BallStuckHitRadius))
+			{
+				return { WeaponName: this.Settings.Secondary, Spot: Ball.Position };
+			}
+		}
+		return undefined;
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void

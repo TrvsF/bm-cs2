@@ -128,7 +128,7 @@ export const GunnerSettings: FGunnerSettings =
 
 	RapidTurret:
 	{
-		DisplayName: "Rapid Turret",
+		DisplayName: "Smg Turret",
 		ModelTemplate: "gunner_rapid_turret_template",
 		DestroyFxTemplate: "gunner_turret_destroy_template",
 		Health: 50,
@@ -199,6 +199,7 @@ export class TurretKind extends BuildingKind<FTurretSettings>
 		const Muzzle: FVector = VectorMath.Add(Building.Position, { x: 0, y: 0, z: this.Settings.MuzzleHeight });
 		const Target: CSPlayerPawn | undefined = this.FindTarget(Building, Muzzle);
 		const TargetSlot: number = GetPlayerSlot(Target);
+
 		if (TargetSlot !== State.TargetSlot)
 		{
 			State.TargetSlot = TargetSlot;
@@ -207,7 +208,7 @@ export class TurretKind extends BuildingKind<FTurretSettings>
 				PlaySoundAt(this.Settings.LockSound, Muzzle);
 			}
 		}
-		// With nobody to shoot it stays pointing where it was left
+
 		if (!Target)
 		{
 			return;
@@ -215,7 +216,7 @@ export class TurretKind extends BuildingKind<FTurretSettings>
 
 		const Chest: FVector = GetChestPosition(Target);
 		const Aim: FRotator = VectorMath.GetRotation(VectorMath.Subtract(Chest, Muzzle));
-		// It swings round at its own pace, and only shoots once the gun is pointing near enough
+		
 		const Swing: number = this.Settings.TurnSpeed * DeltaTime;
 		const Offset: number = GetYawOffset(Building.Yaw, Aim.yaw);
 		TurnBuilding(Building, Building.Yaw + Math.max(-Swing, Math.min(Swing, Offset)));

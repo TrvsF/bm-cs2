@@ -1,6 +1,6 @@
 import { Console, Entities } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, BaseModelEntity } from "cs_script/point_script";
-import { bDebug, LogPrefix, TickInterval, ForEachLivePawn, DrawDebugSphere } from "./bm_core";
+import { bDebug, LogPrefix, TickInterval, VectorMath, ForEachLivePawn, DrawDebugSphere } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
 
@@ -89,6 +89,28 @@ export function TickHealthKits(Now: number): void
 			DrawDebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
 		}
 	}
+}
+
+// The nearest kit that's there to be picked up, for bots
+export function FindNearestHealthKit(Origin: FVector, MaxDistance: number): FVector | undefined
+{
+	let Nearest: FVector | undefined = undefined;
+	let NearestDistance: number = MaxDistance;
+	for (const Kit of GHealthKits)
+	{
+		if (!Kit.Entity.IsValid() || Kit.RespawnTime !== undefined)
+		{
+			continue;
+		}
+		const Position: FVector = Kit.Entity.GetAbsOrigin();
+		const Distance: number = VectorMath.Size(VectorMath.Subtract(Position, Origin));
+		if (Distance < NearestDistance)
+		{
+			Nearest = Position;
+			NearestDistance = Distance;
+		}
+	}
+	return Nearest;
 }
 
 export function ResetHealthKits(): void

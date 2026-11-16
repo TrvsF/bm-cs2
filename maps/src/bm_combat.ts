@@ -230,7 +230,6 @@ export function DrawMissingProjectile(Projectile: FProjectile, Color: FColor = G
 	DrawDebugSphere({ center: Projectile.Position, radius: Radius, duration: TickInterval * 2, color: Color });
 }
 
-// Returns the hit when it ran into a player or (with bHitPlayers) an enemy building, rather than bouncing
 export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): TraceResult | undefined
 {
 	if (Projectile.GroundNormal)

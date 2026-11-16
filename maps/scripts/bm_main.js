@@ -2262,6 +2262,10 @@ var PlayerClass = class {
   TickBot(Pawn, Slot, Now, Enemy) {
     return 0;
   }
+  // Something a bot of this class should shoot right now instead of its target (its own projectile, say, to set it off)
+  GetBotTrickShot(Pawn, Now) {
+    return void 0;
+  }
   // Override for a class whose bots should get behind enemies and knife them instead of shooting
   IsBotStabber() {
     return false;
@@ -3433,6 +3437,7 @@ var ShockerSettings = {
   ComboFxTemplate: "shock_combo_template"
 };
 var ShockBallTemplateName = "shock_ball_template";
+var BotComboTriggerScale = 0.6;
 var ShockerClass = class extends PlayerClass {
   Balls = [];
   constructor() {
@@ -3440,6 +3445,25 @@ var ShockerClass = class extends PlayerClass {
   }
   GetBotShot(WeaponName) {
     return WeaponName === this.Settings.Primary ? GetProjectileBotShot(this.Settings.BallDamage, this.Settings.BallRadius, { Speed: this.Settings.BallSpeed, UpSpeed: 0, GravityScale: 0 }) : GetHitscanBotShot(this.Settings.ShockBeam);
+  }
+  // A bot shoots one of its own balls with the beam once the combo would catch an enemy and not itself
+  GetBotTrickShot(Pawn, Now) {
+    const Eye = Pawn.GetEyePosition();
+    const Reach = this.Settings.ComboRadius * BotComboTriggerScale;
+    for (const Ball of this.Balls) {
+      if (Ball.Owner !== Pawn || VectorMath.Size(VectorMath.Subtract(Ball.Position, Eye)) <= this.Settings.ComboRadius) {
+        continue;
+      }
+      let bEnemyNear = false;
+      ForEachLivePawn((Other) => {
+        bEnemyNear ||= Other !== Pawn && !IsTeammate(Other, Pawn) && VectorMath.Size(VectorMath.Subtract(GetChestPosition(Other), Ball.Position)) <= Reach;
+      });
+      const Sight = bEnemyNear ? Instance8.TraceLine({ start: Eye, end: Ball.Position, ignorePlayers: true }) : void 0;
+      if (Sight && (!Sight.didHit || VectorMath.Size(VectorMath.Subtract(Sight.end, Ball.Position)) <= this.Settings.BallStuckHitRadius)) {
+        return { WeaponName: this.Settings.Secondary, Spot: Ball.Position };
+      }
+    }
+    return void 0;
   }
   OnPrimaryFire(Pawn, Slot, Now) {
     const Ball = { ...LaunchProjectile(Pawn, this.Settings.BallSpeed, 0, 0, ShockBallTemplateName, this.Settings.BallSize), StuckAt: void 0 };
@@ -4645,7 +4669,7 @@ function IsCustomHudLayout2(Ent) {
 }
 
 // src/bm_botcombat.ts
-import { Instance as Instance11, Console as Console12, GameRules as GameRules2, CSInputs as CSInputs8, CSGearSlot as CSGearSlot5 } from "cs_script/point_script";
+import { Instance as Instance11, Console as Console13, GameRules as GameRules2, CSInputs as CSInputs8, CSGearSlot as CSGearSlot5 } from "cs_script/point_script";
 
 // src/bm_bots.ts
 import { Instance as Instance10, Entities as Entities3 } from "cs_script/point_script";
@@ -4752,6 +4776,149 @@ function IsMarkerBot(Slot) {
   return GBotAssignments.has(Slot);
 }
 
+// src/bm_pickups.ts
+import { Console as Console12, Entities as Entities4 } from "cs_script/point_script";
+var HealthKitSettings = {
+  Name: "healthkit",
+  HealFraction: 0.5,
+  RespawnTime: 10,
+  PickupRadius: 52,
+  PickupHeight: 64,
+  SpinDegreesPerSecond: 90,
+  PickupFxTemplate: "healthkit_pickup_template",
+  RespawnFxTemplate: "healthkit_respawn_template"
+};
+var HiddenScale = 1e-3;
+var PickupBelowTolerance = 32;
+var FxLifetime = 3;
+var RescanInterval = 1;
+var KitClassNames = ["prop_dynamic", "prop_dynamic_override"];
+var DebugKitColor = { r: 80, g: 230, b: 120 };
+var GHealthKits = [];
+var GNextRescanTime = 0;
+function TickHealthKits(Now) {
+  if (Now >= GNextRescanTime) {
+    RescanHealthKits();
+    GNextRescanTime = Now + RescanInterval;
+  }
+  for (const Kit of GHealthKits) {
+    if (!Kit.Entity.IsValid()) {
+      continue;
+    }
+    if (Kit.RespawnTime !== void 0) {
+      if (Now < Kit.RespawnTime) {
+        continue;
+      }
+      RespawnKit(Kit);
+    }
+    const Taker = FindKitTaker(Kit);
+    if (Taker) {
+      TakeKit(Kit, Taker, Now);
+    } else if (bDebug) {
+      DrawDebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
+    }
+  }
+}
+function FindNearestHealthKit(Origin, MaxDistance) {
+  let Nearest = void 0;
+  let NearestDistance = MaxDistance;
+  for (const Kit of GHealthKits) {
+    if (!Kit.Entity.IsValid() || Kit.RespawnTime !== void 0) {
+      continue;
+    }
+    const Position = Kit.Entity.GetAbsOrigin();
+    const Distance = VectorMath.Size(VectorMath.Subtract(Position, Origin));
+    if (Distance < NearestDistance) {
+      Nearest = Position;
+      NearestDistance = Distance;
+    }
+  }
+  return Nearest;
+}
+function ResetHealthKits() {
+  for (const Kit of GHealthKits) {
+    if (Kit.Entity.IsValid() && Kit.RespawnTime !== void 0) {
+      SetKitVisible(Kit, true);
+    }
+    Kit.RespawnTime = void 0;
+  }
+  GNextRescanTime = 0;
+}
+function RescanHealthKits() {
+  const Found = new Set(Entities4.FindByName(HealthKitSettings.Name));
+  for (const ClassName of KitClassNames) {
+    for (const Ent of Entities4.FindByClass(ClassName)) {
+      if (Ent.GetEntityName().includes(HealthKitSettings.Name)) {
+        Found.add(Ent);
+      }
+    }
+  }
+  const Known = /* @__PURE__ */ new Map();
+  for (const Kit of GHealthKits) {
+    Known.set(Kit.Entity, Kit);
+  }
+  const Kits = [];
+  for (const Ent of Found) {
+    if (!Ent.IsValid()) {
+      continue;
+    }
+    const Existing = Known.get(Ent);
+    if (Existing) {
+      Kits.push(Existing);
+    } else {
+      Kits.push({ Entity: Ent, VisibleScale: IsModelEntity2(Ent) ? Ent.GetModelScale() : 1, BaseAngles: Ent.GetAbsAngles(), RespawnTime: void 0 });
+    }
+  }
+  GHealthKits = Kits;
+}
+function FindKitTaker(Kit) {
+  const KitPosition = Kit.Entity.GetAbsOrigin();
+  let Taker = void 0;
+  ForEachLivePawn((Pawn) => {
+    if (Taker || Pawn.GetHealth() >= Pawn.GetMaxHealth()) {
+      return;
+    }
+    const Feet = Pawn.GetAbsOrigin();
+    const FlatDistance = Math.hypot(Feet.x - KitPosition.x, Feet.y - KitPosition.y);
+    const Height = Feet.z - KitPosition.z;
+    if (FlatDistance <= HealthKitSettings.PickupRadius && Height >= -PickupBelowTolerance && Height <= HealthKitSettings.PickupHeight) {
+      Taker = Pawn;
+    }
+  });
+  return Taker;
+}
+function TakeKit(Kit, Taker, Now) {
+  const MaxHealth = Taker.GetMaxHealth();
+  const OldHealth = Taker.GetHealth();
+  const NewHealth = Math.min(MaxHealth, OldHealth + Math.ceil(MaxHealth * HealthKitSettings.HealFraction));
+  Taker.SetHealth(NewHealth);
+  SetKitVisible(Kit, false);
+  Kit.RespawnTime = Now + HealthKitSettings.RespawnTime;
+  SpawnKitFx(HealthKitSettings.PickupFxTemplate, Kit);
+  if (bDebug) {
+    const Name = Taker.GetPlayerController()?.GetPlayerName() ?? "someone";
+    Console12.Log(`${LogPrefix} ${Name} picked up a healthkit ${OldHealth} -> ${NewHealth}`);
+  }
+}
+function RespawnKit(Kit) {
+  Kit.RespawnTime = void 0;
+  SetKitVisible(Kit, true);
+  SpawnKitFx(HealthKitSettings.RespawnFxTemplate, Kit);
+}
+function SetKitVisible(Kit, bVisible) {
+  if (IsModelEntity2(Kit.Entity)) {
+    Kit.Entity.SetModelScale(bVisible ? Kit.VisibleScale : HiddenScale);
+  }
+}
+function SpawnKitFx(TemplateName, Kit) {
+  if (TemplateName !== "") {
+    SpawnTemporaryTemplate(TemplateName, Kit.Entity.GetAbsOrigin(), FxLifetime);
+  }
+}
+function IsModelEntity2(Ent) {
+  return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
+}
+
 // src/bm_botcombat.ts
 var BotCombatSettings = {
   SightRange: 2500,
@@ -4777,6 +4944,14 @@ var BotCombatSettings = {
   RoamSpeed: 250,
   RoamProbe: 80,
   RoamSteerInterval: 0.25,
+  RoamDetourTime: 1,
+  StuckCheckInterval: 1.5,
+  StuckDistance: 100,
+  StuckPauseTime: 6,
+  ObjectiveThinkInterval: 8,
+  ObjectiveStandoff: 500,
+  KitHealth: 0.6,
+  KitRange: 1200,
   HealFollowDistance: 200,
   HealLeashRange: 1500,
   JumpSpawnDelay: 1.5,
@@ -4793,11 +4968,11 @@ var BotCombatSettings = {
   StabArriveDistance: 16
 };
 var BotPersonalities = [
-  { Name: "aggressive", MinRatingScale: 0.5, ReactionScale: 0.5, AimErrorScale: 1.5, ChaseSpeed: 250, bHunts: true, JumpInterval: 2 },
-  { Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 4 },
-  { Name: "careful", MinRatingScale: 2, ReactionScale: 1.25, AimErrorScale: 0.5, ChaseSpeed: 0, bHunts: false, JumpInterval: 8 }
+  { Name: "aggressive", MinRatingScale: 0.5, ReactionScale: 0.5, AimErrorScale: 1.5, ChaseSpeed: 250, bHunts: true, JumpInterval: 2, ObjectiveChance: 0.4 },
+  { Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 4, ObjectiveChance: 0.7 },
+  { Name: "careful", MinRatingScale: 2, ReactionScale: 1.25, AimErrorScale: 0.5, ChaseSpeed: 0, bHunts: false, JumpInterval: 8, ObjectiveChance: 0.5 }
 ];
-var FallbackPersonality = { Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 4 };
+var FallbackPersonality = { Name: "steady", MinRatingScale: 1, ReactionScale: 1, AimErrorScale: 1, ChaseSpeed: 0, bHunts: false, JumpInterval: 4, ObjectiveChance: 0.7 };
 var ChaseStopDistance = 150;
 var RoamStepHeight = 18;
 var BotJumpRetryInterval = 0.5;
@@ -4810,7 +4985,7 @@ var GBotFighters = /* @__PURE__ */ new Map();
 var GBotPersonalities = /* @__PURE__ */ new Map();
 var GBotHealers = /* @__PURE__ */ new Map();
 var GBotClassInputs = 0;
-function TickBotCombat(Pawn, Slot, Now, Definition) {
+function TickBotCombat(Pawn, Slot, Now, Definition, Objective = void 0) {
   const Controller = Pawn.GetPlayerController();
   if (!Controller || !Controller.IsBot()) {
     return;
@@ -4841,6 +5016,13 @@ function TickBotCombat(Pawn, Slot, Now, Definition) {
       RoamUntil: 0,
       RoamYaw: 0,
       NextSteerTime: 0,
+      LastSteerTime: 0,
+      StuckSpot: Pawn.GetAbsOrigin(),
+      NextStuckCheckTime: 0,
+      SteerPausedUntil: 0,
+      bOnObjective: false,
+      ObjectiveStandoff: 0,
+      NextObjectiveThinkTime: 0,
       Patient: void 0,
       NextJumpTime: 0,
       JumpUntil: 0,
@@ -4857,6 +5039,8 @@ function TickBotCombat(Pawn, Slot, Now, Definition) {
     Fighter.CampSpot = Fighter.SpawnSpot;
     Fighter.NextCampCheckTime = Now + BotCombatSettings.CampCheckInterval;
     Fighter.RoamUntil = 0;
+    Fighter.NextObjectiveThinkTime = 0;
+    Fighter.SteerPausedUntil = 0;
     Fighter.Patient = void 0;
     Fighter.JumpUntil = 0;
     Fighter.NextJumpTime = Now + BotCombatSettings.JumpSpawnDelay;
@@ -4886,6 +5070,13 @@ function TickBotCombat(Pawn, Slot, Now, Definition) {
   }
   const Enemy = Pick && !("Kind" in Pick.Target) ? Pick.Target : void 0;
   GBotClassInputs = Definition.TickBot(Pawn, Slot, Now, Enemy);
+  const TrickShot = Definition.GetBotTrickShot(Pawn, Now);
+  if (TrickShot) {
+    const Aim = VectorMath.GetRotation(VectorMath.Subtract(TrickShot.Spot, Pawn.GetEyePosition()));
+    Pawn.SetEyeAngles(Aim);
+    ControlBot(Slot, CSInputs8.ATTACK, Pawn.FindWeapon(TrickShot.WeaponName), Aim);
+    return;
+  }
   if (Enemy && Definition.IsBotStabber() && TickBotStab(Pawn, Slot, Now, Fighter, Enemy)) {
     return;
   }
@@ -4900,7 +5091,7 @@ function TickBotCombat(Pawn, Slot, Now, Definition) {
     return;
   }
   if (!bChasing) {
-    RoamBot(Pawn, Now, Fighter, Personality);
+    RoamBot(Pawn, Now, Fighter, Personality, Objective);
   }
   if (Pick && bChasing) {
     Pawn.SetEyeAngles(VectorMath.GetRotation(VectorMath.Subtract(Pick.Spot, Pawn.GetEyePosition())));
@@ -4995,8 +5186,21 @@ function IdleBot(Pawn, Slot, Fighter, Weapons) {
   const WeaponName = Fighter.WeaponName ?? Weapons[0];
   ControlBot(Slot, 0, WeaponName !== void 0 ? Pawn.FindWeapon(WeaponName) : void 0, Pawn.GetEyeAngles());
 }
-function RoamBot(Pawn, Now, Fighter, Personality) {
+function RoamBot(Pawn, Now, Fighter, Personality, Objective) {
   const Origin = Pawn.GetAbsOrigin();
+  const Kit = Pawn.GetHealth() < Pawn.GetMaxHealth() * BotCombatSettings.KitHealth ? FindNearestHealthKit(Origin, BotCombatSettings.KitRange) : void 0;
+  if (Kit) {
+    if (Pawn.GetGroundEntity()) {
+      SteerBot(Pawn, Now, Fighter, Kit);
+    }
+    return;
+  }
+  if (Objective && IsBotOnObjective(Now, Fighter, Personality, Objective)) {
+    if (Pawn.GetGroundEntity() && Math.hypot(Objective.Position.x - Origin.x, Objective.Position.y - Origin.y) > Fighter.ObjectiveStandoff) {
+      SteerBot(Pawn, Now, Fighter, Objective.Position);
+    }
+    return;
+  }
   if (Now >= Fighter.NextCampCheckTime) {
     if (VectorMath.Size(VectorMath.Subtract(Origin, Fighter.CampSpot)) < BotCombatSettings.CampRadius) {
       Fighter.RoamUntil = Now + BotCombatSettings.RoamTime;
@@ -5012,10 +5216,38 @@ function RoamBot(Pawn, Now, Fighter, Personality) {
     SteerBot(Pawn, Now, Fighter, Goal);
   }
 }
+function IsBotOnObjective(Now, Fighter, Personality, Objective) {
+  if (Now >= Fighter.NextObjectiveThinkTime) {
+    Fighter.NextObjectiveThinkTime = Now + BotCombatSettings.ObjectiveThinkInterval;
+    Fighter.bOnObjective = Math.random() < Personality.ObjectiveChance;
+    const Inside = Objective.Radius * 0.5;
+    Fighter.ObjectiveStandoff = Inside + Math.random() * Math.max(0, BotCombatSettings.ObjectiveStandoff - Inside);
+  }
+  return Fighter.bOnObjective;
+}
 function SteerBot(Pawn, Now, Fighter, Goal) {
+  const Origin = Pawn.GetAbsOrigin();
+  if (Now < Fighter.SteerPausedUntil) {
+    return;
+  }
+  if (Now - Fighter.LastSteerTime > BotCombatSettings.RoamSteerInterval) {
+    Fighter.StuckSpot = Origin;
+    Fighter.NextStuckCheckTime = Now + BotCombatSettings.StuckCheckInterval;
+  }
+  Fighter.LastSteerTime = Now;
+  if (Now >= Fighter.NextStuckCheckTime) {
+    const bStuck = VectorMath.Size(VectorMath.Subtract(Origin, Fighter.StuckSpot)) < BotCombatSettings.StuckDistance;
+    Fighter.StuckSpot = Origin;
+    Fighter.NextStuckCheckTime = Now + BotCombatSettings.StuckCheckInterval;
+    if (bStuck) {
+      Fighter.SteerPausedUntil = Now + BotCombatSettings.StuckPauseTime;
+      return;
+    }
+  }
   if (Now >= Fighter.NextSteerTime) {
-    Fighter.NextSteerTime = Now + BotCombatSettings.RoamSteerInterval;
-    Fighter.RoamYaw = FindOpenYaw(Pawn, VectorMath.GetRotation(VectorMath.Subtract(Goal, Pawn.GetAbsOrigin())).yaw);
+    const WantedYaw = VectorMath.GetRotation(VectorMath.Subtract(Goal, Origin)).yaw;
+    Fighter.RoamYaw = FindOpenYaw(Pawn, WantedYaw);
+    Fighter.NextSteerTime = Now + (Fighter.RoamYaw === WantedYaw ? BotCombatSettings.RoamSteerInterval : BotCombatSettings.RoamDetourTime);
   }
   const Direction = VectorMath.GetForwardVector({ pitch: 0, yaw: Fighter.RoamYaw, roll: 0 });
   Pawn.Teleport({ velocity: { x: Direction.x * BotCombatSettings.RoamSpeed, y: Direction.y * BotCombatSettings.RoamSpeed, z: Pawn.GetAbsVelocity().z } });
@@ -5104,7 +5336,7 @@ function ForgetBotCombat(Slot) {
 function GetBotPersonality(Slot, Controller) {
   return GetOrCreate(GBotPersonalities, Slot, () => {
     const Personality = BotPersonalities[Math.floor(Math.random() * BotPersonalities.length)] ?? FallbackPersonality;
-    Console12.Log(`${LogPrefix} bot ${Controller.GetPlayerName()} is ${Personality.Name}`);
+    Console13.Log(`${LogPrefix} bot ${Controller.GetPlayerName()} is ${Personality.Name}`);
     return Personality;
   });
 }
@@ -5266,133 +5498,6 @@ function DrawBotWeapon(Pawn, Fighter, Weapon, Now) {
 }
 function GetRandomError() {
   return (Math.random() * 2 - 1) * BotCombatSettings.AimError;
-}
-
-// src/bm_pickups.ts
-import { Console as Console13, Entities as Entities4 } from "cs_script/point_script";
-var HealthKitSettings = {
-  Name: "healthkit",
-  HealFraction: 0.5,
-  RespawnTime: 10,
-  PickupRadius: 52,
-  PickupHeight: 64,
-  SpinDegreesPerSecond: 90,
-  PickupFxTemplate: "healthkit_pickup_template",
-  RespawnFxTemplate: "healthkit_respawn_template"
-};
-var HiddenScale = 1e-3;
-var PickupBelowTolerance = 32;
-var FxLifetime = 3;
-var RescanInterval = 1;
-var KitClassNames = ["prop_dynamic", "prop_dynamic_override"];
-var DebugKitColor = { r: 80, g: 230, b: 120 };
-var GHealthKits = [];
-var GNextRescanTime = 0;
-function TickHealthKits(Now) {
-  if (Now >= GNextRescanTime) {
-    RescanHealthKits();
-    GNextRescanTime = Now + RescanInterval;
-  }
-  for (const Kit of GHealthKits) {
-    if (!Kit.Entity.IsValid()) {
-      continue;
-    }
-    if (Kit.RespawnTime !== void 0) {
-      if (Now < Kit.RespawnTime) {
-        continue;
-      }
-      RespawnKit(Kit);
-    }
-    const Taker = FindKitTaker(Kit);
-    if (Taker) {
-      TakeKit(Kit, Taker, Now);
-    } else if (bDebug) {
-      DrawDebugSphere({ center: Kit.Entity.GetAbsOrigin(), radius: 12, duration: TickInterval * 2, color: DebugKitColor });
-    }
-  }
-}
-function ResetHealthKits() {
-  for (const Kit of GHealthKits) {
-    if (Kit.Entity.IsValid() && Kit.RespawnTime !== void 0) {
-      SetKitVisible(Kit, true);
-    }
-    Kit.RespawnTime = void 0;
-  }
-  GNextRescanTime = 0;
-}
-function RescanHealthKits() {
-  const Found = new Set(Entities4.FindByName(HealthKitSettings.Name));
-  for (const ClassName of KitClassNames) {
-    for (const Ent of Entities4.FindByClass(ClassName)) {
-      if (Ent.GetEntityName().includes(HealthKitSettings.Name)) {
-        Found.add(Ent);
-      }
-    }
-  }
-  const Known = /* @__PURE__ */ new Map();
-  for (const Kit of GHealthKits) {
-    Known.set(Kit.Entity, Kit);
-  }
-  const Kits = [];
-  for (const Ent of Found) {
-    if (!Ent.IsValid()) {
-      continue;
-    }
-    const Existing = Known.get(Ent);
-    if (Existing) {
-      Kits.push(Existing);
-    } else {
-      Kits.push({ Entity: Ent, VisibleScale: IsModelEntity2(Ent) ? Ent.GetModelScale() : 1, BaseAngles: Ent.GetAbsAngles(), RespawnTime: void 0 });
-    }
-  }
-  GHealthKits = Kits;
-}
-function FindKitTaker(Kit) {
-  const KitPosition = Kit.Entity.GetAbsOrigin();
-  let Taker = void 0;
-  ForEachLivePawn((Pawn) => {
-    if (Taker || Pawn.GetHealth() >= Pawn.GetMaxHealth()) {
-      return;
-    }
-    const Feet = Pawn.GetAbsOrigin();
-    const FlatDistance = Math.hypot(Feet.x - KitPosition.x, Feet.y - KitPosition.y);
-    const Height = Feet.z - KitPosition.z;
-    if (FlatDistance <= HealthKitSettings.PickupRadius && Height >= -PickupBelowTolerance && Height <= HealthKitSettings.PickupHeight) {
-      Taker = Pawn;
-    }
-  });
-  return Taker;
-}
-function TakeKit(Kit, Taker, Now) {
-  const MaxHealth = Taker.GetMaxHealth();
-  const OldHealth = Taker.GetHealth();
-  const NewHealth = Math.min(MaxHealth, OldHealth + Math.ceil(MaxHealth * HealthKitSettings.HealFraction));
-  Taker.SetHealth(NewHealth);
-  SetKitVisible(Kit, false);
-  Kit.RespawnTime = Now + HealthKitSettings.RespawnTime;
-  SpawnKitFx(HealthKitSettings.PickupFxTemplate, Kit);
-  if (bDebug) {
-    const Name = Taker.GetPlayerController()?.GetPlayerName() ?? "someone";
-    Console13.Log(`${LogPrefix} ${Name} picked up a healthkit ${OldHealth} -> ${NewHealth}`);
-  }
-}
-function RespawnKit(Kit) {
-  Kit.RespawnTime = void 0;
-  SetKitVisible(Kit, true);
-  SpawnKitFx(HealthKitSettings.RespawnFxTemplate, Kit);
-}
-function SetKitVisible(Kit, bVisible) {
-  if (IsModelEntity2(Kit.Entity)) {
-    Kit.Entity.SetModelScale(bVisible ? Kit.VisibleScale : HiddenScale);
-  }
-}
-function SpawnKitFx(TemplateName, Kit) {
-  if (TemplateName !== "") {
-    SpawnTemporaryTemplate(TemplateName, Kit.Entity.GetAbsOrigin(), FxLifetime);
-  }
-}
-function IsModelEntity2(Ent) {
-  return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
 }
 
 // src/bm_spawnzones.ts
@@ -5584,6 +5689,10 @@ var GameMode = class {
   // Called on every mode when a player leaves, so none of them keep stale state
   OnPlayerLeave(Slot) {
   }
+  // What this mode would have a bot on this player's team look after right now, if anything
+  GetBotObjective(Pawn) {
+    return void 0;
+  }
   Tick(Now, DeltaTime) {
   }
   // Called every tick for each human player, for this mode's part of the HUD
@@ -5740,6 +5849,12 @@ var PayloadMode = class extends GameMode {
     for (const Controller of Instance12.GetAllPlayerControllers()) {
       ShowPayload(Controller.GetPlayerSlot(), void 0);
     }
+  }
+  GetBotObjective(Pawn) {
+    if (GbRoundOver || !GCart || !GCart.Entity.IsValid()) {
+      return void 0;
+    }
+    return { Position: GCart.Entity.GetAbsOrigin(), Radius: PayloadSettings.PushRadius };
   }
   OnRoundStart() {
     ScanPayload();
@@ -6303,7 +6418,7 @@ function Tick() {
       }
       try {
         const Definition = ClassDefinitions[PlayerClass3];
-        TickBotCombat(Pawn, Slot, Now, Definition);
+        TickBotCombat(Pawn, Slot, Now, Definition, GActiveMode.GetBotObjective(Pawn));
         EmptyRealGuns(Pawn);
         const Shot = TickLauncher(Pawn, Slot, Now);
         if (Shot) {

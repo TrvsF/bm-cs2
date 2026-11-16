@@ -3,6 +3,7 @@ import type { Entity, CSPlayerPawn } from "cs_script/point_script";
 import { bDebug, LogPrefix, TickInterval, ETeam, VectorMath, RotationMath, GetPlayerSlot, ForEachLivePawn } from "../bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "../bm_core";
 import { GameMode } from "../bm_gamemode";
+import type { FBotObjective } from "../bm_gamemode";
 import { ShowPayload } from "../bm_ui";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -148,6 +149,15 @@ export class PayloadMode extends GameMode
 		{
 			ShowPayload(Controller.GetPlayerSlot(), undefined);
 		}
+	}
+
+	public override GetBotObjective(Pawn: CSPlayerPawn): FBotObjective | undefined
+	{
+		if (GbRoundOver || !GCart || !GCart.Entity.IsValid())
+		{
+			return undefined;
+		}
+		return { Position: GCart.Entity.GetAbsOrigin(), Radius: PayloadSettings.PushRadius };
 	}
 
 	public override OnRoundStart(): void

@@ -66,7 +66,6 @@ export enum EBuildHint
 	Cooldown = "Cooldown",
 }
 
-// Where a bot puts a kind of building
 export enum EBotBuildSite
 {
 	NearEnemies,
@@ -80,7 +79,6 @@ export interface FBuildKey
 	readonly Kinds: readonly BuildingKind[];
 }
 
-// What each mouse button builds while a class's build tool is out
 export interface FBuildKeys
 {
 	readonly Left: FBuildKey;
@@ -896,7 +894,6 @@ function GetBuildingByEntity(Ent: Entity | undefined): FBuilding | undefined
 	});
 }
 
-// Slab test. A start inside the box counts as hitting it straight away.
 export function IntersectSegmentBox(Start: FVector, End: FVector, Mins: FVector, Maxs: FVector): FBoxHit | undefined
 {
 	const Delta: FVector = VectorMath.Subtract(End, Start);

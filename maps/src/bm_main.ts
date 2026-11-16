@@ -104,7 +104,7 @@ function Tick(): void
 			try
 			{
 				const Definition = ClassDefinitions[PlayerClass];
-				TickBotCombat(Pawn, Slot, Now, Definition);
+				TickBotCombat(Pawn, Slot, Now, Definition, GActiveMode.GetBotObjective(Pawn));
 				EmptyRealGuns(Pawn);
 				const Shot: FLauncherShot | undefined = TickLauncher(Pawn, Slot, Now);
 				if (Shot)

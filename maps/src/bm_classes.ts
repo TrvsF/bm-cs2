@@ -75,6 +75,12 @@ export interface FHitscanWeaponSettings
 }
 
 // What one shot of a weapon does, for bots to rate their targets with
+export interface FBotTrickShot
+{
+	readonly WeaponName: string;
+	readonly Spot: FVector;
+}
+
 export interface FBotShot
 {
 	readonly Damage: number;
@@ -352,6 +358,12 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 	public TickBot(Pawn: CSPlayerPawn, Slot: number, Now: number, Enemy: CSPlayerPawn | undefined): number
 	{
 		return 0;
+	}
+
+	// Something a bot of this class should shoot right now instead of its target (its own projectile, say, to set it off)
+	public GetBotTrickShot(Pawn: CSPlayerPawn, Now: number): FBotTrickShot | undefined
+	{
+		return undefined;
 	}
 
 	// Override for a class whose bots should get behind enemies and knife them instead of shooting
