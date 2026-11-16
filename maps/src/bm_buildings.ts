@@ -113,7 +113,7 @@ interface FPlacement
 	bPreviewTintedValid: boolean | undefined;
 }
 
-interface FBoxHit
+export interface FBoxHit
 {
 	readonly Fraction: number;
 	readonly Normal: FVector;
@@ -897,7 +897,7 @@ function GetBuildingByEntity(Ent: Entity | undefined): FBuilding | undefined
 }
 
 // Slab test. A start inside the box counts as hitting it straight away.
-function IntersectSegmentBox(Start: FVector, End: FVector, Mins: FVector, Maxs: FVector): FBoxHit | undefined
+export function IntersectSegmentBox(Start: FVector, End: FVector, Mins: FVector, Maxs: FVector): FBoxHit | undefined
 {
 	const Delta: FVector = VectorMath.Subtract(End, Start);
 	let Enter: number = 0;

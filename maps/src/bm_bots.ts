@@ -153,6 +153,16 @@ function DriveBot(Pawn: CSPlayerPawn, Assignment: FBotAssignment): void
 	Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
 }
 
+export function CountBotMarkers(): number
+{
+	let Count: number = 0;
+	for (const MarkerName of BotMarkerModes.keys())
+	{
+		Count += Entities.FindByName(MarkerName).length;
+	}
+	return Count;
+}
+
 export function IsMarkerBot(Slot: number): boolean
 {
 	return GBotAssignments.has(Slot);

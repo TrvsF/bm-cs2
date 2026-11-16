@@ -4,6 +4,8 @@ export abstract class GameMode
 {
 	public abstract readonly DisplayName: string;
 	public abstract readonly CommandName: string;
+	// Whether picking a class changes it there and then, wherever the player is, rather than waiting for their spawn zone or next life
+	public readonly bInstantClassSwitch: boolean = false;
 
 	// Whether this map has what the mode needs. bm_main plays the first mode in GameModes that says yes.
 	public abstract IsMapSetUp(): boolean;

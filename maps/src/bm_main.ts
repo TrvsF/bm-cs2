@@ -36,6 +36,7 @@ import type { FBuilding, FBuildingHit, FBuildKeys } from "./bm_buildings";
 import { GameMode } from "./bm_gamemode";
 import { FreeForAllMode } from "./gamemodes/bm_freeforall";
 import { PayloadMode } from "./gamemodes/bm_payload";
+import { TrainingMode } from "./gamemodes/bm_training";
 import { TeamDeathmatchMode } from "./gamemodes/bm_teamdeathmatch";
 import type { FClassMenuChoice, FTargetId } from "./bm_ui";
 
@@ -67,9 +68,8 @@ const MainSettings: FMainSettings =
 
 // Globals /////////////////////////////////////////////////////////////////////////////////////////
 
-const DefaultMode: GameMode = new FreeForAllMode();
-const GameModes: readonly GameMode[] = [new PayloadMode(), DefaultMode, new TeamDeathmatchMode()];
-let GActiveMode: GameMode = DefaultMode;
+const GameModes: readonly GameMode[] = [new TrainingMode(), new PayloadMode(), new FreeForAllMode(), new TeamDeathmatchMode()];
+let GActiveMode: GameMode = GameModes[0];
 let GChosenMode: GameMode | undefined = undefined;
 const GClassBySlot: Map<number, EPlayableClass> = new Map<number, EPlayableClass>();
 const GPendingClassBySlot: Map<number, EPlayerClass> = new Map<number, EPlayerClass>();
@@ -459,7 +459,7 @@ function SelectGameMode(): void
 	}) ?? GameModes.find((Candidate: GameMode): boolean =>
 	{
 		return Candidate.IsMapSetUp();
-	}) ?? DefaultMode;
+	}) ?? GameModes[0];
 
 	if (Mode !== GActiveMode)
 	{
@@ -536,7 +536,7 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 		ClassDefinitions[PlayerClass].PlayPickFx(Pawn);
 	}
 
-	if (!bAlive || CurrentClass === EPlayerClass.None || ((bInSpawn || bDebug) && PlayerClass !== CurrentClass))
+	if (!bAlive || CurrentClass === EPlayerClass.None || ((bInSpawn || bDebug || GActiveMode.bInstantClassSwitch) && PlayerClass !== CurrentClass))
 	{
 		GPendingClassBySlot.delete(Slot);
 		SetPlayerClass(Player, PlayerClass);

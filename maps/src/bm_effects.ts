@@ -42,6 +42,7 @@ const SoundFiles: readonly string[] = [
 	"sounds/bm/shrinker_shrink.vsnd",
 	"sounds/bm/shrinker_grow.vsnd",
 	"sounds/bm/medic_heal_loop.vsnd",
+	"sounds/bm/turret_lock.vsnd",
 ];
 const SoundEntityClass: string = "point_soundevent";
 // One point_soundevent, no sound set and not started on spawn; the code picks the sound and starts it
@@ -142,7 +143,17 @@ export function SpawnTemporaryTemplate(TemplateName: string, Position: FVector, 
 // Plays a sound event (a name from soundevents_addon.vsndevts) on a player. It follows them as they move.
 export function PlaySoundOn(SoundEvent: string | undefined, Pawn: CSPlayerPawn): void
 {
-	const Spawned: Entity[] = SpawnSoundOn(SoundEvent, Pawn);
+	RemoveSoundWhenFinished(SpawnSoundOn(SoundEvent, Pawn));
+}
+
+// Plays a sound event at a point in the world; it stays where it was played
+export function PlaySoundAt(SoundEvent: string | undefined, Position: FVector): void
+{
+	RemoveSoundWhenFinished(SoundEvent ? SpawnSound(SoundEvent, Position, undefined) : []);
+}
+
+function RemoveSoundWhenFinished(Spawned: readonly Entity[]): void
+{
 	if (Spawned.length === 0)
 	{
 		return;
@@ -215,7 +226,7 @@ function SpawnSoundOn(SoundEvent: string | undefined, Pawn: CSPlayerPawn): Entit
 		return [];
 	}
 	const SourceName: string = GetSoundSourceName(Pawn);
-	const Spawned: Entity[] = SpawnSoundFromTemplate(SoundEvent, Pawn, SourceName) ?? SpawnSoundFromCode(SoundEvent, Pawn, SourceName);
+	const Spawned: Entity[] = SpawnSound(SoundEvent, Pawn.GetAbsOrigin(), SourceName);
 	for (const Ent of Spawned)
 	{
 		Ent.SetParent(Pawn);
@@ -223,26 +234,35 @@ function SpawnSoundOn(SoundEvent: string | undefined, Pawn: CSPlayerPawn): Entit
 	return Spawned;
 }
 
+// Without a source name the sound plays where it was spawned
+function SpawnSound(SoundEvent: string, Position: FVector, SourceName: string | undefined): Entity[]
+{
+	return SpawnSoundFromTemplate(SoundEvent, Position, SourceName) ?? SpawnSoundFromCode(SoundEvent, Position, SourceName);
+}
+
 // undefined when the map has no sound template
-function SpawnSoundFromTemplate(SoundEvent: string, Pawn: CSPlayerPawn, SourceName: string): Entity[] | undefined
+function SpawnSoundFromTemplate(SoundEvent: string, Position: FVector, SourceName: string | undefined): Entity[] | undefined
 {
 	const Template: PointTemplate | undefined = FindPointTemplate(SoundTemplateName);
 	if (!Template)
 	{
 		return undefined;
 	}
-	const Spawned: Entity[] = (Template.ForceSpawn(Pawn.GetAbsOrigin()) ?? []).filter(IsValidEntity);
+	const Spawned: Entity[] = (Template.ForceSpawn(Position) ?? []).filter(IsValidEntity);
 	for (const Ent of Spawned)
 	{
 		Ent.FireInput({ input: "SetSoundEventName", value: SoundEvent });
-		Ent.FireInput({ input: "SetSourceEntity", value: SourceName });
+		if (SourceName !== undefined)
+		{
+			Ent.FireInput({ input: "SetSourceEntity", value: SourceName });
+		}
 		Ent.FireInput({ input: "StartSound" });
 	}
 	return Spawned;
 }
 
 // Gives up for good after the first failure, so the engine's error is only printed once
-function SpawnSoundFromCode(SoundEvent: string, Pawn: CSPlayerPawn, SourceName: string): Entity[]
+function SpawnSoundFromCode(SoundEvent: string, Position: FVector, SourceName: string | undefined): Entity[]
 {
 	if (GbSoundSpawnFailed)
 	{
@@ -254,9 +274,9 @@ function SpawnSoundFromCode(SoundEvent: string, Pawn: CSPlayerPawn, SourceName: 
 		Spawned = Entities.Spawn([
 		{
 			classname: SoundEntityClass,
-			origin: Pawn.GetAbsOrigin(),
+			origin: Position,
 			soundName: SoundEvent,
-			sourceEntityName: SourceName,
+			sourceEntityName: SourceName ?? "",
 			entityIndexSelection: 1,
 			startOnSpawn: true,
 		}]).filter(IsValidEntity);

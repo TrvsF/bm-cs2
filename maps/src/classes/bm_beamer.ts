@@ -5,7 +5,7 @@ import type { FVector } from "../bm_core";
 import type { FDamageCurve } from "../bm_combat";
 import { SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam } from "../bm_effects";
 import type { FHeldBeam } from "../bm_effects";
-import { BeamerShotgunFalloff, BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon, GetHitscanBotShot } from "../bm_classes";
+import { TF2HitscanFalloff, BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon, GetHitscanBotShot } from "../bm_classes";
 import type { FClassSettings, FHitscanWeaponSettings, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -28,8 +28,8 @@ interface FBeamerPlayerState
 const BeamerBeamFalloff: FDamageCurve =
 [
 	{ Distance: 0, Scale: 1.0 },
-	{ Distance: 512, Scale: 0.5 },
-	{ Distance: 1200, Scale: 0.2 },
+	{ Distance: 640, Scale: 0.5 },
+	{ Distance: 1536, Scale: 0.2 },
 ];
 
 export const BeamerSettings: FBeamerSettings =
@@ -88,13 +88,13 @@ export const BeamerSettings: FBeamerSettings =
 
 	Shotgun:
 	{
-		Damage: 10,
+		Damage: 8,
 		HeadshotMultiplier: 1,
 		Range: 2048,
 		Spread: 6,
 		Pellets: 10,
 		bPierces: false,
-		Falloff: BeamerShotgunFalloff,
+		Falloff: TF2HitscanFalloff,
 		Knockback: 600,
 		SelfKnockback: 200,
 		bBloodSplatter: false,

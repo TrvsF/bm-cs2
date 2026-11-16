@@ -1,6 +1,6 @@
 import { CSInputs } from "cs_script/point_script";
-import type { CSPlayerPawn } from "cs_script/point_script";
-import { bDebug, TickInterval, GetTeamColor, GetOrCreate, IsTeammate, IsInputDown, ForEachLivePawn, DrawDebugSphere } from "../bm_core";
+import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
+import { bDebug, TickInterval, GetTeamColor, GetOrCreate, IsTeammate, IsPlayerPawn, IsInputDown, ForEachLivePawn, DrawDebugSphere } from "../bm_core";
 import { VectorMath } from "../bm_core";
 import type { FVector, FColor } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, MakeShootable, Explode } from "../bm_combat";
@@ -16,6 +16,8 @@ export interface FDemoSettings extends FClassSettings
 	readonly PipeLaunchUp: number,
 	readonly PipeRadius: number,
 	readonly PipeDamage: number,
+	// A pipe that strikes a player before bouncing does this many times PipeDamage to them, with nothing lost to the blast's own falloff
+	readonly PipeDirectHitScale: number,
 	readonly PipeRolledDamageScale: number,
 	readonly PipeKnockback: number,
 	readonly PipeFalloff: FDamageFalloff | undefined,
@@ -107,6 +109,7 @@ export const DemoSettings: FDemoSettings =
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
 	PipeDamage: 75,
+	PipeDirectHitScale: 1.2,
 	PipeRolledDamageScale: 0.6,
 	PipeKnockback: 500,
 	PipeFalloff: TF2PipeFalloff,
@@ -314,9 +317,15 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 			return false;
 		}
 
-		if (Now - Pipe.SpawnedAt >= this.Settings.PipeFuseTime || MoveBouncingProjectile(Pipe, DeltaTime, !Pipe.bTouchedWorld, this.Settings.PipeBounce))
+		if (Now - Pipe.SpawnedAt >= this.Settings.PipeFuseTime)
 		{
-			this.DetonatePipe(Pipe);
+			this.DetonatePipe(Pipe, undefined);
+			return false;
+		}
+		const Hit: TraceResult | undefined = MoveBouncingProjectile(Pipe, DeltaTime, !Pipe.bTouchedWorld, this.Settings.PipeBounce);
+		if (Hit)
+		{
+			this.DetonatePipe(Pipe, IsPlayerPawn(Hit.hitEntity) ? Hit.hitEntity : undefined);
 			return false;
 		}
 
@@ -324,10 +333,10 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 		return true;
 	}
 
-	private DetonatePipe(Pipe: FPipe): void
+	private DetonatePipe(Pipe: FPipe, Struck: CSPlayerPawn | undefined): void
 	{
 		DestroyProjectile(Pipe);
 		const Damage: number = this.Settings.PipeDamage * (Pipe.bTouchedWorld ? this.Settings.PipeRolledDamageScale : 1);
-		Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
+		Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff, undefined, Pipe.bTouchedWorld ? undefined : Struck, this.Settings.PipeDirectHitScale);
 	}
 }

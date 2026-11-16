@@ -93,11 +93,12 @@ export interface FBotShot
 export const TF2RocketFalloff: FDamageFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
 export const TF2PipeFalloff: FDamageFalloff = { RampUp: 1, FallOff: 0.9, OptimalDistance: 512 };
 
-export const BeamerShotgunFalloff: FDamageCurve =
+// TF2's scaling for bullets: a weapon's Damage is what it does at 512u, rising to half as much again point blank and falling to half from 1024u on
+export const TF2HitscanFalloff: FDamageCurve =
 [
-	{ Distance: 0, Scale: 1.0 },
-	{ Distance: 256, Scale: 1.0 },
-	{ Distance: 1024, Scale: 0.3 },
+	{ Distance: 0, Scale: 1.5 },
+	{ Distance: 512, Scale: 1.0 },
+	{ Distance: 1024, Scale: 0.5 },
 ];
 
 const PlayableClasses: readonly EPlayableClass[] = Object.values(EPlayerClass).filter((PlayerClass: EPlayerClass): PlayerClass is EPlayableClass =>

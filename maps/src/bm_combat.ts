@@ -3,8 +3,8 @@ import type { Entity, CSPlayerPawn, TraceResult, BaseTraceConfig } from "cs_scri
 import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, GetAimAngles, SpawnTemplateEntities, ForEachLivePawn, DrawDebugBox, DrawDebugSphere } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
 import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
-import { GetOwnedBuildingEntities, FindBuildingOnLine, ClipTraceToBuildings, GetTraceBuilding, DamageBuildingsInRadius } from "./bm_buildings";
-import type { FBuilding, FBuildingHit } from "./bm_buildings";
+import { GetOwnedBuildingEntities, FindBuildingOnLine, ClipTraceToBuildings, GetTraceBuilding, DamageBuildingsInRadius, IntersectSegmentBox } from "./bm_buildings";
+import type { FBuilding, FBuildingHit, FBoxHit } from "./bm_buildings";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,6 +58,13 @@ export interface FBouncingProjectile extends FProjectile
 export interface FPiercingProjectile extends FProjectile
 {
 	readonly HitPlayers: Set<CSPlayerPawn>;
+}
+
+// A player a projectile passed through while ignoring the world
+export interface FPhasedHit
+{
+	readonly Victim: CSPlayerPawn;
+	readonly Point: FVector;
 }
 
 export interface FPiercingStep
@@ -122,6 +129,8 @@ const GroundProbeDistance: number = 8;
 const MinFacingSpeed: number = 1;
 const MissingProjectileRadius: number = 3;
 const AimPointPasses: number = 3;
+const PlayerHalfWidth: number = 16;
+const PlayerHeight: number = 72;
 
 let GShootables: FShootable[] = [];
 
@@ -221,8 +230,8 @@ export function DrawMissingProjectile(Projectile: FProjectile, Color: FColor = G
 	DrawDebugSphere({ center: Projectile.Position, radius: Radius, duration: TickInterval * 2, color: Color });
 }
 
-// Returns whether it ran into a player or (with bHitPlayers) an enemy building, rather than bouncing
-export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): boolean
+// Returns the hit when it ran into a player or (with bHitPlayers) an enemy building, rather than bouncing
+export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): TraceResult | undefined
 {
 	if (Projectile.GroundNormal)
 	{
@@ -232,14 +241,14 @@ export function MoveBouncingProjectile(Projectile: FBouncingProjectile, DeltaTim
 	const Hit: TraceResult | undefined = MoveProjectile(Projectile, DeltaTime, bHitPlayers);
 	if (!Hit)
 	{
-		return false;
+		return undefined;
 	}
 	if (IsDirectHit(Hit, bHitPlayers))
 	{
-		return true;
+		return Hit;
 	}
 	BounceProjectile(Projectile, Hit.normal, Bounce);
-	return false;
+	return undefined;
 }
 
 function IsDirectHit(Hit: TraceResult, bHitPlayers: boolean): boolean
@@ -282,7 +291,7 @@ export function MovePiercingProjectile(Projectile: FPiercingProjectile, DeltaTim
 	return { NewHits: NewHits, WorldHit: WorldHit };
 }
 
-function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): boolean
+function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaTime: number, bHitPlayers: boolean, Bounce: FBounceSettings): TraceResult | undefined
 {
 	const Pull: FVector = { x: 0, y: 0, z: -Gravity * Projectile.GravityScale * DeltaTime };
 	const Rolling: FVector = VectorMath.ProjectOnPlane(VectorMath.Add(Projectile.Velocity, Pull), Ground);
@@ -294,7 +303,7 @@ function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaT
 	if (Hit && IsDirectHit(Hit, bHitPlayers))
 	{
 		PlaceProjectileModels(Projectile, false);
-		return true;
+		return Hit;
 	}
 	if (Hit)
 	{
@@ -302,7 +311,37 @@ function RollProjectile(Projectile: FBouncingProjectile, Ground: FVector, DeltaT
 	}
 	FollowGround(Projectile);
 	PlaceProjectileModels(Projectile, false);
-	return false;
+	return undefined;
+}
+
+// Moves a projectile straight on through anything solid. Returns the players it passed through this step that it hadn't already.
+export function MovePhasedProjectile(Projectile: FPiercingProjectile, DeltaTime: number): FPhasedHit[]
+{
+	const Velocity: FVector = Projectile.Velocity;
+	Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
+	const Start: FVector = Projectile.Position;
+	const End: FVector = VectorMath.Add(Start, VectorMath.Scale(Projectile.Velocity, DeltaTime));
+	const Reach: number = PlayerHalfWidth + Projectile.Radius;
+	const Hits: FPhasedHit[] = [];
+	ForEachLivePawn((Victim: CSPlayerPawn): void =>
+	{
+		if (Victim === Projectile.Owner || Projectile.HitPlayers.has(Victim))
+		{
+			return;
+		}
+		const Feet: FVector = Victim.GetAbsOrigin();
+		const Mins: FVector = { x: Feet.x - Reach, y: Feet.y - Reach, z: Feet.z - Projectile.Radius };
+		const Maxs: FVector = { x: Feet.x + Reach, y: Feet.y + Reach, z: Feet.z + PlayerHeight + Projectile.Radius };
+		const Crossing: FBoxHit | undefined = IntersectSegmentBox(Start, End, Mins, Maxs);
+		if (Crossing)
+		{
+			Projectile.HitPlayers.add(Victim);
+			Hits.push({ Victim: Victim, Point: VectorMath.Add(Start, VectorMath.Scale(VectorMath.Subtract(End, Start), Crossing.Fraction)) });
+		}
+	});
+	Projectile.Position = End;
+	PlaceProjectileModels(Projectile, false);
+	return Hits;
 }
 
 function BounceProjectile(Projectile: FBouncingProjectile, Normal: FVector, Bounce: FBounceSettings): void
@@ -522,7 +561,8 @@ function PlaceProjectileModels(Projectile: FProjectile, bTeleport: boolean): voi
 	}
 }
 
-export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined, FxTemplate: string = ExplosionTemplateName): number
+// DirectVictim = the player the projectile itself struck, if any: they take the full damage times DirectScale, however far their chest is from the blast
+export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: number, Damage: number, Knockback: number, RangeFalloff: FDamageFalloff | undefined, FxTemplate: string = ExplosionTemplateName, DirectVictim: CSPlayerPawn | undefined = undefined, DirectScale: number = 1): number
 {
 	const Origin: FVector = VectorMath.Add(Position, ExplosionOffset);
 	SpawnExplosionFx(Position, Radius, FxTemplate);
@@ -539,15 +579,18 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		const Target: FVector = GetChestPosition(Victim);
 		const Offset: FVector = VectorMath.Subtract(Target, Origin);
 		const Distance: number = VectorMath.Size(Offset);
-		if (Distance > Radius)
+		const bDirect: boolean = Victim === DirectVictim;
+		if (!bDirect)
 		{
-			return;
-		}
-
-		const Trace: TraceResult = Instance.TraceLine({ start: Origin, end: Target, ignorePlayers: true });
-		if (Trace.didHit && !Trace.startedInSolid)
-		{
-			return;
+			if (Distance > Radius)
+			{
+				return;
+			}
+			const Trace: TraceResult = Instance.TraceLine({ start: Origin, end: Target, ignorePlayers: true });
+			if (Trace.didHit && !Trace.startedInSolid)
+			{
+				return;
+			}
 		}
 
 		const bIsSelf: boolean = Victim === Attacker;
@@ -556,7 +599,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 			return;
 		}
 
-		const Falloff: number = 1 - 0.5 * (Distance / Radius);
+		const Falloff: number = bDirect ? DirectScale : 1 - 0.5 * (Distance / Radius);
 		const RangeScale: number = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
 		const BlastDamage: number = Damage * Falloff * RangeScale;
 		const Away: FVector = Distance > 1 ? Offset : UpVector;

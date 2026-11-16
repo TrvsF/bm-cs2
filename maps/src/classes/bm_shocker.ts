@@ -1,6 +1,6 @@
 import { Instance, Console } from "cs_script/point_script";
 import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { LogPrefix, VectorMath, GetPawnName } from "../bm_core";
+import { LogPrefix, VectorMath, GetPawnName, IsPlayerPawn } from "../bm_core";
 import type { FVector } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, EmbedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, MakeShootable, Explode } from "../bm_combat";
 import type { FProjectile } from "../bm_combat";
@@ -16,6 +16,8 @@ export interface FShockerSettings extends FClassSettings
 	readonly BallSpeed: number;
 	readonly BallSize: number;
 	readonly BallDamage: number;
+	// A ball that strikes a player does this many times BallDamage to them, with nothing lost to the blast's own falloff
+	readonly BallDirectHitScale: number;
 	readonly BallRadius: number;
 	readonly BallKnockback: number;
 	readonly BallLifetime: number;
@@ -94,6 +96,7 @@ export const ShockerSettings: FShockerSettings =
 	BallSpeed: 1000,
 	BallSize: 16,
 	BallDamage: 50,
+	BallDirectHitScale: 1.2,
 	BallRadius: 80,
 	BallKnockback: 500,
 	BallLifetime: 5,
@@ -199,7 +202,7 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 			Ball.StuckAt = Now;
 			return true;
 		}
-		this.ExplodeBall(Ball);
+		this.ExplodeBall(Ball, IsPlayerPawn(Hit.hitEntity) ? Hit.hitEntity : undefined);
 		return false;
 	}
 
@@ -214,10 +217,10 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 		Ball.GravityScale = this.Settings.BallKnockedGravityScale;
 	}
 
-	private ExplodeBall(Ball: FShockBall): void
+	private ExplodeBall(Ball: FShockBall, Struck: CSPlayerPawn | undefined = undefined): void
 	{
 		DestroyProjectile(Ball);
-		Explode(Ball.Position, Ball.Owner, this.Settings.BallRadius, this.Settings.BallDamage, this.Settings.BallKnockback, undefined, this.Settings.BallFxTemplate);
+		Explode(Ball.Position, Ball.Owner, this.Settings.BallRadius, this.Settings.BallDamage, this.Settings.BallKnockback, undefined, this.Settings.BallFxTemplate, Struck, this.Settings.BallDirectHitScale);
 	}
 
 	private DetonateBallOnBeam(Shooter: CSPlayerPawn, Start: FVector, End: FVector): FVector | undefined

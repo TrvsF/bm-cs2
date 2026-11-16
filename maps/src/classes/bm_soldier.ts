@@ -1,4 +1,5 @@
-import type { CSPlayerPawn } from "cs_script/point_script";
+import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
+import { IsPlayerPawn } from "../bm_core";
 import { LaunchProjectile, StepImpactProjectile, DestroyProjectiles, Explode } from "../bm_combat";
 import type { FProjectile, FDamageFalloff } from "../bm_combat";
 import { TF2RocketFalloff, PlayerClass, GetProjectileBotShot } from "../bm_classes";
@@ -10,6 +11,8 @@ export interface FSoliderSettings extends FClassSettings
 {
 	readonly RocketSpeed: number;
 	readonly RocketDamage: number;
+	// A rocket that strikes a player does this many times RocketDamage to them, with nothing lost to the blast's own falloff
+	readonly RocketDirectHitScale: number;
 	readonly RocketRadius: number;
 	readonly RocketKnockback: number;
 	readonly RocketLifetime: number;
@@ -46,6 +49,7 @@ export const SoldierSettings: FSoliderSettings =
 	SecondaryLauncher: undefined,
 
 	RocketDamage: 75,
+	RocketDirectHitScale: 1.2,
 	RocketRadius: 160,
 	RocketSpeed: 1200,
 	RocketKnockback: 400,
@@ -93,9 +97,10 @@ export class SoldierClass extends PlayerClass<FSoliderSettings>
 
 	private StepRocket(Rocket: FRocket, Now: number, DeltaTime: number): boolean
 	{
-		return StepImpactProjectile(Rocket, Now, DeltaTime, this.Settings.RocketLifetime, (): void =>
+		return StepImpactProjectile(Rocket, Now, DeltaTime, this.Settings.RocketLifetime, (Hit: TraceResult): void =>
 		{
-			Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff);
+			const Struck: CSPlayerPawn | undefined = IsPlayerPawn(Hit.hitEntity) ? Hit.hitEntity : undefined;
+			Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff, undefined, Struck, this.Settings.RocketDirectHitScale);
 		});
 	}
 }

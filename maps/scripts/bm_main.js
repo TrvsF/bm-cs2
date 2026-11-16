@@ -299,7 +299,8 @@ var BeamFxLingerTime = 1;
 var SoundFiles = [
   "sounds/bm/shrinker_shrink.vsnd",
   "sounds/bm/shrinker_grow.vsnd",
-  "sounds/bm/medic_heal_loop.vsnd"
+  "sounds/bm/medic_heal_loop.vsnd",
+  "sounds/bm/turret_lock.vsnd"
 ];
 var SoundEntityClass = "point_soundevent";
 var SoundTemplateName = "bm_sound_template";
@@ -367,7 +368,12 @@ function SpawnTemporaryTemplate(TemplateName, Position, Lifetime) {
   return Spawned;
 }
 function PlaySoundOn(SoundEvent, Pawn) {
-  const Spawned = SpawnSoundOn(SoundEvent, Pawn);
+  RemoveSoundWhenFinished(SpawnSoundOn(SoundEvent, Pawn));
+}
+function PlaySoundAt(SoundEvent, Position) {
+  RemoveSoundWhenFinished(SoundEvent ? SpawnSound(SoundEvent, Position, void 0) : []);
+}
+function RemoveSoundWhenFinished(Spawned) {
   if (Spawned.length === 0) {
     return;
   }
@@ -415,26 +421,31 @@ function SpawnSoundOn(SoundEvent, Pawn) {
     return [];
   }
   const SourceName = GetSoundSourceName(Pawn);
-  const Spawned = SpawnSoundFromTemplate(SoundEvent, Pawn, SourceName) ?? SpawnSoundFromCode(SoundEvent, Pawn, SourceName);
+  const Spawned = SpawnSound(SoundEvent, Pawn.GetAbsOrigin(), SourceName);
   for (const Ent of Spawned) {
     Ent.SetParent(Pawn);
   }
   return Spawned;
 }
-function SpawnSoundFromTemplate(SoundEvent, Pawn, SourceName) {
+function SpawnSound(SoundEvent, Position, SourceName) {
+  return SpawnSoundFromTemplate(SoundEvent, Position, SourceName) ?? SpawnSoundFromCode(SoundEvent, Position, SourceName);
+}
+function SpawnSoundFromTemplate(SoundEvent, Position, SourceName) {
   const Template = FindPointTemplate(SoundTemplateName);
   if (!Template) {
     return void 0;
   }
-  const Spawned = (Template.ForceSpawn(Pawn.GetAbsOrigin()) ?? []).filter(IsValidEntity);
+  const Spawned = (Template.ForceSpawn(Position) ?? []).filter(IsValidEntity);
   for (const Ent of Spawned) {
     Ent.FireInput({ input: "SetSoundEventName", value: SoundEvent });
-    Ent.FireInput({ input: "SetSourceEntity", value: SourceName });
+    if (SourceName !== void 0) {
+      Ent.FireInput({ input: "SetSourceEntity", value: SourceName });
+    }
     Ent.FireInput({ input: "StartSound" });
   }
   return Spawned;
 }
-function SpawnSoundFromCode(SoundEvent, Pawn, SourceName) {
+function SpawnSoundFromCode(SoundEvent, Position, SourceName) {
   if (GbSoundSpawnFailed) {
     return [];
   }
@@ -443,9 +454,9 @@ function SpawnSoundFromCode(SoundEvent, Pawn, SourceName) {
     Spawned = Entities2.Spawn([
       {
         classname: SoundEntityClass,
-        origin: Pawn.GetAbsOrigin(),
+        origin: Position,
         soundName: SoundEvent,
-        sourceEntityName: SourceName,
+        sourceEntityName: SourceName ?? "",
         entityIndexSelection: 1,
         startOnSpawn: true
       }
@@ -1384,6 +1395,8 @@ var GroundProbeDistance = 8;
 var MinFacingSpeed = 1;
 var MissingProjectileRadius = 3;
 var AimPointPasses = 3;
+var PlayerHalfWidth = 16;
+var PlayerHeight = 72;
 var GShootables = [];
 function LaunchProjectile(Owner, Speed, UpSpeed, GravityScale, TemplateName, Radius = 0, Shape = "sphere" /* Sphere */) {
   const Direction = VectorMath.GetForwardVector(GetAimAngles(Owner));
@@ -1463,13 +1476,13 @@ function MoveBouncingProjectile(Projectile, DeltaTime, bHitPlayers, Bounce) {
   }
   const Hit = MoveProjectile(Projectile, DeltaTime, bHitPlayers);
   if (!Hit) {
-    return false;
+    return void 0;
   }
   if (IsDirectHit(Hit, bHitPlayers)) {
-    return true;
+    return Hit;
   }
   BounceProjectile(Projectile, Hit.normal, Bounce);
-  return false;
+  return void 0;
 }
 function IsDirectHit(Hit, bHitPlayers) {
   return IsPlayerPawn(Hit.hitEntity) || bHitPlayers && GetTraceBuilding(Hit) !== void 0;
@@ -1510,14 +1523,38 @@ function RollProjectile(Projectile, Ground, DeltaTime, bHitPlayers, Bounce) {
   const Hit = SlowedSpeed > 0 ? SweepProjectile(Projectile, DeltaTime, bHitPlayers) : void 0;
   if (Hit && IsDirectHit(Hit, bHitPlayers)) {
     PlaceProjectileModels(Projectile, false);
-    return true;
+    return Hit;
   }
   if (Hit) {
     BounceProjectile(Projectile, Hit.normal, Bounce);
   }
   FollowGround(Projectile);
   PlaceProjectileModels(Projectile, false);
-  return false;
+  return void 0;
+}
+function MovePhasedProjectile(Projectile, DeltaTime) {
+  const Velocity = Projectile.Velocity;
+  Projectile.Velocity = { x: Velocity.x, y: Velocity.y, z: Velocity.z - Gravity * Projectile.GravityScale * DeltaTime };
+  const Start = Projectile.Position;
+  const End = VectorMath.Add(Start, VectorMath.Scale(Projectile.Velocity, DeltaTime));
+  const Reach = PlayerHalfWidth + Projectile.Radius;
+  const Hits = [];
+  ForEachLivePawn((Victim) => {
+    if (Victim === Projectile.Owner || Projectile.HitPlayers.has(Victim)) {
+      return;
+    }
+    const Feet = Victim.GetAbsOrigin();
+    const Mins = { x: Feet.x - Reach, y: Feet.y - Reach, z: Feet.z - Projectile.Radius };
+    const Maxs = { x: Feet.x + Reach, y: Feet.y + Reach, z: Feet.z + PlayerHeight + Projectile.Radius };
+    const Crossing = IntersectSegmentBox(Start, End, Mins, Maxs);
+    if (Crossing) {
+      Projectile.HitPlayers.add(Victim);
+      Hits.push({ Victim, Point: VectorMath.Add(Start, VectorMath.Scale(VectorMath.Subtract(End, Start), Crossing.Fraction)) });
+    }
+  });
+  Projectile.Position = End;
+  PlaceProjectileModels(Projectile, false);
+  return Hits;
 }
 function BounceProjectile(Projectile, Normal, Bounce) {
   Projectile.bTouchedWorld = true;
@@ -1673,7 +1710,7 @@ function PlaceProjectileModels(Projectile, bTeleport) {
     }
   }
 }
-function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff, FxTemplate = ExplosionTemplateName) {
+function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff, FxTemplate = ExplosionTemplateName, DirectVictim = void 0, DirectScale = 1) {
   const Origin = VectorMath.Add(Position, ExplosionOffset);
   SpawnExplosionFx(Position, Radius, FxTemplate);
   if (!Attacker.IsValid()) {
@@ -1686,18 +1723,21 @@ function Explode(Position, Attacker, Radius, Damage, Knockback, RangeFalloff, Fx
     const Target = GetChestPosition(Victim);
     const Offset = VectorMath.Subtract(Target, Origin);
     const Distance = VectorMath.Size(Offset);
-    if (Distance > Radius) {
-      return;
-    }
-    const Trace = Instance5.TraceLine({ start: Origin, end: Target, ignorePlayers: true });
-    if (Trace.didHit && !Trace.startedInSolid) {
-      return;
+    const bDirect = Victim === DirectVictim;
+    if (!bDirect) {
+      if (Distance > Radius) {
+        return;
+      }
+      const Trace = Instance5.TraceLine({ start: Origin, end: Target, ignorePlayers: true });
+      if (Trace.didHit && !Trace.startedInSolid) {
+        return;
+      }
     }
     const bIsSelf = Victim === Attacker;
     if (!bIsSelf && IsTeammate(Victim, Attacker)) {
       return;
     }
-    const Falloff = 1 - 0.5 * (Distance / Radius);
+    const Falloff = bDirect ? DirectScale : 1 - 0.5 * (Distance / Radius);
     const RangeScale = bIsSelf ? 1 : GetRangeDamageScale(Attacker, Victim, RangeFalloff);
     const BlastDamage = Damage * Falloff * RangeScale;
     const Away = Distance > 1 ? Offset : UpVector;
@@ -2052,10 +2092,10 @@ var EPlayerClass = /* @__PURE__ */ ((EPlayerClass2) => {
 })(EPlayerClass || {});
 var TF2RocketFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
 var TF2PipeFalloff = { RampUp: 1, FallOff: 0.9, OptimalDistance: 512 };
-var BeamerShotgunFalloff = [
-  { Distance: 0, Scale: 1 },
-  { Distance: 256, Scale: 1 },
-  { Distance: 1024, Scale: 0.3 }
+var TF2HitscanFalloff = [
+  { Distance: 0, Scale: 1.5 },
+  { Distance: 512, Scale: 1 },
+  { Distance: 1024, Scale: 0.5 }
 ];
 var PlayableClasses = Object.values(EPlayerClass).filter((PlayerClass3) => {
   return PlayerClass3 !== "none" /* None */;
@@ -2388,6 +2428,7 @@ var SoldierSettings = {
   },
   SecondaryLauncher: void 0,
   RocketDamage: 75,
+  RocketDirectHitScale: 1.2,
   RocketRadius: 160,
   RocketSpeed: 1200,
   RocketKnockback: 400,
@@ -2417,8 +2458,9 @@ var SoldierClass = class extends PlayerClass {
     this.Rockets = [];
   }
   StepRocket(Rocket, Now, DeltaTime) {
-    return StepImpactProjectile(Rocket, Now, DeltaTime, this.Settings.RocketLifetime, () => {
-      Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff);
+    return StepImpactProjectile(Rocket, Now, DeltaTime, this.Settings.RocketLifetime, (Hit) => {
+      const Struck = IsPlayerPawn(Hit.hitEntity) ? Hit.hitEntity : void 0;
+      Explode(Rocket.Position, Rocket.Owner, this.Settings.RocketRadius, this.Settings.RocketDamage, this.Settings.RocketKnockback, this.Settings.RocketFalloff, void 0, Struck, this.Settings.RocketDirectHitScale);
     });
   }
 };
@@ -2473,6 +2515,7 @@ var DemoSettings = {
   PipeLaunchUp: 150,
   PipeRadius: 160,
   PipeDamage: 75,
+  PipeDirectHitScale: 1.2,
   PipeRolledDamageScale: 0.6,
   PipeKnockback: 500,
   PipeFalloff: TF2PipeFalloff,
@@ -2617,17 +2660,22 @@ var DemomanClass = class extends PlayerClass {
       DestroyProjectile(Pipe);
       return false;
     }
-    if (Now - Pipe.SpawnedAt >= this.Settings.PipeFuseTime || MoveBouncingProjectile(Pipe, DeltaTime, !Pipe.bTouchedWorld, this.Settings.PipeBounce)) {
-      this.DetonatePipe(Pipe);
+    if (Now - Pipe.SpawnedAt >= this.Settings.PipeFuseTime) {
+      this.DetonatePipe(Pipe, void 0);
+      return false;
+    }
+    const Hit = MoveBouncingProjectile(Pipe, DeltaTime, !Pipe.bTouchedWorld, this.Settings.PipeBounce);
+    if (Hit) {
+      this.DetonatePipe(Pipe, IsPlayerPawn(Hit.hitEntity) ? Hit.hitEntity : void 0);
       return false;
     }
     DrawMissingProjectile(Pipe);
     return true;
   }
-  DetonatePipe(Pipe) {
+  DetonatePipe(Pipe, Struck) {
     DestroyProjectile(Pipe);
     const Damage = this.Settings.PipeDamage * (Pipe.bTouchedWorld ? this.Settings.PipeRolledDamageScale : 1);
-    Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
+    Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff, void 0, Pipe.bTouchedWorld ? void 0 : Struck, this.Settings.PipeDirectHitScale);
   }
 };
 
@@ -3046,8 +3094,8 @@ var RailerClass = class extends PlayerClass {
 import { CSInputs as CSInputs4 } from "cs_script/point_script";
 var BeamerBeamFalloff = [
   { Distance: 0, Scale: 1 },
-  { Distance: 512, Scale: 0.5 },
-  { Distance: 1200, Scale: 0.2 }
+  { Distance: 640, Scale: 0.5 },
+  { Distance: 1536, Scale: 0.2 }
 ];
 var BeamerSettings = {
   DisplayName: "Beamer",
@@ -3098,13 +3146,13 @@ var BeamerSettings = {
   },
   EnergyBeamRefireInterval: 0.05,
   Shotgun: {
-    Damage: 10,
+    Damage: 8,
     HeadshotMultiplier: 1,
     Range: 2048,
     Spread: 6,
     Pellets: 10,
     bPierces: false,
-    Falloff: BeamerShotgunFalloff,
+    Falloff: TF2HitscanFalloff,
     Knockback: 600,
     SelfKnockback: 200,
     bBloodSplatter: false,
@@ -3223,14 +3271,16 @@ var BoxerSettings = {
   CubeFalloff: BoxerCubeFalloff,
   CubeKnockback: 300,
   CubeLifetime: 5,
+  CubeThroughWallDamageScale: 0.5,
+  CubeThroughWallColor: { r: 150, g: 60, b: 255 },
   Shotgun: {
-    Damage: 10,
+    Damage: 8,
     HeadshotMultiplier: 1,
     Range: 2048,
     Spread: 6,
     Pellets: 8,
     bPierces: false,
-    Falloff: BeamerShotgunFalloff,
+    Falloff: TF2HitscanFalloff,
     Knockback: 300,
     SelfKnockback: 150,
     bBloodSplatter: false,
@@ -3253,7 +3303,7 @@ var BoxerClass = class extends PlayerClass {
   }
   OnPrimaryFire(Pawn, Slot, Now) {
     const Projectile = LaunchProjectile(Pawn, this.Settings.CubeSpeed, 0, this.Settings.CubeGravityScale, CubeTemplateName, this.Settings.CubeRadius, "box" /* Box */);
-    this.Cubes.push({ ...Projectile, HitPlayers: /* @__PURE__ */ new Set() });
+    this.Cubes.push({ ...Projectile, HitPlayers: /* @__PURE__ */ new Set(), bThroughWall: false });
   }
   OnSecondaryFire(Pawn, Slot, Now) {
     FireHitscanWeapon(Pawn, this.Settings.Shotgun, Pawn.FindWeapon(this.Settings.Secondary));
@@ -3272,33 +3322,46 @@ var BoxerClass = class extends PlayerClass {
       DestroyProjectile(Cube);
       return false;
     }
+    if (Cube.bThroughWall) {
+      const Hits = MovePhasedProjectile(Cube, DeltaTime);
+      for (const Hit of Hits) {
+        this.CubeHitPlayer(Cube, Hit.Victim, Hit.Point);
+      }
+      DrawMissingProjectile(Cube);
+      return true;
+    }
     const Step = MovePiercingProjectile(Cube, DeltaTime);
     for (const Hit of Step.NewHits) {
-      this.CubeHitPlayer(Cube, Hit);
+      this.CubeHitPlayer(Cube, Hit.Victim, Hit.Trace.end);
     }
-    if (Step.WorldHit) {
-      const Distance = VectorMath.Size(VectorMath.Subtract(Cube.Position, Cube.Start));
-      DamageTracedBuilding(Step.WorldHit, this.Settings.CubeDamage * EvaluateDamageCurve(this.Settings.CubeFalloff, Distance), Cube.Owner);
+    if (Step.WorldHit && GetTraceBuilding(Step.WorldHit)) {
+      DamageTracedBuilding(Step.WorldHit, this.GetCubeDamage(Cube, Cube.Position), Cube.Owner);
       DestroyProjectile(Cube);
       return false;
+    }
+    if (Step.WorldHit) {
+      Cube.bThroughWall = true;
+      TintProjectile(Cube, this.Settings.CubeThroughWallColor);
     }
     DrawMissingProjectile(Cube);
     return true;
   }
-  CubeHitPlayer(Cube, Hit) {
+  GetCubeDamage(Cube, Point) {
+    const Distance = VectorMath.Size(VectorMath.Subtract(Point, Cube.Start));
+    const WallScale = Cube.bThroughWall ? this.Settings.CubeThroughWallDamageScale : 1;
+    return this.Settings.CubeDamage * EvaluateDamageCurve(this.Settings.CubeFalloff, Distance) * WallScale;
+  }
+  CubeHitPlayer(Cube, Victim, Point) {
     const Boxer = Cube.Owner;
-    const Victim = Hit.Victim;
     if (IsTeammate(Victim, Boxer)) {
       return;
     }
-    const Distance = VectorMath.Size(VectorMath.Subtract(Hit.Trace.end, Cube.Start));
-    const RangeScale = EvaluateDamageCurve(this.Settings.CubeFalloff, Distance);
-    const Damage = this.Settings.CubeDamage * RangeScale;
+    const Damage = this.GetCubeDamage(Cube, Point);
     ApplyKnockback(Victim, Cube.Velocity, Damage, this.Settings.CubeKnockback, false);
     if (DealShockDamage(Boxer, Victim, Damage, Boxer.FindWeapon(this.Settings.Primary)) > 0) {
-      SpawnBloodSplatter(Hit.Trace.end, Victim);
+      SpawnBloodSplatter(Point, Victim);
     }
-    Console8.Log(`${LogPrefix} ${GetPawnName(Boxer)} Damaged (cube) ${GetPawnName(Victim)} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
+    Console8.Log(`${LogPrefix} ${GetPawnName(Boxer)} Damaged (cube${Cube.bThroughWall ? ", through a wall" : ""}) ${GetPawnName(Victim)} : ${Math.round(Damage)}d`);
   }
 };
 
@@ -3354,6 +3417,7 @@ var ShockerSettings = {
   BallSpeed: 1e3,
   BallSize: 16,
   BallDamage: 50,
+  BallDirectHitScale: 1.2,
   BallRadius: 80,
   BallKnockback: 500,
   BallLifetime: 5,
@@ -3426,7 +3490,7 @@ var ShockerClass = class extends PlayerClass {
       Ball.StuckAt = Now;
       return true;
     }
-    this.ExplodeBall(Ball);
+    this.ExplodeBall(Ball, IsPlayerPawn(Hit.hitEntity) ? Hit.hitEntity : void 0);
     return false;
   }
   KnockBall(Ball, Push) {
@@ -3437,9 +3501,9 @@ var ShockerClass = class extends PlayerClass {
     Ball.Velocity = VectorMath.Add(Ball.Velocity, Push);
     Ball.GravityScale = this.Settings.BallKnockedGravityScale;
   }
-  ExplodeBall(Ball) {
+  ExplodeBall(Ball, Struck = void 0) {
     DestroyProjectile(Ball);
-    Explode(Ball.Position, Ball.Owner, this.Settings.BallRadius, this.Settings.BallDamage, this.Settings.BallKnockback, void 0, this.Settings.BallFxTemplate);
+    Explode(Ball.Position, Ball.Owner, this.Settings.BallRadius, this.Settings.BallDamage, this.Settings.BallKnockback, void 0, this.Settings.BallFxTemplate, Struck, this.Settings.BallDirectHitScale);
   }
   DetonateBallOnBeam(Shooter, Start, End) {
     let Combo = void 0;
@@ -3802,13 +3866,13 @@ var GunnerSettings = {
   },
   SecondaryLauncher: void 0,
   Shotgun: {
-    Damage: 12,
+    Damage: 10,
     HeadshotMultiplier: 1,
     Range: 2048,
     Spread: 5,
     Pellets: 8,
     bPierces: false,
-    Falloff: BeamerShotgunFalloff,
+    Falloff: TF2HitscanFalloff,
     Knockback: 250,
     SelfKnockback: 150,
     bBloodSplatter: true,
@@ -3820,7 +3884,7 @@ var GunnerSettings = {
     ImpactLifetime: 0
   },
   HeavyTurret: {
-    DisplayName: "Heavy Turret",
+    DisplayName: "Sniper Turret",
     ModelTemplate: "gunner_heavy_turret_template",
     DestroyFxTemplate: "gunner_turret_destroy_template",
     Health: 75,
@@ -3832,6 +3896,9 @@ var GunnerSettings = {
     FireInterval: 2,
     ArmTime: 1,
     MuzzleHeight: 40,
+    TurnSpeed: 180,
+    AimTolerance: 8,
+    LockSound: "bm.turret.lock",
     Gun: {
       Damage: 40,
       HeadshotMultiplier: 1,
@@ -3852,7 +3919,7 @@ var GunnerSettings = {
     }
   },
   RapidTurret: {
-    DisplayName: "Rapid Turret",
+    DisplayName: "Smg Turret",
     ModelTemplate: "gunner_rapid_turret_template",
     DestroyFxTemplate: "gunner_turret_destroy_template",
     Health: 50,
@@ -3864,6 +3931,9 @@ var GunnerSettings = {
     FireInterval: 0.12,
     ArmTime: 1,
     MuzzleHeight: 32,
+    TurnSpeed: 300,
+    AimTolerance: 10,
+    LockSound: "bm.turret.lock",
     Gun: {
       Damage: 4,
       HeadshotMultiplier: 1,
@@ -3891,23 +3961,35 @@ var TurretKind = class extends BuildingKind {
     return true;
   }
   OnPlaced(Building, Now) {
-    this.States.set(Building, { ArmedAt: Now + this.Settings.ArmTime, NextFireTime: Now + this.Settings.ArmTime });
+    this.States.set(Building, { ArmedAt: Now + this.Settings.ArmTime, NextFireTime: Now + this.Settings.ArmTime, TargetSlot: INDEX_NONE });
   }
   OnRemoved(Building) {
     this.States.delete(Building);
   }
   Tick(Building, Now, DeltaTime) {
     const State = this.States.get(Building);
+    if (!State || Now < State.ArmedAt) {
+      return;
+    }
     const Muzzle = VectorMath.Add(Building.Position, { x: 0, y: 0, z: this.Settings.MuzzleHeight });
-    const Target = State ? this.FindTarget(Building, Muzzle) : void 0;
-    if (!State || !Target) {
+    const Target = this.FindTarget(Building, Muzzle);
+    const TargetSlot = GetPlayerSlot(Target);
+    if (TargetSlot !== State.TargetSlot) {
+      State.TargetSlot = TargetSlot;
+      if (Target) {
+        PlaySoundAt(this.Settings.LockSound, Muzzle);
+      }
+    }
+    if (!Target) {
       return;
     }
     const Chest = GetChestPosition(Target);
     const Aim = VectorMath.GetRotation(VectorMath.Subtract(Chest, Muzzle));
-    TurnBuilding(Building, Aim.yaw);
+    const Swing = this.Settings.TurnSpeed * DeltaTime;
+    const Offset = GetYawOffset(Building.Yaw, Aim.yaw);
+    TurnBuilding(Building, Building.Yaw + Math.max(-Swing, Math.min(Swing, Offset)));
     DrawDebugLine({ start: Muzzle, end: Chest, duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
-    if (Now < State.NextFireTime) {
+    if (Math.abs(Offset) > this.Settings.AimTolerance || Now < State.NextFireTime) {
       return;
     }
     State.NextFireTime = Now + this.Settings.FireInterval;
@@ -3940,10 +4022,19 @@ var TurretKind = class extends BuildingKind {
     return Target;
   }
 };
+function GetYawOffset(From, To) {
+  let Offset = (To - From) % 360;
+  if (Offset > 180) {
+    Offset -= 360;
+  } else if (Offset < -180) {
+    Offset += 360;
+  }
+  return Offset;
+}
 var GunnerClass = class extends PlayerClass {
   HeavyTurret = new TurretKind(GunnerSettings.HeavyTurret);
   RapidTurret = new TurretKind(GunnerSettings.RapidTurret);
-  BuildKeys = { Left: { Label: "Heavy Turret", Kinds: [this.HeavyTurret] }, Right: { Label: "Rapid Turret", Kinds: [this.RapidTurret] } };
+  BuildKeys = { Left: { Label: "Sniper Turret", Kinds: [this.HeavyTurret] }, Right: { Label: "Smg Turret", Kinds: [this.RapidTurret] } };
   PlayerStates = /* @__PURE__ */ new Map();
   constructor() {
     super(GunnerSettings);
@@ -4649,6 +4740,13 @@ function DriveBot(Pawn, Assignment) {
   }
   const Forward = VectorMath.GetForwardVector({ pitch: 0, yaw: Assignment.Yaw, roll: 0 });
   Pawn.Teleport({ velocity: { x: Forward.x * BotRunSpeed, y: Forward.y * BotRunSpeed, z: Pawn.GetAbsVelocity().z } });
+}
+function CountBotMarkers() {
+  let Count = 0;
+  for (const MarkerName of BotMarkerModes.keys()) {
+    Count += Entities3.FindByName(MarkerName).length;
+  }
+  return Count;
 }
 function IsMarkerBot(Slot) {
   return GBotAssignments.has(Slot);
@@ -5459,6 +5557,8 @@ function Block(Pawn, Visitor, Zone) {
 
 // src/bm_gamemode.ts
 var GameMode = class {
+  // Whether picking a class changes it there and then, wherever the player is, rather than waiting for their spawn zone or next life
+  bInstantClassSwitch = false;
   // Server settings for this mode, applied at each round start after the shared ones
   GetMatchCommands() {
     return [];
@@ -5612,7 +5712,7 @@ var GLastScanReport2 = "";
 var GHealAccumulators = /* @__PURE__ */ new Map();
 var PayloadMode = class extends GameMode {
   DisplayName = "Payload";
-  CommandName = "payload";
+  CommandName = "pl";
   IsMapSetUp() {
     ScanPayload();
     return IsPayloadReady();
@@ -6004,6 +6104,54 @@ function DrawTrack(Track) {
   }
 }
 
+// src/gamemodes/bm_training.ts
+var TrainingSettings = {
+  DefaultBotCount: 4
+};
+var TrainingMode = class extends GameMode {
+  DisplayName = "Training";
+  CommandName = "training";
+  bInstantClassSwitch = true;
+  IsMapSetUp() {
+    return true;
+  }
+  GetMatchCommands() {
+    const Markers = CountBotMarkers();
+    return [
+      "mp_teammates_are_enemies 0",
+      "mp_friendlyfire 0",
+      "mp_ignore_round_win_conditions 1",
+      "mp_respawn_on_death_t 1",
+      "mp_respawn_on_death_ct 1",
+      "mp_roundtime 60",
+      "mp_roundtime_defuse 60",
+      "mp_roundtime_hostage 60",
+      "mp_autoteambalance 0",
+      "mp_limitteams 0",
+      "mp_humanteam t",
+      "bot_join_team ct",
+      "bot_stop 1",
+      "bot_quota_mode normal",
+      `bot_quota ${Markers > 0 ? Markers : TrainingSettings.DefaultBotCount}`
+    ];
+  }
+  OnPlayerSpawn(Pawn, Slot) {
+    ResetBotMode(Slot);
+  }
+  OnPlayerLeave(Slot) {
+    ForgetBot(Slot);
+  }
+  Tick(Now, DeltaTime) {
+    TickBots(Now);
+    ForEachPlayer((Controller) => {
+      const bBot = Controller.IsBot();
+      if (Controller.GetTeamNumber() === (bBot ? 2 /* Terrorist */ : 3 /* CounterTerrorist */)) {
+        Controller.JoinTeam(bBot ? 3 /* CounterTerrorist */ : 2 /* Terrorist */);
+      }
+    });
+  }
+};
+
 // src/gamemodes/bm_teamdeathmatch.ts
 import { Instance as Instance13, Console as Console16, GameRules as GameRules4, CSRoundEndReason as CSRoundEndReason2 } from "cs_script/point_script";
 var TeamDeathmatchSettings = {
@@ -6131,9 +6279,8 @@ var MainSettings = {
   MapModePrefix: "bm_gm_",
   DebugBotQuota: 8
 };
-var DefaultMode = new FreeForAllMode();
-var GameModes = [new PayloadMode(), DefaultMode, new TeamDeathmatchMode()];
-var GActiveMode = DefaultMode;
+var GameModes = [new TrainingMode(), new PayloadMode(), new FreeForAllMode(), new TeamDeathmatchMode()];
+var GActiveMode = GameModes[0];
 var GChosenMode = void 0;
 var GClassBySlot = /* @__PURE__ */ new Map();
 var GPendingClassBySlot = /* @__PURE__ */ new Map();
@@ -6401,7 +6548,7 @@ function SelectGameMode() {
     return Candidate !== void 0 && Candidate.IsMapSetUp();
   }) ?? GameModes.find((Candidate) => {
     return Candidate.IsMapSetUp();
-  }) ?? DefaultMode;
+  }) ?? GameModes[0];
   if (Mode !== GActiveMode) {
     GActiveMode.OnDeactivated();
     GActiveMode = Mode;
@@ -6453,7 +6600,7 @@ function RequestPlayerClass(Player, PlayerClass3) {
   if (PlayerClass3 !== "none" /* None */ && Pawn && Pawn.IsValid()) {
     ClassDefinitions[PlayerClass3].PlayPickFx(Pawn);
   }
-  if (!bAlive || CurrentClass === "none" /* None */ || (bInSpawn || bDebug) && PlayerClass3 !== CurrentClass) {
+  if (!bAlive || CurrentClass === "none" /* None */ || (bInSpawn || bDebug || GActiveMode.bInstantClassSwitch) && PlayerClass3 !== CurrentClass) {
     GPendingClassBySlot.delete(Slot);
     SetPlayerClass(Player, PlayerClass3);
     return;
