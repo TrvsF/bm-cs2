@@ -1,6 +1,6 @@
 import { Instance, Console } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, RotationMath, IsFreeForAll, IsModelEntity, GetPawnName, GetPlayerSlot, GetColorForTeam, GetOrCreate, SpawnTemplateEntities, INDEX_NONE } from "./bm_core";
+import { TickInterval, LogPrefix, VectorMath, RotationMath, IsFreeForAll, IsModelEntity, GetPawnName, GetPlayerSlot, GetColorForTeam, GetOrCreate, GetAimAngles, IsBotControlled, SpawnTemplateEntities, INDEX_NONE, DrawDebugBox, DrawDebugLine, DrawDebugSphere } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
 import { SpawnTemporaryTemplate } from "./bm_effects";
 import { ShowDamageNumber } from "./bm_hud";
@@ -66,13 +66,19 @@ export enum EBuildHint
 	Cooldown = "Cooldown",
 }
 
+export enum EBotBuildSite
+{
+	NearEnemies,
+	AtSpawn,
+	AwayFromSpawn,
+}
+
 export interface FBuildKey
 {
 	readonly Label: string;
 	readonly Kinds: readonly BuildingKind[];
 }
 
-// What each mouse button builds while a class's build tool is out
 export interface FBuildKeys
 {
 	readonly Left: FBuildKey;
@@ -105,7 +111,7 @@ interface FPlacement
 	bPreviewTintedValid: boolean | undefined;
 }
 
-interface FBoxHit
+export interface FBoxHit
 {
 	readonly Fraction: number;
 	readonly Normal: FVector;
@@ -122,6 +128,17 @@ export abstract class BuildingKind<TSettings extends FBuildingSettings = FBuildi
 
 	public OnPlaced(Building: FBuilding, Now: number): void
 	{
+	}
+
+	public GetBotSite(): EBotBuildSite
+	{
+		return EBotBuildSite.NearEnemies;
+	}
+
+	// Whether enemy bots shoot at it
+	public IsBotTarget(): boolean
+	{
+		return false;
 	}
 
 	public Tick(Building: FBuilding, Now: number, DeltaTime: number): void
@@ -253,6 +270,14 @@ export function GetBuildingCenter(Building: FBuilding): FVector
 	return VectorMath.Add(Building.Position, { x: 0, y: 0, z: Building.Kind.Settings.Height / 2 });
 }
 
+export function GetEnemyBuildings(Pawn: CSPlayerPawn): FBuilding[]
+{
+	return GBuildings.filter((Building: FBuilding): boolean =>
+	{
+		return !Building.bRemoved && IsBuildingEnemy(Building, Pawn);
+	});
+}
+
 export function IsBuildingEnemy(Building: FBuilding, Pawn: CSPlayerPawn): boolean
 {
 	return Pawn !== Building.Owner && (IsFreeForAll() || Pawn.GetTeamNumber() !== Building.Team);
@@ -356,7 +381,7 @@ export function DestroyBuilding(Building: FBuilding): void
 	const TemplateName: string = Building.Kind.Settings.DestroyFxTemplate;
 	if (TemplateName === "" || !SpawnTemporaryTemplate(TemplateName, Center, DestroyFxLifetime))
 	{
-		Instance.DebugSphere({ center: Center, radius: Math.max(Building.Kind.Settings.Height, Building.Kind.Settings.HalfWidth), duration: 0.5, color: DestroyedDebugColor });
+		DrawDebugSphere({ center: Center, radius: Math.max(Building.Kind.Settings.Height, Building.Kind.Settings.HalfWidth), duration: 0.5, color: DestroyedDebugColor });
 	}
 	GetOrCreate(GRebuildTimes, Building.OwnerSlot, (): Map<BuildingKind, number> =>
 	{
@@ -496,7 +521,7 @@ function GetRebuildWait(Slot: number, Kind: BuildingKind, Now: number): number
 	return Math.max(0, (GRebuildTimes.get(Slot)?.get(Kind) ?? 0) - Now);
 }
 
-function GetNextToBuild(Slot: number, Kinds: readonly BuildingKind[]): BuildingKind | undefined
+export function GetNextToBuild(Slot: number, Kinds: readonly BuildingKind[]): BuildingKind | undefined
 {
 	return Kinds.find((Kind: BuildingKind): boolean =>
 	{
@@ -518,8 +543,9 @@ function UseBuildKey(Pawn: CSPlayerPawn, Slot: number, Kinds: readonly BuildingK
 	}
 
 	const Eye: FVector = Pawn.GetEyePosition();
-	const Reach: FVector = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), PickUpRange));
-	const InView: FBuildingHit | undefined = TraceBuildings(Eye, Reach, 0, (Building: FBuilding): boolean =>
+	const Reach: FVector = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(GetAimAngles(Pawn)), PickUpRange));
+	// Bots never pick their buildings back up
+	const InView: FBuildingHit | undefined = IsBotControlled(Pawn) ? undefined : TraceBuildings(Eye, Reach, 0, (Building: FBuilding): boolean =>
 	{
 		return Building.OwnerSlot === Slot && Kinds.includes(Building.Kind);
 	});
@@ -598,7 +624,7 @@ export function TickPlacement(Slot: number): void
 		const To: FVector | undefined = Placement.Path[Index];
 		if (From && To)
 		{
-			Instance.DebugLine({ start: From, end: To, duration: TickInterval * 2, color: Color });
+			DrawDebugLine({ start: From, end: To, duration: TickInterval * 2, color: Color });
 		}
 	}
 	DrawBuildingBox(Placement.Position, Placement.Kind.Settings, Color);
@@ -665,7 +691,7 @@ function SpawnPreview(Kind: BuildingKind, Position: FVector): FBuildingModel[]
 		{
 			continue;
 		}
-		Instance.EntFireAtTarget({ target: Model.Ent, input: "DisableCollision" });
+		Model.Ent.FireInput({ input: "DisableCollision" });
 		if (Model.Ent.GetParent() === undefined)
 		{
 			Model.Ent.SetModelScale(PreviewScale);
@@ -678,7 +704,7 @@ function UpdatePlacementSpot(Placement: FPlacement): void
 {
 	const Settings: FBuildingSettings = Placement.Kind.Settings;
 	const Owner: CSPlayerPawn = Placement.Owner;
-	const Aim: FRotator = Owner.GetEyeAngles();
+	const Aim: FRotator = GetAimAngles(Owner);
 	const Ignored: Entity[] = [Owner, ...GetModelEntities(Placement.Preview)];
 
 	let Position: FVector = Owner.GetEyePosition();
@@ -868,8 +894,7 @@ function GetBuildingByEntity(Ent: Entity | undefined): FBuilding | undefined
 	});
 }
 
-// Slab test. A start inside the box counts as hitting it straight away.
-function IntersectSegmentBox(Start: FVector, End: FVector, Mins: FVector, Maxs: FVector): FBoxHit | undefined
+export function IntersectSegmentBox(Start: FVector, End: FVector, Mins: FVector, Maxs: FVector): FBoxHit | undefined
 {
 	const Delta: FVector = VectorMath.Subtract(End, Start);
 	let Enter: number = 0;
@@ -988,7 +1013,7 @@ function GetModelEntities(Models: readonly FBuildingModel[]): Entity[]
 
 function DrawBuildingBox(Position: FVector, Settings: FBuildingSettings, Color: FColor): void
 {
-	Instance.DebugBox(
+	DrawDebugBox(
 	{
 		mins: VectorMath.Add(Position, { x: -Settings.HalfWidth, y: -Settings.HalfWidth, z: 0 }),
 		maxs: VectorMath.Add(Position, { x: Settings.HalfWidth, y: Settings.HalfWidth, z: Settings.Height }),

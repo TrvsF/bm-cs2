@@ -1,11 +1,12 @@
-import { Instance, CSInputs } from "cs_script/point_script";
-import type { CSPlayerPawn } from "cs_script/point_script";
-import { bDebug, TickInterval, GetTeamColor, GetOrCreate } from "../bm_core";
-import type { FColor } from "../bm_core";
-import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, Explode } from "../bm_combat";
+import { CSInputs } from "cs_script/point_script";
+import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
+import { bDebug, TickInterval, GetTeamColor, GetOrCreate, IsTeammate, IsPlayerPawn, IsInputDown, ForEachLivePawn, DrawDebugSphere } from "../bm_core";
+import { VectorMath } from "../bm_core";
+import type { FVector, FColor } from "../bm_core";
+import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, MakeShootable, Explode } from "../bm_combat";
 import type { FProjectile, FBouncingProjectile, FBounceSettings, FDamageFalloff } from "../bm_combat";
-import { TF2RocketFalloff, PlayerClass } from "../bm_classes";
-import type { FClassSettings, FHudCounter } from "../bm_classes";
+import { TF2PipeFalloff, PlayerClass, GetProjectileBotShot } from "../bm_classes";
+import type { FClassSettings, FHudCounter, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -15,6 +16,8 @@ export interface FDemoSettings extends FClassSettings
 	readonly PipeLaunchUp: number,
 	readonly PipeRadius: number,
 	readonly PipeDamage: number,
+	// A pipe that strikes a player before bouncing does this many times PipeDamage to them, with nothing lost to the blast's own falloff
+	readonly PipeDirectHitScale: number,
 	readonly PipeRolledDamageScale: number,
 	readonly PipeKnockback: number,
 	readonly PipeFalloff: FDamageFalloff | undefined,
@@ -31,6 +34,8 @@ export interface FDemoSettings extends FClassSettings
 	readonly StickyKnockback: number;
 	readonly StickyFalloff: FDamageFalloff | undefined;
 	readonly StickyFalloffTime: number;
+	readonly StickyShootRadius: number;
+	readonly StickyWeight: number;
 }
 
 export interface FPipe extends FBouncingProjectile
@@ -47,7 +52,6 @@ export interface FStickyBomb extends FProjectile
 interface FDemoPlayerState
 {
 	Stickies: FStickyBomb[];
-	bDetonateHeld: boolean;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,13 +103,16 @@ export const DemoSettings: FDemoSettings =
 	StickyKnockback: 450,
 	StickyFalloff: TF2StickyFalloff,
 	StickyFalloffTime: 5,
+	StickyShootRadius: 12,
+	StickyWeight: 1,
 	PipeLaunchSpeed: 1337,
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
 	PipeDamage: 75,
+	PipeDirectHitScale: 1.2,
 	PipeRolledDamageScale: 0.6,
 	PipeKnockback: 500,
-	PipeFalloff: TF2RocketFalloff,
+	PipeFalloff: TF2PipeFalloff,
 	PipeFuseTime: 1.6,
 	PipeBounce:
 	{
@@ -119,6 +126,7 @@ export const DemoSettings: FDemoSettings =
 const StickyTemplateName: string = "sticky_template";
 const PipeTemplateName: string = "pipe_template";
 const UnarmedStickyColor: FColor = { r: 240, g: 240, b: 240 };
+const BotStickyTriggerScale: number = 0.6;
 
 // Demoman /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -132,6 +140,38 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 		super(DemoSettings);
 	}
 
+	// A bot sets its stickies off once an enemy is well inside the blast of an armed one
+	public override TickBot(Pawn: CSPlayerPawn, Slot: number, Now: number, Enemy: CSPlayerPawn | undefined): number
+	{
+		const State: FDemoPlayerState | undefined = this.PlayerStates.get(Slot);
+		if (!State)
+		{
+			return 0;
+		}
+		const Reach: number = this.Settings.StickyRadius * BotStickyTriggerScale;
+		let bTrigger: boolean = false;
+		ForEachLivePawn((Other: CSPlayerPawn): void =>
+		{
+			if (bTrigger || Other === Pawn || IsTeammate(Other, Pawn))
+			{
+				return;
+			}
+			const Spot: FVector = Other.GetAbsOrigin();
+			bTrigger = State.Stickies.some((Sticky: FStickyBomb): boolean =>
+			{
+				return Now >= Sticky.ArmedAt && VectorMath.Size(VectorMath.Subtract(Sticky.Position, Spot)) <= Reach;
+			});
+		});
+		return bTrigger ? this.Settings.StickyDetonateKey : 0;
+	}
+
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return WeaponName === this.Settings.Primary
+			? GetProjectileBotShot(this.Settings.StickyDamage, this.Settings.StickyRadius, { Speed: this.Settings.StickyLaunchSpeed, UpSpeed: this.Settings.StickyLaunchUp, GravityScale: 1 })
+			: GetProjectileBotShot(this.Settings.PipeDamage, this.Settings.PipeRadius, { Speed: this.Settings.PipeLaunchSpeed, UpSpeed: this.Settings.PipeLaunchUp, GravityScale: 1 });
+	}
+
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number, ChargeFraction: number): void
 	{
 		const Speed: number = this.Settings.StickyLaunchSpeed + (this.Settings.StickyMaxLaunchSpeed - this.Settings.StickyLaunchSpeed) * ChargeFraction;
@@ -143,6 +183,11 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 			bTintedArmed: false,
 		};
 		TintProjectile(Sticky, UnarmedStickyColor);
+		MakeShootable(Sticky, this.Settings.StickyShootRadius, this.Settings.StickyWeight, (Push: FVector): void =>
+		{
+			Sticky.Velocity = Sticky.bStuck ? Push : VectorMath.Add(Sticky.Velocity, Push);
+			Sticky.bStuck = false;
+		});
 
 		const State: FDemoPlayerState = this.GetPlayerState(Slot);
 		State.Stickies.push(Sticky);
@@ -181,6 +226,10 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
 	{
 		const State: FDemoPlayerState = this.GetPlayerState(Slot);
+		State.Stickies = State.Stickies.filter((Sticky: FStickyBomb): boolean =>
+		{
+			return !Sticky.bDestroyed;
+		});
 		for (const Sticky of State.Stickies)
 		{
 			if (!Sticky.bStuck && MoveProjectile(Sticky, DeltaTime, false))
@@ -194,7 +243,7 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 			const bArmed: boolean = Now >= Sticky.ArmedAt;
 			if (Sticky.Models.length === 0)
 			{
-				Instance.DebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: bArmed ? GetTeamColor(Pawn) : UnarmedStickyColor });
+				DrawDebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: bArmed ? GetTeamColor(Pawn) : UnarmedStickyColor });
 			}
 			else if (bArmed && !Sticky.bTintedArmed)
 			{
@@ -203,10 +252,8 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 			}
 		}
 
-		const bDown: boolean = Pawn.IsInputPressed(this.Settings.StickyDetonateKey);
-		const bPressed: boolean = bDown && !State.bDetonateHeld;
-		State.bDetonateHeld = bDown;
-		if (!bPressed)
+		// Held, not pressed: stickies still arming when the key went down go off as soon as they are armed
+		if (!IsInputDown(Pawn, this.Settings.StickyDetonateKey))
 		{
 			return;
 		}
@@ -258,7 +305,7 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 	{
 		return GetOrCreate(this.PlayerStates, Slot, (): FDemoPlayerState =>
 		{
-			return { Stickies: [], bDetonateHeld: false };
+			return { Stickies: [] };
 		});
 	}
 
@@ -270,9 +317,15 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 			return false;
 		}
 
-		if (Now - Pipe.SpawnedAt >= this.Settings.PipeFuseTime || MoveBouncingProjectile(Pipe, DeltaTime, !Pipe.bTouchedWorld, this.Settings.PipeBounce))
+		if (Now - Pipe.SpawnedAt >= this.Settings.PipeFuseTime)
 		{
-			this.DetonatePipe(Pipe);
+			this.DetonatePipe(Pipe, undefined);
+			return false;
+		}
+		const Hit: TraceResult | undefined = MoveBouncingProjectile(Pipe, DeltaTime, !Pipe.bTouchedWorld, this.Settings.PipeBounce);
+		if (Hit)
+		{
+			this.DetonatePipe(Pipe, IsPlayerPawn(Hit.hitEntity) ? Hit.hitEntity : undefined);
 			return false;
 		}
 
@@ -280,10 +333,10 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 		return true;
 	}
 
-	private DetonatePipe(Pipe: FPipe): void
+	private DetonatePipe(Pipe: FPipe, Struck: CSPlayerPawn | undefined): void
 	{
 		DestroyProjectile(Pipe);
 		const Damage: number = this.Settings.PipeDamage * (Pipe.bTouchedWorld ? this.Settings.PipeRolledDamageScale : 1);
-		Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff);
+		Explode(Pipe.Position, Pipe.Owner, this.Settings.PipeRadius, Damage, this.Settings.PipeKnockback, this.Settings.PipeFalloff, undefined, Pipe.bTouchedWorld ? undefined : Struck, this.Settings.PipeDirectHitScale);
 	}
 }

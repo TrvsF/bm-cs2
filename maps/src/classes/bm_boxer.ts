@@ -1,12 +1,13 @@
 import { Console } from "cs_script/point_script";
 import type { CSPlayerPawn } from "cs_script/point_script";
 import { LogPrefix, VectorMath, GetPawnName, IsTeammate } from "../bm_core";
-import { EProjectileShape, LaunchProjectile, MovePiercingProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve, ApplyKnockback } from "../bm_combat";
-import type { FProjectile, FPiercingProjectile, FPiercingStep, FDamageCurve, FHitscanHit } from "../bm_combat";
-import { DamageTracedBuilding } from "../bm_buildings";
+import type { FVector, FColor } from "../bm_core";
+import { EProjectileShape, LaunchProjectile, MovePiercingProjectile, MovePhasedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, EvaluateDamageCurve, ApplyKnockback } from "../bm_combat";
+import type { FProjectile, FPiercingProjectile, FPiercingStep, FPhasedHit, FDamageCurve } from "../bm_combat";
+import { GetTraceBuilding, DamageTracedBuilding } from "../bm_buildings";
 import { SpawnBloodSplatter } from "../bm_effects";
-import { BeamerShotgunFalloff, PlayerClass, FireHitscanWeapon, DealShockDamage } from "../bm_classes";
-import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
+import { TF2HitscanFalloff, PlayerClass, FireHitscanWeapon, DealShockDamage, GetHitscanBotShot, GetProjectileBotShot } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -19,11 +20,15 @@ export interface FBoxerSettings extends FClassSettings
 	readonly CubeFalloff: FDamageCurve;
 	readonly CubeKnockback: number;
 	readonly CubeLifetime: number;
+	// A cube goes on through walls. Once it has, it turns this colour and its damage is multiplied by CubeThroughWallDamageScale.
+	readonly CubeThroughWallDamageScale: number;
+	readonly CubeThroughWallColor: FColor;
 	readonly Shotgun: FHitscanWeaponSettings;
 }
 
 export interface FCube extends FPiercingProjectile
 {
+	bThroughWall: boolean;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,16 +80,18 @@ export const BoxerSettings: FBoxerSettings =
 	CubeFalloff: BoxerCubeFalloff,
 	CubeKnockback: 300,
 	CubeLifetime: 5,
+	CubeThroughWallDamageScale: 0.5,
+	CubeThroughWallColor: { r: 150, g: 60, b: 255 },
 
 	Shotgun:
 	{
-		Damage: 10,
+		Damage: 8,
 		HeadshotMultiplier: 1,
 		Range: 2048,
 		Spread: 6,
 		Pellets: 8,
 		bPierces: false,
-		Falloff: BeamerShotgunFalloff,
+		Falloff: TF2HitscanFalloff,
 		Knockback: 300,
 		SelfKnockback: 150,
 		bBloodSplatter: false,
@@ -110,10 +117,17 @@ export class BoxerClass extends PlayerClass<FBoxerSettings>
 		super(BoxerSettings);
 	}
 
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return WeaponName === this.Settings.Primary
+			? GetProjectileBotShot(this.Settings.CubeDamage, this.Settings.CubeRadius, { Speed: this.Settings.CubeSpeed, UpSpeed: 0, GravityScale: this.Settings.CubeGravityScale }, this.Settings.CubeFalloff)
+			: GetHitscanBotShot(this.Settings.Shotgun);
+	}
+
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
 		const Projectile: FProjectile = LaunchProjectile(Pawn, this.Settings.CubeSpeed, 0, this.Settings.CubeGravityScale, CubeTemplateName, this.Settings.CubeRadius, EProjectileShape.Box);
-		this.Cubes.push({ ...Projectile, HitPlayers: new Set<CSPlayerPawn>() });
+		this.Cubes.push({ ...Projectile, HitPlayers: new Set<CSPlayerPawn>(), bThroughWall: false });
 	}
 
 	public override OnSecondaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
@@ -143,40 +157,60 @@ export class BoxerClass extends PlayerClass<FBoxerSettings>
 			return false;
 		}
 
+		if (Cube.bThroughWall)
+		{
+			// Walls no longer stop it, so they no longer hide anyone from it either
+			const Hits: FPhasedHit[] = MovePhasedProjectile(Cube, DeltaTime);
+			for (const Hit of Hits)
+			{
+				this.CubeHitPlayer(Cube, Hit.Victim, Hit.Point);
+			}
+			DrawMissingProjectile(Cube);
+			return true;
+		}
+
 		const Step: FPiercingStep = MovePiercingProjectile(Cube, DeltaTime);
 		for (const Hit of Step.NewHits)
 		{
-			this.CubeHitPlayer(Cube, Hit);
+			this.CubeHitPlayer(Cube, Hit.Victim, Hit.Trace.end);
+		}
+		if (Step.WorldHit && GetTraceBuilding(Step.WorldHit))
+		{
+			DamageTracedBuilding(Step.WorldHit, this.GetCubeDamage(Cube, Cube.Position), Cube.Owner);
+			DestroyProjectile(Cube);
+			return false;
 		}
 		if (Step.WorldHit)
 		{
-			const Distance: number = VectorMath.Size(VectorMath.Subtract(Cube.Position, Cube.Start));
-			DamageTracedBuilding(Step.WorldHit, this.Settings.CubeDamage * EvaluateDamageCurve(this.Settings.CubeFalloff, Distance), Cube.Owner);
-			DestroyProjectile(Cube);
-			return false;
+			Cube.bThroughWall = true;
+			TintProjectile(Cube, this.Settings.CubeThroughWallColor);
 		}
 
 		DrawMissingProjectile(Cube);
 		return true;
 	}
 
-	private CubeHitPlayer(Cube: FCube, Hit: FHitscanHit): void
+	private GetCubeDamage(Cube: FCube, Point: FVector): number
+	{
+		const Distance: number = VectorMath.Size(VectorMath.Subtract(Point, Cube.Start));
+		const WallScale: number = Cube.bThroughWall ? this.Settings.CubeThroughWallDamageScale : 1;
+		return this.Settings.CubeDamage * EvaluateDamageCurve(this.Settings.CubeFalloff, Distance) * WallScale;
+	}
+
+	private CubeHitPlayer(Cube: FCube, Victim: CSPlayerPawn, Point: FVector): void
 	{
 		const Boxer: CSPlayerPawn = Cube.Owner;
-		const Victim: CSPlayerPawn = Hit.Victim;
 		if (IsTeammate(Victim, Boxer))
 		{
 			return;
 		}
 
-		const Distance: number = VectorMath.Size(VectorMath.Subtract(Hit.Trace.end, Cube.Start));
-		const RangeScale: number = EvaluateDamageCurve(this.Settings.CubeFalloff, Distance);
-		const Damage: number = this.Settings.CubeDamage * RangeScale;
+		const Damage: number = this.GetCubeDamage(Cube, Point);
 		ApplyKnockback(Victim, Cube.Velocity, Damage, this.Settings.CubeKnockback, false);
 		if (DealShockDamage(Boxer, Victim, Damage, Boxer.FindWeapon(this.Settings.Primary)) > 0)
 		{
-			SpawnBloodSplatter(Hit.Trace.end, Victim);
+			SpawnBloodSplatter(Point, Victim);
 		}
-		Console.Log(`${LogPrefix} ${GetPawnName(Boxer)} Damaged (cube) ${GetPawnName(Victim)} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
+		Console.Log(`${LogPrefix} ${GetPawnName(Boxer)} Damaged (cube${Cube.bThroughWall ? ", through a wall" : ""}) ${GetPawnName(Victim)} : ${Math.round(Damage)}d`);
 	}
 }

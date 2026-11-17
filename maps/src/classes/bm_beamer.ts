@@ -1,12 +1,12 @@
 import { CSInputs } from "cs_script/point_script";
 import type { CSPlayerPawn } from "cs_script/point_script";
-import { TickInterval, VectorMath, GetTeamColor, GetOrCreate, IsWeapon } from "../bm_core";
+import { TickInterval, VectorMath, GetTeamColor, GetOrCreate, IsInputDown, GetHeldWeapon, GetAimAngles, IsWeapon } from "../bm_core";
 import type { FVector } from "../bm_core";
 import type { FDamageCurve } from "../bm_combat";
 import { SpawnHeldBeam, MoveHeldBeam, RemoveHeldBeam } from "../bm_effects";
 import type { FHeldBeam } from "../bm_effects";
-import { BeamerShotgunFalloff, BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon } from "../bm_classes";
-import type { FClassSettings, FHitscanWeaponSettings } from "../bm_classes";
+import { TF2HitscanFalloff, BeamStartDrop, PlayerClass, FireHitscanWeapon, TraceHitscanWeapon, GetHitscanBotShot } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,8 +28,8 @@ interface FBeamerPlayerState
 const BeamerBeamFalloff: FDamageCurve =
 [
 	{ Distance: 0, Scale: 1.0 },
-	{ Distance: 512, Scale: 0.5 },
-	{ Distance: 1200, Scale: 0.2 },
+	{ Distance: 640, Scale: 0.5 },
+	{ Distance: 1536, Scale: 0.2 },
 ];
 
 export const BeamerSettings: FBeamerSettings =
@@ -88,13 +88,13 @@ export const BeamerSettings: FBeamerSettings =
 
 	Shotgun:
 	{
-		Damage: 10,
+		Damage: 8,
 		HeadshotMultiplier: 1,
 		Range: 2048,
 		Spread: 6,
 		Pellets: 10,
 		bPierces: false,
-		Falloff: BeamerShotgunFalloff,
+		Falloff: TF2HitscanFalloff,
 		Knockback: 600,
 		SelfKnockback: 200,
 		bBloodSplatter: false,
@@ -116,6 +116,11 @@ export class BeamerClass extends PlayerClass<FBeamerSettings>
 	constructor()
 	{
 		super(BeamerSettings);
+	}
+
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return GetHitscanBotShot(WeaponName === this.Settings.Primary ? this.Settings.EnergyBeam : this.Settings.Shotgun);
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
@@ -144,7 +149,7 @@ export class BeamerClass extends PlayerClass<FBeamerSettings>
 
 		const Beam: FHitscanWeaponSettings = this.Settings.EnergyBeam;
 		const Start: FVector = Pawn.GetEyePosition();
-		const End: FVector = TraceHitscanWeapon(Pawn, Beam, Start, VectorMath.GetForwardVector(Pawn.GetEyeAngles())).End;
+		const End: FVector = TraceHitscanWeapon(Pawn, Beam, Start, VectorMath.GetForwardVector(GetAimAngles(Pawn))).End;
 		const BeamStart: FVector = VectorMath.Subtract(Start, BeamStartDrop);
 		if (State.Beam)
 		{
@@ -186,7 +191,7 @@ export class BeamerClass extends PlayerClass<FBeamerSettings>
 	{
 		const FireInterval: number = this.Settings.PrimaryLauncher ? this.Settings.PrimaryLauncher.FireInterval : 0;
 		const bStillFiring: boolean = Now - State.LastBeamTime <= FireInterval + TickInterval * 1.5;
-		return bStillFiring && Pawn.IsInputPressed(CSInputs.ATTACK) && IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Primary);
+		return bStillFiring && IsInputDown(Pawn, CSInputs.ATTACK) && IsWeapon(GetHeldWeapon(Pawn), this.Settings.Primary);
 	}
 
 	private StopBeam(State: FBeamerPlayerState): void

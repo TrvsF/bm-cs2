@@ -1,6 +1,6 @@
-import { Instance, Console, CSInputs } from "cs_script/point_script";
+import { Console, CSInputs } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CustomHudLayout } from "cs_script/point_script";
-import { LogPrefix, ForEachLivePawn, GetOrCreate } from "./bm_core";
+import { LogPrefix, ForEachLivePawn, GetOrCreate, FindEntityByName } from "./bm_core";
 import { EPlayerClass } from "./bm_classes";
 import type { FHudCounter, FClassSettings } from "./bm_classes";
 import { ClassDefinitions } from "./classes/bm_classlist";
@@ -432,13 +432,14 @@ export function ShowTargetId(Slot: number, Target: FTargetId | undefined): void
 	Ui.SetHasClassForPlayer(Slot, TargetIdPanelId, "Shown", true);
 }
 
-export function ShowLeaderboard(Rows: readonly FLeaderboardRow[] | undefined): void
+// MaxRows = how many of the top rows to list. Anyone below that sees their own row underneath (ShowLeaderboardYou).
+export function ShowLeaderboard(Rows: readonly FLeaderboardRow[] | undefined, MaxRows: number = MaxLeaderboardRows): void
 {
 	let Ui: CustomHudLayout | undefined = undefined;
 	for (let Index: number = 0; Index <= MaxLeaderboardRows; Index++)
 	{
 		const bPanel: boolean = Index === MaxLeaderboardRows;
-		const Row: FLeaderboardRow | undefined = Rows && !bPanel ? Rows[Index] : undefined;
+		const Row: FLeaderboardRow | undefined = Rows && !bPanel && Index < MaxRows ? Rows[Index] : undefined;
 		const Key: string = bPanel ? (Rows ? "Shown" : "") : Row ? GetLeaderboardKey(Row) : "";
 		if ((GShownLeaderboard[Index] ?? "") === Key)
 		{
@@ -463,13 +464,13 @@ export function ShowLeaderboard(Rows: readonly FLeaderboardRow[] | undefined): v
 	}
 }
 
-export function ShowLeaderboardYou(Slot: number, Rows: readonly FLeaderboardRow[]): void
+export function ShowLeaderboardYou(Slot: number, Rows: readonly FLeaderboardRow[], MaxRows: number = MaxLeaderboardRows): void
 {
 	const Index: number = Rows.findIndex((Row: FLeaderboardRow): boolean =>
 	{
 		return Row.Slot === Slot;
 	});
-	const Own: FLeaderboardRow | undefined = Index >= MaxLeaderboardRows ? Rows[Index] : undefined;
+	const Own: FLeaderboardRow | undefined = Index >= Math.min(MaxRows, MaxLeaderboardRows) ? Rows[Index] : undefined;
 	const Key: string = `${Index}|${Own ? GetLeaderboardKey(Own) : ""}`;
 	if (GShownLeaderboardYou.get(Slot) === Key)
 	{
@@ -707,7 +708,7 @@ export function ResetClassUi(Slot: number): void
 
 function FindClassUi(): CustomHudLayout | undefined
 {
-	const Ui: Entity | undefined = Instance.FindEntityByName(ClassUiName);
+	const Ui: Entity | undefined = FindEntityByName(ClassUiName);
 	if (IsCustomHudLayout(Ui))
 	{
 		return Ui;
@@ -724,4 +725,4 @@ function FindClassUi(): CustomHudLayout | undefined
 function IsCustomHudLayout(Ent: Entity | undefined): Ent is CustomHudLayout
 {
 	return Ent !== undefined && "SetInputCaptureEnabled" in Ent && typeof Ent.SetInputCaptureEnabled === "function";
-}
+}

@@ -1,10 +1,10 @@
-import { Instance, Console, CSInputs } from "cs_script/point_script";
-import type { CSPlayerPawn } from "cs_script/point_script";
-import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, ForEachLivePawn } from "../bm_core";
+import { Console, CSInputs, CSDamageTypes, CSDamageFlags } from "cs_script/point_script";
+import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
+import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, GetHeldWeapon, ForEachLivePawn, DrawDebugLine } from "../bm_core";
 import type { FVector, FColor, FHeldInputs } from "../bm_core";
-import { Explode } from "../bm_combat";
-import { SpawnTemporaryTemplate } from "../bm_effects";
-import { BuildingKind, FindOwnedBuilding, IsBuildingEnemy, IsStandingOn, GetBuildingCenter, TickBuildTool, CancelPlacement, RemoveBuilding, DestroyBuilding } from "../bm_buildings";
+import { Explode, SpawnExplosionFx } from "../bm_combat";
+import { SpawnTemporaryTemplate, PlaySoundOn } from "../bm_effects";
+import { BuildingKind, EBotBuildSite, FindOwnedBuilding, IsBuildingEnemy, IsStandingOn, GetBuildingCenter, TickBuildTool, CancelPlacement, RemoveBuilding, DestroyBuilding } from "../bm_buildings";
 import type { FBuilding, FBuildingSettings, FBuildKeys } from "../bm_buildings";
 import { PlayerClass } from "../bm_classes";
 import type { FClassSettings, FHudCounter } from "../bm_classes";
@@ -21,6 +21,9 @@ export interface FTrapSettings extends FBuildingSettings
 	readonly BlastHeight: number;
 	readonly Knockback: number;
 	readonly ExplodeFxTemplate: string;
+	readonly OwnerDamage: number;
+	readonly OwnerLaunchSpeed: number;
+	readonly OwnerLaunchUpSpeed: number;
 }
 
 export interface FTeleporterSettings extends FBuildingSettings
@@ -39,6 +42,9 @@ export interface FShrinkerSettings extends FClassSettings
 	readonly ShrunkDuration: number;
 	readonly RechargeTime: number;
 	readonly MinShrinkCharge: number;
+	// Sound events, played as the shrink or grow starts
+	readonly ShrinkSound: string;
+	readonly GrowSound: string;
 	readonly Trap: FTrapSettings;
 	readonly TeleporterEntrance: FTeleporterSettings;
 	readonly TeleporterExit: FTeleporterSettings;
@@ -85,6 +91,8 @@ export const ShrinkerSettings: FShrinkerSettings =
 	ShrunkDuration: 12,
 	RechargeTime: 16,
 	MinShrinkCharge: 10,
+	ShrinkSound: "bm.shrinker.shrink",
+	GrowSound: "bm.shrinker.grow",
 
 	Trap:
 	{
@@ -105,6 +113,9 @@ export const ShrinkerSettings: FShrinkerSettings =
 		BlastHeight: 24,
 		Knockback: 300,
 		ExplodeFxTemplate: "shrinker_trap_explode_template",
+		OwnerDamage: 33,
+		OwnerLaunchSpeed: 600,
+		OwnerLaunchUpSpeed: 550,
 	},
 
 	TeleporterEntrance:
@@ -143,6 +154,8 @@ export const ShrinkerSettings: FShrinkerSettings =
 };
 
 const MaxShrinkCharge: number = 100;
+const BotShrinkCharge: number = 50;
+const UnarmedTrapColor: FColor = { r: 255, g: 255, b: 255 };
 const TeleportFxLifetime: number = 3;
 const ArrivalLift: number = 2;
 
@@ -164,22 +177,64 @@ export class TrapKind extends BuildingKind<FTrapSettings>
 
 	public override Tick(Building: FBuilding, Now: number, DeltaTime: number): void
 	{
-		const State: FTrapState | undefined = this.States.get(Building);
-		const Victim: CSPlayerPawn | undefined = State && Now >= State.ArmedAt ? this.FindVictim(Building) : undefined;
-		if (!Victim)
+		if (!this.IsArmed(Building, Now))
 		{
 			return;
 		}
 		const Origin: FVector = VectorMath.Add(Building.Position, { x: 0, y: 0, z: this.Settings.BlastHeight });
-		Console.Log(`${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
-		Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, undefined, this.Settings.ExplodeFxTemplate);
-		RemoveBuilding(Building);
+		const Victim: CSPlayerPawn | undefined = this.FindVictim(Building);
+		if (Victim)
+		{
+			Console.Log(`${LogPrefix} ${GetPawnName(Victim)} set off ${GetPawnName(Building.Owner)}'s ${this.Settings.DisplayName}`);
+			Building.DamageDealt += Explode(Origin, Building.Owner, this.Settings.BlastRadius, this.Settings.Damage, this.Settings.Knockback, undefined, this.Settings.ExplodeFxTemplate);
+			RemoveBuilding(Building);
+		}
+		else if (this.IsOwnerOnIt(Building))
+		{
+			SpawnExplosionFx(Origin, this.Settings.BlastRadius, this.Settings.ExplodeFxTemplate);
+			this.LaunchOwner(Building);
+			RemoveBuilding(Building);
+		}
+	}
+
+	public override GetColor(Building: FBuilding, Now: number): FColor | undefined
+	{
+		return this.IsArmed(Building, Now) ? undefined : UnarmedTrapColor;
 	}
 
 	public override GetStatus(Building: FBuilding, Now: number): string
 	{
+		return this.IsArmed(Building, Now) ? "Armed" : "Arming";
+	}
+
+	private IsArmed(Building: FBuilding, Now: number): boolean
+	{
 		const State: FTrapState | undefined = this.States.get(Building);
-		return State && Now < State.ArmedAt ? "Arming" : "Armed";
+		return State !== undefined && Now >= State.ArmedAt;
+	}
+
+	private IsOwnerOnIt(Building: FBuilding): boolean
+	{
+		const Owner: CSPlayerPawn = Building.Owner;
+		return Owner.IsValid() && Owner.IsAlive() && IsStandingOn(Building, Owner, this.Settings.TriggerReach, this.Settings.TriggerHeight);
+	}
+
+	private LaunchOwner(Building: FBuilding): void
+	{
+		const Owner: CSPlayerPawn = Building.Owner;
+		const Feet: FVector = Owner.GetAbsOrigin();
+		const Away: FVector = VectorMath.GetSafeNormal({ x: Feet.x - Building.Position.x, y: Feet.y - Building.Position.y, z: 0 });
+		const Launch: FVector = VectorMath.Add(VectorMath.Scale(Away, this.Settings.OwnerLaunchSpeed), { x: 0, y: 0, z: this.Settings.OwnerLaunchUpSpeed });
+		Console.Log(`${LogPrefix} ${GetPawnName(Owner)} stepped on their own ${this.Settings.DisplayName}`);
+		Owner.Teleport({ velocity: Launch });
+		Owner.TakeDamage(
+		{
+			damage: this.Settings.OwnerDamage,
+			damageTypes: CSDamageTypes.BLAST,
+			damageFlags: CSDamageFlags.IGNORE_ARMOR,
+			attacker: Owner,
+			inflictor: Owner,
+		});
 	}
 
 	private FindVictim(Building: FBuilding): CSPlayerPawn | undefined
@@ -210,6 +265,11 @@ export class TeleporterKind extends BuildingKind<FTeleporterSettings>
 		this.bEntrance = bEntrance;
 	}
 
+	public override GetBotSite(): EBotBuildSite
+	{
+		return this.bEntrance ? EBotBuildSite.AtSpawn : EBotBuildSite.AwayFromSpawn;
+	}
+
 	public override OnPlaced(Building: FBuilding, Now: number): void
 	{
 		this.States.set(Building, { ReadyAt: Now });
@@ -237,7 +297,7 @@ export class TeleporterKind extends BuildingKind<FTeleporterSettings>
 		{
 			return;
 		}
-		Instance.DebugLine({ start: GetBuildingCenter(Building), end: GetBuildingCenter(Exit), duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
+		DrawDebugLine({ start: GetBuildingCenter(Building), end: GetBuildingCenter(Exit), duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
 		if (Now < State.ReadyAt)
 		{
 			return;
@@ -326,17 +386,48 @@ export class ShrinkerClass extends PlayerClass<FShrinkerSettings>
 		const bRightPressed: boolean = ConsumePress(Pawn, State.Held, CSInputs.ATTACK2);
 		TickBuildTool(Pawn, Slot, this.GetBuildKeys(Pawn), bLeftPressed, bRightPressed, Now);
 
-		if (bRightPressed && IsKnife(Pawn.GetActiveWeapon()))
+		const bWasShrunk: boolean = State.bWantsShrunk;
+		if (bRightPressed && IsKnife(GetHeldWeapon(Pawn)))
 		{
 			this.ToggleShrink(State);
 		}
 		this.TickCharge(State, DeltaTime);
+		if (State.bWantsShrunk !== bWasShrunk)
+		{
+			PlaySoundOn(State.bWantsShrunk ? this.Settings.ShrinkSound : this.Settings.GrowSound, Pawn);
+		}
 		this.TickSize(Pawn, State, DeltaTime);
 	}
 
 	public override GetBuildKeys(Pawn: CSPlayerPawn): FBuildKeys | undefined
 	{
-		return IsWeapon(Pawn.GetActiveWeapon(), this.Settings.Primary) ? this.BuildKeys : undefined;
+		return IsWeapon(GetHeldWeapon(Pawn), this.Settings.Primary) ? this.BuildKeys : undefined;
+	}
+
+	public override GetBotBuildTool(Pawn: CSPlayerPawn): CSWeaponBase | undefined
+	{
+		return Pawn.FindWeapon(this.Settings.Primary);
+	}
+
+	public override IsBotStabber(): boolean
+	{
+		return true;
+	}
+
+	public override TickBot(Pawn: CSPlayerPawn, Slot: number, Now: number, Enemy: CSPlayerPawn | undefined): number
+	{
+		const State: FShrinkerPlayerState = this.GetPlayerState(Slot);
+		const bWanted: boolean = Enemy !== undefined && (State.bWantsShrunk || State.Charge >= BotShrinkCharge);
+		const bWasShrunk: boolean = State.bWantsShrunk;
+		if (bWanted !== bWasShrunk)
+		{
+			this.ToggleShrink(State);
+		}
+		if (State.bWantsShrunk !== bWasShrunk)
+		{
+			PlaySoundOn(State.bWantsShrunk ? this.Settings.ShrinkSound : this.Settings.GrowSound, Pawn);
+		}
+		return 0;
 	}
 
 	public override ClearPlayer(Slot: number): void

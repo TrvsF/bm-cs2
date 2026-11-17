@@ -1,9 +1,9 @@
 import { Console, CSGearSlot, CSDamageTypes, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { LogPrefix, VectorMath, GetTeamColor, GetPlayerSlot, GetOrCreate, IsWeapon, IsKnife } from "./bm_core";
+import { LogPrefix, VectorMath, GetTeamColor, GetPlayerSlot, GetOrCreate, GetAimAngles, IsWeapon, IsKnife } from "./bm_core";
 import type { FVector, FRotator, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
-import type { FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult } from "./bm_combat";
+import type { FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult, FBallistics } from "./bm_combat";
 import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
 import { DamageBuilding } from "./bm_buildings";
@@ -74,15 +74,37 @@ export interface FHitscanWeaponSettings
 	readonly ImpactLifetime: number;
 }
 
+// What one shot of a weapon does, for bots to rate their targets with
+export interface FBotTrickShot
+{
+	readonly WeaponName: string;
+	readonly Spot: FVector;
+}
+
+export interface FBotShot
+{
+	readonly Damage: number;
+	readonly Spread: number;
+	readonly Range: number;
+	readonly Falloff: FDamageCurve;
+	readonly BlastRadius: number;
+	// How hard firing it throws its own shooter (recoil, or its own blast). Above 0, bots jump with it.
+	readonly SelfPush: number;
+	// How its projectile flies, for leading and lobbing. undefined = it hits at once.
+	readonly Ballistics: FBallistics | undefined;
+}
+
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 export const TF2RocketFalloff: FDamageFalloff = { RampUp: 1.25, FallOff: 0.5, OptimalDistance: 512 };
+export const TF2PipeFalloff: FDamageFalloff = { RampUp: 1, FallOff: 0.9, OptimalDistance: 512 };
 
-export const BeamerShotgunFalloff: FDamageCurve =
+// TF2's scaling for bullets: a weapon's Damage is what it does at 512u, rising to half as much again point blank and falling to half from 1024u on
+export const TF2HitscanFalloff: FDamageCurve =
 [
-	{ Distance: 0, Scale: 1.0 },
-	{ Distance: 256, Scale: 1.0 },
-	{ Distance: 1024, Scale: 0.3 },
+	{ Distance: 0, Scale: 1.5 },
+	{ Distance: 512, Scale: 1.0 },
+	{ Distance: 1024, Scale: 0.5 },
 ];
 
 const PlayableClasses: readonly EPlayableClass[] = Object.values(EPlayerClass).filter((PlayerClass: EPlayerClass): PlayerClass is EPlayableClass =>
@@ -91,6 +113,7 @@ const PlayableClasses: readonly EPlayableClass[] = Object.values(EPlayerClass).f
 });
 
 const MaxBeamHits: number = 8;
+const ProjectileBotRange: number = 4096;
 const DefaultHealth: number = 100;
 const DefaultSizeScale: number = 1.0;
 const StrippedGearSlots: readonly CSGearSlot[] = [CSGearSlot.RIFLE, CSGearSlot.PISTOL, CSGearSlot.KNIFE, CSGearSlot.GRENADES];
@@ -312,6 +335,55 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 		}
 	}
 
+	// The weapons a bot of this class shoots with: by default every one the script fires
+	// WHAT ^
+	public GetBotWeapons(): string[]
+	{
+		const Weapons: string[] = this.Settings.PrimaryLauncher ? [this.Settings.Primary] : [];
+		if (this.Settings.SecondaryLauncher && this.Settings.Secondary !== "" && this.Settings.Secondary !== this.Settings.Primary)
+		{
+			Weapons.push(this.Settings.Secondary);
+		}
+		return Weapons;
+	}
+
+	// Override so bots know what a weapon does. undefined = they fire it at anything they see.
+	public GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return undefined;
+	}
+
+	// Runs every tick for a bot of this class, for whatever the class wants its bots to do on their own (use an ability, set off their bombs).
+	// Enemy = who the bot is after, if anyone. Returns any keys to hold down for it this tick, on top of what it presses itself.
+	public TickBot(Pawn: CSPlayerPawn, Slot: number, Now: number, Enemy: CSPlayerPawn | undefined): number
+	{
+		return 0;
+	}
+
+	// Something a bot of this class should shoot right now instead of its target (its own projectile, say, to set it off)
+	public GetBotTrickShot(Pawn: CSPlayerPawn, Now: number): FBotTrickShot | undefined
+	{
+		return undefined;
+	}
+
+	// Override for a class whose bots should get behind enemies and knife them instead of shooting
+	public IsBotStabber(): boolean
+	{
+		return false;
+	}
+
+	// Override for a class whose bots should follow and heal teammates (melee out, attack held) instead of fighting
+	public IsBotHealer(): boolean
+	{
+		return false;
+	}
+
+	// Override for a class that builds: the weapon its bots hold to build with
+	public GetBotBuildTool(Pawn: CSPlayerPawn): CSWeaponBase | undefined
+	{
+		return undefined;
+	}
+
 	// Called every tick, whether or not anyone is playing this class
 	public TickWorld(Now: number, DeltaTime: number): void
 	{
@@ -391,7 +463,7 @@ export abstract class PlayerClass<TSettings extends FClassSettings>
 export function FireHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeaponSettings, Weapon: CSWeaponBase | undefined, Intercept?: (Start: FVector, End: FVector) => FVector | undefined): void
 {
 	const Start: FVector = Shooter.GetEyePosition();
-	const Aim: FRotator = Shooter.GetEyeAngles();
+	const Aim: FRotator = GetAimAngles(Shooter);
 	FireHitscan(Shooter, Settings, Weapon, Start, Aim, VectorMath.Subtract(Start, BeamStartDrop), Intercept);
 
 	const Backwards: FVector = VectorMath.Scale(VectorMath.GetForwardVector(Aim), -1);
@@ -442,6 +514,16 @@ export function FireHitscan(Attacker: CSPlayerPawn, Settings: FHitscanWeaponSett
 		}
 	}
 	return DamageTotal;
+}
+
+export function GetHitscanBotShot(Settings: FHitscanWeaponSettings): FBotShot
+{
+	return { Damage: Settings.Damage * Settings.Pellets, Spread: Settings.Spread, Range: Settings.Range, Falloff: Settings.Falloff, BlastRadius: 0, SelfPush: Settings.SelfKnockback, Ballistics: undefined };
+}
+
+export function GetProjectileBotShot(Damage: number, BlastRadius: number, Ballistics: FBallistics, Falloff: FDamageCurve = [], SelfPush: number = 0): FBotShot
+{
+	return { Damage: Damage, Spread: 0, Range: ProjectileBotRange, Falloff: Falloff, BlastRadius: BlastRadius, SelfPush: SelfPush, Ballistics: Ballistics };
 }
 
 export function TraceHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeaponSettings, Start: FVector, Direction: FVector): FHitscanResult

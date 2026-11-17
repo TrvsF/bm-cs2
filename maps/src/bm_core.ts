@@ -1,4 +1,4 @@
-import { Instance, Console, CSWeaponType } from "cs_script/point_script";
+import { Instance, Console, Entities, CSWeaponType } from "cs_script/point_script";
 import type
 {
 	Entity,
@@ -55,6 +55,13 @@ interface FPendingTimer
 	Callback: () => void;
 }
 
+export interface FBotControl
+{
+	readonly Inputs: number;
+	readonly Weapon: CSWeaponBase | undefined;
+	readonly Aim: FRotator;
+}
+
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
 export const INDEX_NONE: number = -1;
@@ -66,10 +73,12 @@ export const UpVector: FVector = { x: 0, y: 0, z: 1 };
 export const ZeroVector: FVector = { x: 0, y: 0, z: 0 };
 const ChestOffset: FVector = { x: 0, y: 0, z: 40 };
 
-const TerroristColor: FColor = { r: 220, g: 60, b: 50 };
-const CounterTerroristColor: FColor = { r: 70, g: 130, b: 230 };
+const TerroristColor: FColor = { r: 238, g: 158, b: 153 };
+const CounterTerroristColor: FColor = { r: 163, g: 193, b: 243 };
 
 const GPendingTimers: FPendingTimer[] = [];
+const GBotControls: Map<number, FBotControl> = new Map<number, FBotControl>();
+let bDebugDraw: boolean = false;
 
 // Timers //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -174,7 +183,7 @@ export interface FHeldInputs
 
 export function ConsumePress(Pawn: CSPlayerPawn, Held: FHeldInputs, Input: CSInputs): boolean
 {
-	const bDown: boolean = Pawn.IsInputPressed(Input);
+	const bDown: boolean = IsInputDown(Pawn, Input);
 	const bWasDown: boolean = (Held.Mask & Input) !== 0;
 	Held.Mask = bDown ? Held.Mask | Input : Held.Mask & ~Input;
 	return bDown && !bWasDown;
@@ -282,6 +291,17 @@ export function IsPointTemplate(Ent: Entity | undefined): Ent is PointTemplate
 	return Ent !== undefined && "ForceSpawn" in Ent && typeof Ent.ForceSpawn === "function";
 }
 
+export function FindEntityByName(Name: string): Entity | undefined
+{
+	return Entities.FindByName(Name)[0];
+}
+
+export function FindPointTemplate(Name: string): PointTemplate | undefined
+{
+	const Template: Entity | undefined = FindEntityByName(Name);
+	return IsPointTemplate(Template) ? Template : undefined;
+}
+
 export function GetChestPosition(Pawn: CSPlayerPawn): FVector
 {
 	return VectorMath.Add(Pawn.GetAbsOrigin(), ChestOffset);
@@ -348,21 +368,10 @@ export function IsKnife(Weapon: CSWeaponBase | undefined): boolean
 	return Data !== undefined && Data.GetType() === CSWeaponType.KNIFE;
 }
 
-export function SpawnFromTemplate(TemplateName: string, Position: FVector): Entity | undefined
-{
-	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	if (!IsPointTemplate(Template))
-	{
-		return undefined;
-	}
-	const Spawned: Entity[] | undefined = Template.ForceSpawn(Position);
-	return Spawned ? Spawned[0] : undefined;
-}
-
 export function SpawnTemplateEntities(TemplateName: string, Position: FVector, Rotation: FRotator | undefined): Entity[]
 {
-	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	if (!IsPointTemplate(Template))
+	const Template: PointTemplate | undefined = FindPointTemplate(TemplateName);
+	if (!Template)
 	{
 		return [];
 	}
@@ -402,4 +411,73 @@ export function ForEachLivePawn(Visitor: (Pawn: CSPlayerPawn, Slot: number) => v
 			Visitor(Pawn, Slot);
 		}
 	}
+}
+
+// Debug drawing ///////////////////////////////////////////////////////////////////////////////////
+
+export function ToggleDebugDraw(): boolean
+{
+	bDebugDraw = !bDebugDraw;
+	return bDebugDraw;
+}
+
+export function DrawDebugLine(Config: { start: FVector, end: FVector, duration?: number, color?: FColor }): void
+{
+	if (bDebugDraw)
+	{
+		Instance.DebugLine(Config);
+	}
+}
+
+export function DrawDebugSphere(Config: { center: FVector, radius: number, duration?: number, color?: FColor }): void
+{
+	if (bDebugDraw)
+	{
+		Instance.DebugSphere(Config);
+	}
+}
+
+export function DrawDebugBox(Config: { mins: FVector, maxs: FVector, duration?: number, color?: FColor }): void
+{
+	if (bDebugDraw)
+	{
+		Instance.DebugBox(Config);
+	}
+}
+
+// Bots ////////////////////////////////////////////////////////////////////////////////////////////
+
+export function SetBotControl(Slot: number, Control: FBotControl | undefined): void
+{
+	if (Control)
+	{
+		GBotControls.set(Slot, Control);
+	}
+	else
+	{
+		GBotControls.delete(Slot);
+	}
+}
+
+export function IsBotControlled(Pawn: CSPlayerPawn): boolean
+{
+	return GBotControls.has(GetPlayerSlot(Pawn));
+}
+
+export function IsInputDown(Pawn: CSPlayerPawn, Input: CSInputs): boolean
+{
+	const Control: FBotControl | undefined = GBotControls.get(GetPlayerSlot(Pawn));
+	return Control ? (Control.Inputs & Input) !== 0 : Pawn.IsInputPressed(Input);
+}
+
+export function GetHeldWeapon(Pawn: CSPlayerPawn): CSWeaponBase | undefined
+{
+	const Control: FBotControl | undefined = GBotControls.get(GetPlayerSlot(Pawn));
+	return (Control ? Control.Weapon : undefined) ?? Pawn.GetActiveWeapon();
+}
+
+export function GetAimAngles(Pawn: CSPlayerPawn): FRotator
+{
+	const Control: FBotControl | undefined = GBotControls.get(GetPlayerSlot(Pawn));
+	return Control ? Control.Aim : Pawn.GetEyeAngles();
 }

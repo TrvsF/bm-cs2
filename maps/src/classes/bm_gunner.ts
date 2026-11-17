@@ -1,11 +1,12 @@
-import { Instance, CSInputs } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { TickInterval, VectorMath, GetChestPosition, GetTeamColor, GetOrCreate, IsKnife, ConsumePress, ForEachLivePawn } from "../bm_core";
+import { Instance, CSInputs, CSGearSlot } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSWeaponBase, TraceResult } from "cs_script/point_script";
+import { TickInterval, INDEX_NONE, VectorMath, GetChestPosition, GetTeamColor, GetPlayerSlot, GetOrCreate, IsKnife, ConsumePress, GetHeldWeapon, ForEachLivePawn, DrawDebugLine } from "../bm_core";
 import type { FVector, FRotator, FHeldInputs } from "../bm_core";
+import { PlaySoundAt } from "../bm_effects";
 import { BuildingKind, GetOwnedBuildings, GetBuildingEntities, IsBuildingEnemy, TurnBuilding, TickBuildTool, CancelPlacement, GetPlacingKind, IsRepairingBuilding } from "../bm_buildings";
 import type { FBuilding, FBuildingSettings, FBuildKeys } from "../bm_buildings";
-import { BeamerShotgunFalloff, PlayerClass, FireHitscanWeapon, FireHitscan } from "../bm_classes";
-import type { FClassSettings, FHitscanWeaponSettings, FHudCounter } from "../bm_classes";
+import { TF2HitscanFalloff, PlayerClass, FireHitscanWeapon, FireHitscan, GetHitscanBotShot } from "../bm_classes";
+import type { FClassSettings, FHitscanWeaponSettings, FHudCounter, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -14,6 +15,9 @@ export interface FTurretSettings extends FBuildingSettings
 	readonly FireInterval: number;
 	readonly ArmTime: number;
 	readonly MuzzleHeight: number;
+	readonly TurnSpeed: number;
+	readonly AimTolerance: number;
+	readonly LockSound: string;
 	readonly Gun: FHitscanWeaponSettings;
 }
 
@@ -28,6 +32,7 @@ interface FTurretState
 {
 	ArmedAt: number;
 	NextFireTime: number;
+	TargetSlot: number;
 }
 
 interface FGunnerPlayerState
@@ -65,13 +70,13 @@ export const GunnerSettings: FGunnerSettings =
 
 	Shotgun:
 	{
-		Damage: 12,
+		Damage: 10,
 		HeadshotMultiplier: 1,
 		Range: 2048,
 		Spread: 5,
 		Pellets: 8,
 		bPierces: false,
-		Falloff: BeamerShotgunFalloff,
+		Falloff: TF2HitscanFalloff,
 		Knockback: 250,
 		SelfKnockback: 150,
 		bBloodSplatter: true,
@@ -85,7 +90,7 @@ export const GunnerSettings: FGunnerSettings =
 
 	HeavyTurret:
 	{
-		DisplayName: "Heavy Turret",
+		DisplayName: "Sniper Turret",
 		ModelTemplate: "gunner_heavy_turret_template",
 		DestroyFxTemplate: "gunner_turret_destroy_template",
 		Health: 75,
@@ -97,6 +102,9 @@ export const GunnerSettings: FGunnerSettings =
 		FireInterval: 2.0,
 		ArmTime: 1.0,
 		MuzzleHeight: 40,
+		TurnSpeed: 180,
+		AimTolerance: 8,
+		LockSound: "bm.turret.lock",
 		Gun:
 		{
 			Damage: 40,
@@ -120,7 +128,7 @@ export const GunnerSettings: FGunnerSettings =
 
 	RapidTurret:
 	{
-		DisplayName: "Rapid Turret",
+		DisplayName: "Smg Turret",
 		ModelTemplate: "gunner_rapid_turret_template",
 		DestroyFxTemplate: "gunner_turret_destroy_template",
 		Health: 50,
@@ -132,6 +140,9 @@ export const GunnerSettings: FGunnerSettings =
 		FireInterval: 0.12,
 		ArmTime: 1.0,
 		MuzzleHeight: 32,
+		TurnSpeed: 300,
+		AimTolerance: 10,
+		LockSound: "bm.turret.lock",
 		Gun:
 		{
 			Damage: 4,
@@ -162,9 +173,14 @@ export class TurretKind extends BuildingKind<FTurretSettings>
 {
 	private States: Map<FBuilding, FTurretState> = new Map<FBuilding, FTurretState>();
 
+	public override IsBotTarget(): boolean
+	{
+		return true;
+	}
+
 	public override OnPlaced(Building: FBuilding, Now: number): void
 	{
-		this.States.set(Building, { ArmedAt: Now + this.Settings.ArmTime, NextFireTime: Now + this.Settings.ArmTime });
+		this.States.set(Building, { ArmedAt: Now + this.Settings.ArmTime, NextFireTime: Now + this.Settings.ArmTime, TargetSlot: INDEX_NONE });
 	}
 
 	public override OnRemoved(Building: FBuilding): void
@@ -175,18 +191,37 @@ export class TurretKind extends BuildingKind<FTurretSettings>
 	public override Tick(Building: FBuilding, Now: number, DeltaTime: number): void
 	{
 		const State: FTurretState | undefined = this.States.get(Building);
+		if (!State || Now < State.ArmedAt)
+		{
+			return;
+		}
+
 		const Muzzle: FVector = VectorMath.Add(Building.Position, { x: 0, y: 0, z: this.Settings.MuzzleHeight });
-		const Target: CSPlayerPawn | undefined = State ? this.FindTarget(Building, Muzzle) : undefined;
-		if (!State || !Target)
+		const Target: CSPlayerPawn | undefined = this.FindTarget(Building, Muzzle);
+		const TargetSlot: number = GetPlayerSlot(Target);
+
+		if (TargetSlot !== State.TargetSlot)
+		{
+			State.TargetSlot = TargetSlot;
+			if (Target)
+			{
+				PlaySoundAt(this.Settings.LockSound, Muzzle);
+			}
+		}
+
+		if (!Target)
 		{
 			return;
 		}
 
 		const Chest: FVector = GetChestPosition(Target);
 		const Aim: FRotator = VectorMath.GetRotation(VectorMath.Subtract(Chest, Muzzle));
-		TurnBuilding(Building, Aim.yaw);
-		Instance.DebugLine({ start: Muzzle, end: Chest, duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
-		if (Now < State.NextFireTime)
+		
+		const Swing: number = this.Settings.TurnSpeed * DeltaTime;
+		const Offset: number = GetYawOffset(Building.Yaw, Aim.yaw);
+		TurnBuilding(Building, Building.Yaw + Math.max(-Swing, Math.min(Swing, Offset)));
+		DrawDebugLine({ start: Muzzle, end: Chest, duration: TickInterval * 2, color: GetTeamColor(Building.Owner) });
+		if (Math.abs(Offset) > this.Settings.AimTolerance || Now < State.NextFireTime)
 		{
 			return;
 		}
@@ -229,18 +264,42 @@ export class TurretKind extends BuildingKind<FTurretSettings>
 	}
 }
 
+function GetYawOffset(From: number, To: number): number
+{
+	let Offset: number = (To - From) % 360;
+	if (Offset > 180)
+	{
+		Offset -= 360;
+	}
+	else if (Offset < -180)
+	{
+		Offset += 360;
+	}
+	return Offset;
+}
+
 // Gunner //////////////////////////////////////////////////////////////////////////////////////////
 
 export class GunnerClass extends PlayerClass<FGunnerSettings>
 {
 	private readonly HeavyTurret: TurretKind = new TurretKind(GunnerSettings.HeavyTurret);
 	private readonly RapidTurret: TurretKind = new TurretKind(GunnerSettings.RapidTurret);
-	private readonly BuildKeys: FBuildKeys = { Left: { Label: "Heavy Turret", Kinds: [this.HeavyTurret] }, Right: { Label: "Rapid Turret", Kinds: [this.RapidTurret] } };
+	private readonly BuildKeys: FBuildKeys = { Left: { Label: "Sniper Turret", Kinds: [this.HeavyTurret] }, Right: { Label: "Smg Turret", Kinds: [this.RapidTurret] } };
 	private PlayerStates: Map<number, FGunnerPlayerState> = new Map<number, FGunnerPlayerState>();
 
 	constructor()
 	{
 		super(GunnerSettings);
+	}
+
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return GetHitscanBotShot(this.Settings.Shotgun);
+	}
+
+	public override GetBotBuildTool(Pawn: CSPlayerPawn): CSWeaponBase | undefined
+	{
+		return Pawn.FindWeaponBySlot(CSGearSlot.KNIFE);
 	}
 
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
@@ -259,7 +318,7 @@ export class GunnerClass extends PlayerClass<FGunnerSettings>
 
 	public override GetBuildKeys(Pawn: CSPlayerPawn): FBuildKeys | undefined
 	{
-		return IsKnife(Pawn.GetActiveWeapon()) ? this.BuildKeys : undefined;
+		return IsKnife(GetHeldWeapon(Pawn)) ? this.BuildKeys : undefined;
 	}
 
 	public override ClearPlayer(Slot: number): void

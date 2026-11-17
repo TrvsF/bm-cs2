@@ -1,6 +1,6 @@
-import { Instance, Console, GameRules, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData } from "cs_script/point_script";
-import { bDebug, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
+import { Instance, Console, GameRules, Entities, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
+import { bDebug, ToggleDebugDraw, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
 import type
 {
 	FPlayerChatEvent,
@@ -21,28 +21,59 @@ import { EPlayerClass, GiveNoClassLoadout, RestoreDefaultBody, HideBody, ShowBod
 import type { EPlayableClass } from "./bm_classes";
 import { ClassDefinitions, GiveLoadout, IsWeaponAllowed } from "./classes/bm_classlist";
 import { MedicSettings } from "./classes/bm_medic";
-import { ClearDecals, SpawnGibs } from "./bm_effects";
+import { TurretKind } from "./classes/bm_gunner";
+import { ClearDecals, SpawnGibs, PrecacheSounds, RunSpawnTest } from "./bm_effects";
 import { ShowDamageNumber, ShowAirshot, ResetDamageNumbers } from "./bm_hud";
 import { GetHeightAboveGround } from "./bm_combat";
 import { OpenClassMenu, CloseClassMenu, OfferClassMenu, TickClassMenuKey, ReadClassMenuClick, ShowClassIndicator, ShowAmmo, ShowHealth, ShowCounter, ShowBuildings, ShowBuildHints, ShowTargetId, ResetClassUi } from "./bm_ui";
 import { TickLauncher, ClearLauncher, GetLauncherAmmo, EmptyRealGuns } from "./bm_launcher";
+import { TickBotCombat, ForgetBotCombat } from "./bm_botcombat";
 import type { FLauncherShot } from "./bm_launcher";
 import { TickHealthKits, ResetHealthKits } from "./bm_pickups";
 import { TickSpawnZones, ResetSpawnZones, ForgetSpawnZonePlayer, ForgetSpawnZoneHistory, IsInFriendlySpawnZone, RefreshSpawnZoneTouches } from "./bm_spawnzones";
-import { TickBuildings, ClearBuildings, RemoveBuildings, GetBuildingHudRows, GetBuildHints, RepairBuildingInReach } from "./bm_buildings";
-import type { FBuildKeys } from "./bm_buildings";
+import { TickBuildings, ClearBuildings, RemoveBuildings, GetBuildingHudRows, GetBuildHints, RepairBuildingInReach, TraceBuildings, GetTraceBuilding, IsBuildingEnemy } from "./bm_buildings";
+import type { FBuilding, FBuildingHit, FBuildKeys } from "./bm_buildings";
 import { GameMode } from "./bm_gamemode";
 import { FreeForAllMode } from "./gamemodes/bm_freeforall";
 import { PayloadMode } from "./gamemodes/bm_payload";
+import { TrainingMode } from "./gamemodes/bm_training";
+import { TeamDeathmatchMode } from "./gamemodes/bm_teamdeathmatch";
 import type { FClassMenuChoice, FTargetId } from "./bm_ui";
+
+// Types ///////////////////////////////////////////////////////////////////////////////////////////
+
+interface FMainSettings
+{
+	readonly MaxDeltaTime: number;
+	readonly AirshotMinHeight: number;
+	readonly TargetIdRange: number;
+	readonly LoadoutDelay: number;
+	readonly ClassMenuDelay: number;
+	readonly MapModePrefix: string;
+	readonly DebugBotQuota: number;
+}
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
 
-const AirshotMinHeight: number = 64;
+const MainSettings: FMainSettings =
+{
+	MaxDeltaTime: 0.1,
+	AirshotMinHeight: 96,
+	TargetIdRange: 3000,
+	LoadoutDelay: 0.1,
+	ClassMenuDelay: 0.5,
+	MapModePrefix: "bm_gm_",
+	DebugBotQuota: 8,
+};
 
-const FreeForAll: FreeForAllMode = new FreeForAllMode();
-const GameModes: readonly GameMode[] = [new PayloadMode(), FreeForAll];
-let GActiveMode: GameMode = FreeForAll;
+// Globals /////////////////////////////////////////////////////////////////////////////////////////
+
+const GameModes: readonly GameMode[] = [new TrainingMode(), new PayloadMode(), new FreeForAllMode(), new TeamDeathmatchMode()];
+let GActiveMode: GameMode = GameModes[0];
+let GChosenMode: GameMode | undefined = undefined;
+const GClassBySlot: Map<number, EPlayableClass> = new Map<number, EPlayableClass>();
+const GPendingClassBySlot: Map<number, EPlayerClass> = new Map<number, EPlayerClass>();
+let GLastThinkTime: number = 0;
 
 // Main ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,7 +81,7 @@ function Tick(): void
 {
 	const Now: number = Instance.GetGameTime();
 	Instance.SetNextThink(Now + TickInterval);
-	const DeltaTime: number = Math.min(0.1, Math.max(0, Now - GLastThinkTime)) || TickInterval;
+	const DeltaTime: number = Math.min(MainSettings.MaxDeltaTime, Math.max(0, Now - GLastThinkTime)) || TickInterval;
 	GLastThinkTime = Now;
 
 	try
@@ -65,9 +96,15 @@ function Tick(): void
 		ForEachLivePawn((Pawn: CSPlayerPawn, Slot: number): void =>
 		{
 			const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
-			if (PlayerClass !== undefined)
+			if (PlayerClass === undefined)
+			{
+				return;
+			}
+			// One player's error mustn't cost everyone else their tick
+			try
 			{
 				const Definition = ClassDefinitions[PlayerClass];
+				TickBotCombat(Pawn, Slot, Now, Definition, GActiveMode.GetBotObjective(Pawn));
 				EmptyRealGuns(Pawn);
 				const Shot: FLauncherShot | undefined = TickLauncher(Pawn, Slot, Now);
 				if (Shot)
@@ -75,6 +112,10 @@ function Tick(): void
 					Definition.OnLauncherFired(Pawn, Slot, Now, Shot);
 				}
 				Definition.TickPlayer(Pawn, Slot, Now, DeltaTime);
+			}
+			catch (Exception: unknown)
+			{
+				Console.Log(`${LogPrefix} error ticking ${GetPawnName(Pawn)}: ${String(Exception)}`);
 			}
 		});
 		for (const Definition of Object.values(ClassDefinitions))
@@ -100,6 +141,7 @@ function Tick(): void
 
 function BeginPlay(): void
 {
+	PrecacheSounds();
 	SelectGameMode();
 	ApplyMatchSettings();
 	Instance.OnPlayerChat(HandlePlayerChat);
@@ -139,6 +181,10 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 	{
 		return Candidate === Command;
 	});
+	const Mode: GameMode | undefined = GameModes.find((Candidate: GameMode): boolean =>
+	{
+		return Candidate.CommandName === Command;
+	});
 
 	if (Command === "class")
 	{
@@ -148,13 +194,25 @@ function HandlePlayerChat(Event: FPlayerChatEvent): void
 	{
 		EndWarmupNow(Player);
 	}
-	else if (Command === "hudtest" && bDebug)
+	else if (Command === "debugdraw")
 	{
-		ShowDamageNumber(Player.GetPlayerSlot(), 123);
+		Console.Log(`${LogPrefix} debug drawing ${ToggleDebugDraw() ? "on" : "off"}`);
+	}
+	else if (Command === "spawntest" && bDebug)
+	{
+		const Pawn: CSPlayerPawn | undefined = Player.GetPlayerPawn();
+		if (Pawn)
+		{
+			RunSpawnTest(Pawn);
+		}
 	}
 	else if (PlayerClass !== undefined)
 	{
 		RequestPlayerClass(Player, PlayerClass);
+	}
+	else if (Mode !== undefined)
+	{
+		ChooseGameMode(Player, Mode);
 	}
 	else
 	{
@@ -176,13 +234,13 @@ function HandlePlayerReset(Event: FPlayerResetEvent): void
 	ForgetSpawnZoneHistory(Slot);
 	RefreshSpawnZoneTouches();
 	GActiveMode.OnPlayerSpawn(Pawn, Slot);
-	AssignRandomBotClass(Pawn, Slot);
+	QueueRandomBotClass(Pawn, Slot);
 	const bHadClass: boolean = GClassBySlot.has(Slot);
 	ApplyPendingClass(Slot);
 	RefreshClassUi(Pawn, Slot);
 	const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
 
-	SetTimer(0.1, (): void =>
+	SetTimer(MainSettings.LoadoutDelay, (): void =>
 	{
 		if (!Pawn.IsValid() || !Pawn.IsAlive() || GClassBySlot.get(Slot) !== PlayerClass)
 		{
@@ -227,6 +285,7 @@ function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 	ClearPlayer(Event.playerSlot);
 	RemoveBuildings(Event.playerSlot);
 	ForgetSpawnZonePlayer(Event.playerSlot);
+	ForgetBotCombat(Event.playerSlot);
 	for (const Mode of GameModes)
 	{
 		Mode.OnPlayerLeave(Event.playerSlot);
@@ -326,7 +385,7 @@ function HandlePlayerDamage(Event: FPlayerDamageEvent): void
 	ShowDamageNumber(AttackerSlot, Event.damage);
 	GActiveMode.OnPlayerDamage(GetPlayerSlot(Event.player), AttackerSlot, Event.damage);
 
-	if (GetHeightAboveGround(Event.player, AirshotMinHeight) >= AirshotMinHeight)
+	if (GetHeightAboveGround(Event.player, MainSettings.AirshotMinHeight) >= MainSettings.AirshotMinHeight)
 	{
 		ShowAirshot(AttackerSlot);
 	}
@@ -386,21 +445,21 @@ function HandleModifyPlayerDamage(Event: FModifyDamageEvent): FModifyDamageResul
 	return ClassDefinitions[AttackerClass].ModifyOutgoingDamage(Event);
 }
 
-// Globals ////////////////////////////////////////////////////////////////////////////////////////
-
-const GClassBySlot: Map<number, EPlayableClass> = new Map<number, EPlayableClass>();
-const TargetIdRange: number = 3000;
-const GPendingClassBySlot: Map<number, EPlayerClass> = new Map<number, EPlayerClass>();
-let GLastThinkTime: number = 0;
-
 // Match //////////////////////////////////////////////////////////////////////////////////////////
 
 function SelectGameMode(): void
 {
-	const Mode: GameMode = GameModes.find((Candidate: GameMode): boolean =>
+	const MapMode: GameMode | undefined = GameModes.find((Candidate: GameMode): boolean =>
+	{
+		return Entities.FindByName(`${MainSettings.MapModePrefix}${Candidate.CommandName}`).length > 0;
+	});
+	const Mode: GameMode = [GChosenMode, MapMode].find((Candidate: GameMode | undefined): boolean =>
+	{
+		return Candidate !== undefined && Candidate.IsMapSetUp();
+	}) ?? GameModes.find((Candidate: GameMode): boolean =>
 	{
 		return Candidate.IsMapSetUp();
-	}) ?? FreeForAll;
+	}) ?? GameModes[0];
 
 	if (Mode !== GActiveMode)
 	{
@@ -411,16 +470,29 @@ function SelectGameMode(): void
 	}
 }
 
+function ChooseGameMode(Player: CSPlayerController, Mode: GameMode): void
+{
+	if (!Mode.IsMapSetUp())
+	{
+		Console.Log(`${LogPrefix} ${Player.GetPlayerName()} picked ${Mode.DisplayName}, but this map isn't set up for it`);
+		return;
+	}
+	GChosenMode = Mode;
+	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} picked ${Mode.DisplayName}, restarting`);
+	Console.ServerCommand("mp_restartgame 1");
+}
+
 function ApplyMatchSettings(): void
 {
 	const Commands: string[] = [];
 
 	Commands.push("sv_infinite_ammo 0");
+	Commands.push("mp_solid_teammates 0");
 
 	if (bDebug)
 	{
 		Commands.push("mp_do_warmup_period 0", "mp_warmuptime 0", "mp_freezetime 0");
-		Commands.push("bot_quota_mode fill", "bot_quota 8", "bot_join_team any");
+		Commands.push("bot_quota_mode fill", `bot_quota ${MainSettings.DebugBotQuota}`, "bot_join_team any");
 	}
 	Commands.push(...GActiveMode.GetMatchCommands());
 
@@ -464,7 +536,7 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 		ClassDefinitions[PlayerClass].PlayPickFx(Pawn);
 	}
 
-	if (!bAlive || CurrentClass === EPlayerClass.None || ((bInSpawn || bDebug) && PlayerClass !== CurrentClass))
+	if (!bAlive || CurrentClass === EPlayerClass.None || ((bInSpawn || bDebug || GActiveMode.bInstantClassSwitch) && PlayerClass !== CurrentClass))
 	{
 		GPendingClassBySlot.delete(Slot);
 		SetPlayerClass(Player, PlayerClass);
@@ -479,7 +551,7 @@ function RequestPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClas
 	{
 		GPendingClassBySlot.set(Slot, PlayerClass);
 	}
-	ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === 2);
+	ShowClassIndicator(Slot, CurrentClass, Pawn?.GetTeamNumber() === ETeam.Terrorist);
 	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} requested class ${PlayerClass}`);
 }
 
@@ -548,7 +620,7 @@ function SetPlayerClass(Player: CSPlayerController, PlayerClass: EPlayerClass): 
 			GiveLoadout(Pawn, PlayerClass);
 		}
 	}
-	ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === 2);
+	ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === ETeam.Terrorist);
 
 	const ClassLabel: string = PlayerClass === EPlayerClass.None ? "normal" : PlayerClass;
 	Console.Log(`${LogPrefix} ${Player.GetPlayerName()} set class to ${ClassLabel}`);
@@ -564,6 +636,16 @@ function AssignRandomBotClass(Pawn: CSPlayerPawn, Slot: number): boolean
 	const PlayerClass: EPlayableClass = PickRandomClass();
 	GClassBySlot.set(Slot, PlayerClass);
 	return true;
+}
+
+// Bots come back as a different class every life
+function QueueRandomBotClass(Pawn: CSPlayerPawn, Slot: number): void
+{
+	const Controller: CSPlayerController | undefined = Pawn.GetPlayerController();
+	if (Controller && Controller.IsBot() && !GPendingClassBySlot.has(Slot))
+	{
+		GPendingClassBySlot.set(Slot, PickRandomClass());
+	}
 }
 
 function TickBotClasses(): void
@@ -587,8 +669,8 @@ function RefreshClassUi(Pawn: CSPlayerPawn, Slot: number): void
 	}
 
 	const PlayerClass: EPlayerClass = GClassBySlot.get(Slot) ?? EPlayerClass.None;
-	ShowClassIndicator(Slot, PlayerClass, Pawn?.GetTeamNumber() === 2);
-	SetTimer(0.5, (): void =>
+	ShowClassIndicator(Slot, PlayerClass, Pawn.GetTeamNumber() === ETeam.Terrorist);
+	SetTimer(MainSettings.ClassMenuDelay, (): void =>
 	{
 		if (Pawn.IsValid() && Pawn.IsAlive())
 		{
@@ -636,10 +718,20 @@ function FindTargetId(Pawn: CSPlayerPawn, Slot: number): FTargetId | undefined
 {
 	const ViewerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
 	const HealTarget: CSPlayerPawn | undefined = ViewerClass !== undefined ? ClassDefinitions[ViewerClass].GetHealTarget(Slot) : undefined;
+	if (HealTarget)
+	{
+		return GetPawnTargetId(HealTarget, Pawn);
+	}
 	const Eye: FVector = Pawn.GetEyePosition();
-	const End: FVector = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), TargetIdRange));
-	const Target: Entity | undefined = HealTarget ?? Instance.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn }).hitEntity;
-	if (!IsPlayerPawn(Target) || !Target.IsAlive() || !IsTeammate(Target, Pawn))
+	const End: FVector = VectorMath.Add(Eye, VectorMath.Scale(VectorMath.GetForwardVector(Pawn.GetEyeAngles()), MainSettings.TargetIdRange));
+	const Trace: TraceResult = Instance.TraceLine({ start: Eye, end: End, ignoreEntity: Pawn });
+	const Turret: FBuilding | undefined = FindFriendlyTurret(Pawn, Eye, End, Trace);
+	return Turret ? GetTurretTargetId(Turret) : GetPawnTargetId(Trace.hitEntity, Pawn);
+}
+
+function GetPawnTargetId(Target: Entity | undefined, Viewer: CSPlayerPawn): FTargetId | undefined
+{
+	if (!IsPlayerPawn(Target) || !Target.IsAlive() || !IsTeammate(Target, Viewer))
 	{
 		return undefined;
 	}
@@ -647,6 +739,28 @@ function FindTargetId(Pawn: CSPlayerPawn, Slot: number): FTargetId | undefined
 	const Name: string = TargetClass !== undefined ? `${GetPawnName(Target)} (${ClassDefinitions[TargetClass].Settings.DisplayName})` : GetPawnName(Target);
 	const MaxHealth: number = Target.GetMaxHealth();
 	return { Name: Name, Health: Target.GetHealth(), MaxHealth: MaxHealth, MaxOverheal: Math.floor(MaxHealth * MedicSettings.OverhealMult), bTerrorist: Target.GetTeamNumber() === ETeam.Terrorist };
+}
+
+function GetTurretTargetId(Turret: FBuilding): FTargetId
+{
+	const MaxHealth: number = Turret.Kind.Settings.Health;
+	const Name: string = `${GetPawnName(Turret.Owner)}'s ${Turret.Kind.Settings.DisplayName}`;
+	return { Name: Name, Health: Math.max(0, Math.ceil(Turret.Health)), MaxHealth: MaxHealth, MaxOverheal: MaxHealth, bTerrorist: Turret.Team === ETeam.Terrorist };
+}
+
+function FindFriendlyTurret(Viewer: CSPlayerPawn, Eye: FVector, End: FVector, Trace: TraceResult): FBuilding | undefined
+{
+	const IsFriendlyTurret: (Building: FBuilding) => boolean = (Building: FBuilding): boolean =>
+	{
+		return Building.Kind instanceof TurretKind && !Building.bRemoved && !IsBuildingEnemy(Building, Viewer);
+	};
+	const Struck: FBuilding | undefined = GetTraceBuilding(Trace);
+	if (Struck)
+	{
+		return IsFriendlyTurret(Struck) ? Struck : undefined;
+	}
+	const Hit: FBuildingHit | undefined = TraceBuildings(Eye, End, 0, IsFriendlyTurret);
+	return Hit && (!Trace.didHit || Hit.Fraction <= Trace.fraction) ? Hit.Building : undefined;
 }
 
 // Weapons /////////////////////////////////////////////////////////////////////////////////////////

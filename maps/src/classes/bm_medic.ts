@@ -1,12 +1,13 @@
 import { Instance, Console, CSInputs } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPawnName, GetOrCreate, IsPlayerPawn, IsTeammate, IsKnife, ForEachLivePawn } from "../bm_core";
+import { TickInterval, LogPrefix, VectorMath, GetTeamColor, GetChestPosition, GetPawnName, GetOrCreate, IsPlayerPawn, IsTeammate, IsKnife, IsInputDown, GetHeldWeapon, GetAimAngles, ForEachLivePawn, DrawDebugLine } from "../bm_core";
 import type { FVector, FModifyDamageEvent, FModifyDamageResult } from "../bm_core";
 import { LaunchProjectile, MoveProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, EvaluateDamageCurve } from "../bm_combat";
 import type { FProjectile, FDamageCurve } from "../bm_combat";
 import { DamageTracedBuilding } from "../bm_buildings";
-import { BeamStartDrop, PlayerClass, DealShockDamage } from "../bm_classes";
-import type { FClassSettings, FHudCounter } from "../bm_classes";
+import { StartSoundOn, StopSound } from "../bm_effects";
+import { BeamStartDrop, PlayerClass, DealShockDamage, GetProjectileBotShot } from "../bm_classes";
+import type { FClassSettings, FHudCounter, FBotShot } from "../bm_classes";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,6 +27,7 @@ export interface FMedicSettings extends FClassSettings
 	readonly OverhealDecayPerSec: number;
 	readonly UberSecondsToFill: number;
 	readonly UberDuration: number;
+	readonly HealSound: string;
 }
 
 export interface FBolt extends FProjectile
@@ -39,6 +41,7 @@ interface FMedicPlayerState
 	HealAccumulator: number;
 	UberCharge: number;
 	UberEndTime: number;
+	HealSound: Entity[] | undefined;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,6 +93,7 @@ export const MedicSettings: FMedicSettings =
 	OverhealDecayPerSec: 3.3,
 	UberSecondsToFill: 40,
 	UberDuration: 8,
+	HealSound: "bm.medic.heal_loop",
 };
 
 const BoltTemplateName: string = "crossbow_bolt_template";
@@ -111,6 +115,16 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 		super(MedicSettings);
 	}
 
+	public override GetBotShot(WeaponName: string): FBotShot | undefined
+	{
+		return GetProjectileBotShot(this.Settings.BoltDamage, 0, { Speed: this.Settings.BoltSpeed, UpSpeed: 0, GravityScale: this.Settings.BoltGravityScale }, this.Settings.BoltRampUp);
+	}
+
+	public override IsBotHealer(): boolean
+	{
+		return true;
+	}
+
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
 		const Projectile: FProjectile = LaunchProjectile(Pawn, this.Settings.BoltSpeed, 0, this.Settings.BoltGravityScale, BoltTemplateName);
@@ -130,8 +144,8 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 	public override TickPlayer(Pawn: CSPlayerPawn, Slot: number, Now: number, DeltaTime: number): void
 	{
 		const State: FMedicPlayerState = this.GetPlayerState(Slot);
-		const bHoldingMedigun: boolean = IsKnife(Pawn.GetActiveWeapon());
-		const bFiring: boolean = bHoldingMedigun && Pawn.IsInputPressed(CSInputs.ATTACK);
+		const bHoldingMedigun: boolean = IsKnife(GetHeldWeapon(Pawn));
+		const bFiring: boolean = bHoldingMedigun && IsInputDown(Pawn, CSInputs.ATTACK);
 
 		let Target: CSPlayerPawn | undefined = bFiring ? State.HealTarget : undefined;
 		if (Target && !this.IsHealTargetValid(Pawn, Target))
@@ -143,6 +157,7 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 			Target = this.AcquireHealTarget(Pawn);
 		}
 		State.HealTarget = Target;
+		this.UpdateHealSound(Pawn, State, Target !== undefined);
 
 		if (Target)
 		{
@@ -166,7 +181,7 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 				State.UberCharge = Math.min(100, State.UberCharge + ChargeRate * DeltaTime);
 			}
 			// Placeholder beam (tools mode only). Swap for an env_beam for real servers.
-			Instance.DebugLine(
+			DrawDebugLine(
 			{
 				start: VectorMath.Subtract(Pawn.GetEyePosition(), BeamStartDrop),
 				end: GetChestPosition(Target),
@@ -175,7 +190,7 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 			});
 		}
 
-		if (Now >= State.UberEndTime && State.UberCharge >= 100 && bHoldingMedigun && Pawn.IsInputPressed(CSInputs.ATTACK2))
+		if (Now >= State.UberEndTime && State.UberCharge >= 100 && bHoldingMedigun && IsInputDown(Pawn, CSInputs.ATTACK2))
 		{
 			State.UberEndTime = Now + this.Settings.UberDuration;
 		}
@@ -201,6 +216,10 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 
 	public override OnRoundStart(): void
 	{
+		for (const State of this.PlayerStates.values())
+		{
+			this.StopHealSound(State);
+		}
 		this.PlayerStates.clear();
 		DestroyProjectiles(this.Bolts);
 		this.Bolts = [];
@@ -208,6 +227,11 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 
 	public override ClearPlayer(Slot: number): void
 	{
+		const State: FMedicPlayerState | undefined = this.PlayerStates.get(Slot);
+		if (State)
+		{
+			this.StopHealSound(State);
+		}
 		this.PlayerStates.delete(Slot);
 		this.DecayAccumulators.delete(Slot);
 	}
@@ -297,11 +321,32 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 		Console.Log(`${LogPrefix} ${MedicName} Damaged (bolt) ${VictimName} : ${Math.round(Damage)}d : ${Math.round(Distance)}u x${RangeScale.toFixed(2)}`);
 	}
 
+	private UpdateHealSound(Pawn: CSPlayerPawn, State: FMedicPlayerState, bHealing: boolean): void
+	{
+		if (bHealing && !State.HealSound)
+		{
+			State.HealSound = StartSoundOn(this.Settings.HealSound, Pawn);
+		}
+		else if (!bHealing)
+		{
+			this.StopHealSound(State);
+		}
+	}
+
+	private StopHealSound(State: FMedicPlayerState): void
+	{
+		if (State.HealSound)
+		{
+			StopSound(State.HealSound);
+			State.HealSound = undefined;
+		}
+	}
+
 	private GetPlayerState(Slot: number): FMedicPlayerState
 	{
 		return GetOrCreate(this.PlayerStates, Slot, (): FMedicPlayerState =>
 		{
-			return { HealTarget: undefined, HealAccumulator: 0, UberCharge: 0, UberEndTime: 0 };
+			return { HealTarget: undefined, HealAccumulator: 0, UberCharge: 0, UberEndTime: 0, HealSound: undefined };
 		});
 	}
 
@@ -323,7 +368,7 @@ export class MedicClass extends PlayerClass<FMedicSettings>
 	private AcquireHealTarget(Medic: CSPlayerPawn): CSPlayerPawn | undefined
 	{
 		const EyePosition: FVector = Medic.GetEyePosition();
-		const Forward: FVector = VectorMath.GetForwardVector(Medic.GetEyeAngles());
+		const Forward: FVector = VectorMath.GetForwardVector(GetAimAngles(Medic));
 		const End: FVector = VectorMath.Add(EyePosition, VectorMath.Scale(Forward, this.Settings.Range));
 		const HitEntity: Entity | undefined = Instance.TraceSphere({ start: EyePosition, end: End, radius: 12, ignoreEntity: Medic }).hitEntity;
 		if (IsPlayerPawn(HitEntity) && HitEntity.IsAlive() && HitEntity.GetTeamNumber() === Medic.GetTeamNumber())

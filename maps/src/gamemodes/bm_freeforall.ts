@@ -22,6 +22,7 @@ const GScores: Map<number, FPlayerScore> = new Map<number, FPlayerScore>();
 export class FreeForAllMode extends GameMode
 {
 	public override readonly DisplayName: string = "Free for all";
+	public override readonly CommandName: string = "ffa";
 
 	public override IsMapSetUp(): boolean
 	{
@@ -32,6 +33,7 @@ export class FreeForAllMode extends GameMode
 	{
 		const Commands: string[] = [
 			"mp_teammates_are_enemies 1",
+			"mp_solid_teammates 1",
 			"mp_friendlyfire 1",
 			"mp_ignore_round_win_conditions 1",
 			"mp_respawn_on_death_t 1",

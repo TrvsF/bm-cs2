@@ -108,6 +108,104 @@
 			</Panel>
 		</Panel>
 
+		<Panel id="TeamBoard" class="Leaderboard TeamBoard" hittest="false">
+			<Panel class="TeamBoardScores" hittest="false">
+				<Label id="TeamBoardScoreT" class="TeamBoardScore Team_t" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardGoal" class="TeamBoardGoal" text="First to {s:goal}" hittest="false" />
+				<Label id="TeamBoardScoreCT" class="TeamBoardScore Team_ct" text="{s:kills}" hittest="false" />
+			</Panel>
+			<Panel class="LeaderboardLine LeaderboardHeader TeamBoardHeader Team_t" hittest="false">
+				<Label class="LeaderboardName" text="Terrorists" hittest="false" />
+				<Label class="LeaderboardKills" text="Kills" hittest="false" />
+				<Label class="LeaderboardDamage" text="Dmg" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardTRow0" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardTName0" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardTKills0" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardTDamage0" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardTRow1" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardTName1" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardTKills1" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardTDamage1" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardTRow2" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardTName2" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardTKills2" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardTDamage2" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardTRow3" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardTName3" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardTKills3" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardTDamage3" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardTRow4" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardTName4" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardTKills4" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardTDamage4" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardTRow5" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardTName5" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardTKills5" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardTDamage5" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardTRow6" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardTName6" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardTKills6" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardTDamage6" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardTRow7" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardTName7" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardTKills7" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardTDamage7" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel class="LeaderboardLine LeaderboardHeader TeamBoardHeader Team_ct" hittest="false">
+				<Label class="LeaderboardName" text="Counter-Terrorists" hittest="false" />
+				<Label class="LeaderboardKills" text="Kills" hittest="false" />
+				<Label class="LeaderboardDamage" text="Dmg" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardCTRow0" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardCTName0" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardCTKills0" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardCTDamage0" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardCTRow1" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardCTName1" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardCTKills1" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardCTDamage1" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardCTRow2" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardCTName2" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardCTKills2" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardCTDamage2" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardCTRow3" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardCTName3" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardCTKills3" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardCTDamage3" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardCTRow4" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardCTName4" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardCTKills4" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardCTDamage4" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardCTRow5" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardCTName5" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardCTKills5" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardCTDamage5" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardCTRow6" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardCTName6" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardCTKills6" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardCTDamage6" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+			<Panel id="TeamBoardCTRow7" class="LeaderboardLine LeaderboardEntry" hittest="false">
+				<Label id="TeamBoardCTName7" class="LeaderboardName" text="{s:name}" hittest="false" />
+				<Label id="TeamBoardCTKills7" class="LeaderboardKills" text="{s:kills}" hittest="false" />
+				<Label id="TeamBoardCTDamage7" class="LeaderboardDamage" text="{s:damage}" hittest="false" />
+			</Panel>
+		</Panel>
+
 		<Panel id="PayloadBar" class="PayloadBar" hittest="false">
 			<Panel class="PayloadSide" hittest="false" />
 			<Label id="PayloadSection0Fill" class="PayloadFill" text="{s:fill}" hittest="false" />

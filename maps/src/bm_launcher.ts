@@ -1,7 +1,7 @@
 import { Instance, GameRules, CSInputs, CSGearSlot } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { TickInterval } from "./bm_core";
-import { SpawnTemporaryTemplate } from "./bm_effects";
+import { TickInterval, IsInputDown, GetHeldWeapon } from "./bm_core";
+import { SpawnTemporaryTemplate, PlaySoundOn } from "./bm_effects";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -12,13 +12,15 @@ export interface FLauncherSettings
 	readonly ReloadFirstTime: number;
 	readonly ReloadEachTime: number;
 	readonly ChargeTime: number;
-	// Release early to fire with part of the charge; full charge still fires by itself
 	readonly bFireOnRelease?: boolean;
 	readonly DeployTime: number;
 	readonly FireFxTemplate: string;
 	readonly ReloadFxTemplate: string;
 	readonly AltFireInterval?: number;
 	readonly AltFireFxTemplate?: string;
+	readonly FireSound?: string;
+	readonly AltFireSound?: string;
+	readonly ReloadSound?: string;
 }
 
 export interface FLauncherShot
@@ -95,7 +97,7 @@ export function TickLauncher(Pawn: CSPlayerPawn, Slot: number, Now: number): FLa
 		return undefined;
 	}
 
-	const Active: CSWeaponBase | undefined = Pawn.GetActiveWeapon();
+	const Active: CSWeaponBase | undefined = GetHeldWeapon(Pawn);
 	let Shot: FLauncherShot | undefined = undefined;
 	for (const State of Launchers)
 	{
@@ -120,7 +122,7 @@ export function TickLauncher(Pawn: CSPlayerPawn, Slot: number, Now: number): FLa
 export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo | undefined
 {
 	const Launchers: FLauncherState[] | undefined = GLaunchers.get(Slot);
-	const Active: CSWeaponBase | undefined = Pawn.GetActiveWeapon();
+	const Active: CSWeaponBase | undefined = GetHeldWeapon(Pawn);
 	if (!Launchers || !Active)
 	{
 		return undefined;
@@ -146,8 +148,8 @@ export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo
 function TickHeldLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): FLauncherShot | undefined
 {
 	const bCanFire: boolean = !Pawn.IsBuyMenuOpen() && !GameRules.IsFreezePeriod();
-	const bMainHeld: boolean = bCanFire && Pawn.IsInputPressed(CSInputs.ATTACK);
-	const bAltFire: boolean = bCanFire && !bMainHeld && State.Settings.AltFireInterval !== undefined && Pawn.IsInputPressed(CSInputs.ATTACK2);
+	const bMainHeld: boolean = bCanFire && IsInputDown(Pawn, CSInputs.ATTACK);
+	const bAltFire: boolean = bCanFire && !bMainHeld && State.Settings.AltFireInterval !== undefined && IsInputDown(Pawn, CSInputs.ATTACK2);
 	if ((bMainHeld || bAltFire) && State.Clip > 0)
 	{
 		State.NextReloadTime = undefined;
@@ -188,6 +190,7 @@ function FireLauncher(Pawn: CSPlayerPawn, State: FLauncherState, Now: number, bA
 	const bHeldThrough: boolean = Now - State.NextFireTime < TickInterval * 1.5;
 	State.NextFireTime = (bHeldThrough ? State.NextFireTime : Now) + Interval;
 	SpawnFireFx(Pawn, bAltFire ? State.Settings.AltFireFxTemplate ?? State.Settings.FireFxTemplate : State.Settings.FireFxTemplate);
+	PlaySoundOn(bAltFire ? State.Settings.AltFireSound ?? State.Settings.FireSound : State.Settings.FireSound, Pawn);
 	return { WeaponName: State.WeaponName, bAltFire: bAltFire, ChargeFraction: ChargeFraction };
 }
 
@@ -243,6 +246,7 @@ function TickReload(Pawn: CSPlayerPawn, State: FLauncherState, Now: number): voi
 	}
 	State.Clip = State.Settings.ReloadEachTime > 0 ? State.Clip + 1 : State.Settings.ClipSize;
 	SpawnReloadFx(Pawn, State.Settings);
+	PlaySoundOn(State.Settings.ReloadSound, Pawn);
 	State.ReloadStartTime = Now;
 	State.NextReloadTime = CanReload(State) ? Now + State.Settings.ReloadEachTime : undefined;
 }

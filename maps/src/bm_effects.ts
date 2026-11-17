@@ -1,6 +1,6 @@
-import { Instance } from "cs_script/point_script";
-import type { Entity, CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { TickInterval, VectorMath, UpVector, IsPointTemplate, GetChestPosition, SetTimer } from "./bm_core";
+import { Instance, Console, Entities } from "cs_script/point_script";
+import type { Entity, CSPlayerPawn, CSPrecache, PointTemplate, TraceResult } from "cs_script/point_script";
+import { TickInterval, LogPrefix, VectorMath, UpVector, FindPointTemplate, GetChestPosition, GetPlayerSlot, SetTimer, DrawDebugLine } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -35,6 +35,27 @@ const GibFallbackTemplateName: string = "boom_template";
 const GibLifetime: number = 5;
 const GibFlingSpeed: number = 450;
 const RefiredBeamLifetime: number = 0.15;
+const BeamParticleSuffix: string = "_fx";
+const BeamFxLingerTime: number = 1;
+// Sound files loaded up front, so the first play doesn't stall. Add new ones here
+const SoundFiles: readonly string[] = [
+	"sounds/bm/shrinker_shrink.vsnd",
+	"sounds/bm/shrinker_grow.vsnd",
+	"sounds/bm/medic_heal_loop.vsnd",
+	"sounds/bm/turret_lock.vsnd",
+];
+const SoundEntityClass: string = "point_soundevent";
+// One point_soundevent, no sound set and not started on spawn; the code picks the sound and starts it
+const SoundTemplateName: string = "bm_sound_template";
+const SpawnTestClasses: readonly string[] = ["point_soundevent", "info_target", "logic_relay", "info_particle_system", "prop_dynamic", "point_template"];
+// One-shot sounds clear up when they finish; this is only a backstop in case one never says so
+const OneShotSoundLifetime: number = 30;
+const StoppedSoundLifetime: number = 0.5;
+// A sound follows its source entity, found by name, so players without one are given this plus their slot
+const SoundSourcePrefix: string = "bm_player_";
+
+let GSoundPrecache: CSPrecache | undefined = undefined;
+let GbSoundSpawnFailed: boolean = false;
 
 let GDecals: Entity[][] = [];
 
@@ -101,8 +122,8 @@ export function SpawnGibs(Victim: CSPlayerPawn): void
 
 export function SpawnTemporaryTemplate(TemplateName: string, Position: FVector, Lifetime: number): Entity[] | undefined
 {
-	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	if (!IsPointTemplate(Template))
+	const Template: PointTemplate | undefined = FindPointTemplate(TemplateName);
+	if (!Template)
 	{
 		return undefined;
 	}
@@ -117,25 +138,199 @@ export function SpawnTemporaryTemplate(TemplateName: string, Position: FVector, 
 	return Spawned;
 }
 
+// Sounds //////////////////////////////////////////////////////////////////////////////////////////
+
+// Plays a sound event (a name from soundevents_addon.vsndevts) on a player. It follows them as they move.
+export function PlaySoundOn(SoundEvent: string | undefined, Pawn: CSPlayerPawn): void
+{
+	RemoveSoundWhenFinished(SpawnSoundOn(SoundEvent, Pawn));
+}
+
+// Plays a sound event at a point in the world; it stays where it was played
+export function PlaySoundAt(SoundEvent: string | undefined, Position: FVector): void
+{
+	RemoveSoundWhenFinished(SoundEvent ? SpawnSound(SoundEvent, Position, undefined) : []);
+}
+
+function RemoveSoundWhenFinished(Spawned: readonly Entity[]): void
+{
+	if (Spawned.length === 0)
+	{
+		return;
+	}
+	const Remove = (): void =>
+	{
+		RemoveEntities(Spawned);
+	};
+	for (const Ent of Spawned)
+	{
+		Entities.ConnectOutput({ target: Ent, output: "OnSoundFinished", callback: Remove });
+	}
+	SetTimer(OneShotSoundLifetime, Remove);
+}
+
+// For a looping sound: keeps playing until it's handed to StopSound
+export function StartSoundOn(SoundEvent: string | undefined, Pawn: CSPlayerPawn): Entity[]
+{
+	return SpawnSoundOn(SoundEvent, Pawn);
+}
+
+export function StopSound(Entities: readonly Entity[]): void
+{
+	for (const Ent of Entities)
+	{
+		if (Ent.IsValid())
+		{
+			Ent.FireInput({ input: "StopSound" });
+		}
+	}
+	SetTimer(StoppedSoundLifetime, (): void =>
+	{
+		RemoveEntities(Entities);
+	});
+}
+
+export function PrecacheSounds(): void
+{
+	GSoundPrecache ??= Instance.Precache({ resources: [...SoundFiles], entities: [SoundEntityClass] });
+}
+
+// Debug: reports which entity classes Entities.Spawn will make, and whether the sound files have loaded
+export function RunSpawnTest(Pawn: CSPlayerPawn): void
+{
+	const Precache: string = GSoundPrecache ? `server ${GSoundPrecache.IsServerLoaded()}, everyone ${GSoundPrecache.IsLoadedForAll()}` : "never made";
+	Console.Log(`${LogPrefix} spawn test: sound precache loaded: ${Precache}`);
+	for (const ClassName of SpawnTestClasses)
+	{
+		let Result: string;
+		try
+		{
+			const Spawned: Entity[] = Entities.Spawn([{ classname: ClassName, origin: Pawn.GetAbsOrigin() }]);
+			Result = `${Spawned.filter(IsValidEntity).length} of ${Spawned.length} valid`;
+			RemoveEntities(Spawned);
+		}
+		catch (Exception)
+		{
+			Result = `threw ${String(Exception)}`;
+		}
+		Console.Log(`${LogPrefix} spawn test: ${ClassName}: ${Result}`);
+	}
+}
+
+// Its source is the player, so it follows them; it's parented to them too.
+// From the map's sound template if it has one, otherwise made in code
+function SpawnSoundOn(SoundEvent: string | undefined, Pawn: CSPlayerPawn): Entity[]
+{
+	if (!SoundEvent || !Pawn.IsValid())
+	{
+		return [];
+	}
+	const SourceName: string = GetSoundSourceName(Pawn);
+	const Spawned: Entity[] = SpawnSound(SoundEvent, Pawn.GetAbsOrigin(), SourceName);
+	for (const Ent of Spawned)
+	{
+		Ent.SetParent(Pawn);
+	}
+	return Spawned;
+}
+
+// Without a source name the sound plays where it was spawned
+function SpawnSound(SoundEvent: string, Position: FVector, SourceName: string | undefined): Entity[]
+{
+	return SpawnSoundFromTemplate(SoundEvent, Position, SourceName) ?? SpawnSoundFromCode(SoundEvent, Position, SourceName);
+}
+
+// undefined when the map has no sound template
+function SpawnSoundFromTemplate(SoundEvent: string, Position: FVector, SourceName: string | undefined): Entity[] | undefined
+{
+	const Template: PointTemplate | undefined = FindPointTemplate(SoundTemplateName);
+	if (!Template)
+	{
+		return undefined;
+	}
+	const Spawned: Entity[] = (Template.ForceSpawn(Position) ?? []).filter(IsValidEntity);
+	for (const Ent of Spawned)
+	{
+		Ent.FireInput({ input: "SetSoundEventName", value: SoundEvent });
+		if (SourceName !== undefined)
+		{
+			Ent.FireInput({ input: "SetSourceEntity", value: SourceName });
+		}
+		Ent.FireInput({ input: "StartSound" });
+	}
+	return Spawned;
+}
+
+// Gives up for good after the first failure, so the engine's error is only printed once
+function SpawnSoundFromCode(SoundEvent: string, Position: FVector, SourceName: string | undefined): Entity[]
+{
+	if (GbSoundSpawnFailed)
+	{
+		return [];
+	}
+	let Spawned: Entity[] = [];
+	try
+	{
+		Spawned = Entities.Spawn([
+		{
+			classname: SoundEntityClass,
+			origin: Position,
+			soundName: SoundEvent,
+			sourceEntityName: SourceName ?? "",
+			entityIndexSelection: 1,
+			startOnSpawn: true,
+		}]).filter(IsValidEntity);
+	}
+	catch (Exception)
+	{
+		Console.Log(`${LogPrefix} Entities.Spawn failed: ${String(Exception)}`);
+	}
+	if (Spawned.length === 0)
+	{
+		GbSoundSpawnFailed = true;
+		Console.Log(`${LogPrefix} couldn't make a ${SoundEntityClass} in code, so sounds are off until the map has a "${SoundTemplateName}"`);
+	}
+	return Spawned;
+}
+
+function IsValidEntity(Ent: Entity): boolean
+{
+	return Ent.IsValid();
+}
+
+function GetSoundSourceName(Pawn: CSPlayerPawn): string
+{
+	const Name: string = Pawn.GetEntityName();
+	if (Name !== "")
+	{
+		return Name;
+	}
+	const NewName: string = `${SoundSourcePrefix}${GetPlayerSlot(Pawn)}`;
+	Pawn.SetEntityName(NewName);
+	return NewName;
+}
+
+// Beams ///////////////////////////////////////////////////////////////////////////////////////////
+
 export function SpawnBeam(TemplateName: string, EndMarkerName: string, Start: FVector, End: FVector, Lifetime: number, FallbackColor: FColor): void
 {
 	const Spawned: Entity[] | undefined = SpawnBeamCopy(TemplateName, EndMarkerName, Start, End);
 	if (!Spawned)
 	{
-		Instance.DebugLine({ start: Start, end: End, duration: Lifetime, color: FallbackColor });
+		DrawDebugLine({ start: Start, end: End, duration: Lifetime, color: FallbackColor });
 		return;
 	}
 	SetTimer(Lifetime, (): void =>
 	{
-		RemoveEntities(Spawned);
+		RemoveBeamCopy(Spawned);
 	});
 }
 
 // undefined when the map has no such template
 function SpawnBeamCopy(TemplateName: string, EndMarkerName: string, Start: FVector, End: FVector): Entity[] | undefined
 {
-	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	if (!IsPointTemplate(Template))
+	const Template: PointTemplate | undefined = FindPointTemplate(TemplateName);
+	if (!Template)
 	{
 		return undefined;
 	}
@@ -158,8 +353,8 @@ export function SpawnHeldBeam(TemplateName: string, EndMarkerName: string, Start
 		MoveHeldBeam(Beam, Start, End);
 		return Beam;
 	}
-	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	if (IsPointTemplate(Template))
+	const Template: PointTemplate | undefined = FindPointTemplate(TemplateName);
+	if (Template)
 	{
 		Beam.Entities.push(...(Template.ForceSpawn(Start, VectorMath.GetRotation(VectorMath.Subtract(End, Start))) ?? []));
 	}
@@ -180,7 +375,7 @@ export function MoveHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector): voi
 		const Copy: FBeamCopy | undefined = Beam.Copies[Index];
 		if (Copy && Copy.RemoveAt <= Now)
 		{
-			RemoveEntities(Copy.Entities);
+			RemoveBeamCopy(Copy.Entities);
 			Beam.Copies.splice(Index, 1);
 		}
 	}
@@ -197,7 +392,7 @@ export function MoveHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector): voi
 	}
 	else
 	{
-		Instance.DebugLine({ start: Start, end: End, duration: Beam.RefireInterval, color: Beam.FallbackColor });
+		DrawDebugLine({ start: Start, end: End, duration: Beam.RefireInterval, color: Beam.FallbackColor });
 	}
 }
 
@@ -206,7 +401,7 @@ export function RemoveHeldBeam(Beam: FHeldBeam): void
 	RemoveEntities(Beam.Entities);
 	for (const Copy of Beam.Copies)
 	{
-		RemoveEntities(Copy.Entities);
+		RemoveBeamCopy(Copy.Entities);
 	}
 	Beam.Copies.length = 0;
 }
@@ -215,7 +410,7 @@ function PlaceHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector, bTeleport:
 {
 	if (Beam.Entities.length === 0)
 	{
-		Instance.DebugLine({ start: Start, end: End, duration: TickInterval * 2, color: Beam.FallbackColor });
+		DrawDebugLine({ start: Start, end: End, duration: TickInterval * 2, color: Beam.FallbackColor });
 		return;
 	}
 
@@ -254,8 +449,8 @@ export function ClearDecals(): void
 
 function SpawnDecal(TemplateName: string, Position: FVector, SurfaceNormal: FVector): void
 {
-	const Template: Entity | undefined = Instance.FindEntityByName(TemplateName);
-	if (!IsPointTemplate(Template))
+	const Template: PointTemplate | undefined = FindPointTemplate(TemplateName);
+	if (!Template)
 	{
 		return;
 	}
@@ -305,6 +500,18 @@ function FindNearbySurface(Position: FVector, MaxDistance: number): TraceResult 
 		}
 	}
 	return Closest;
+}
+
+function RemoveBeamCopy(Entities: readonly Entity[]): void
+{
+	RemoveEntities(Entities.filter((Ent: Entity): boolean =>
+	{
+		return Ent.IsValid() && Ent.GetEntityName().endsWith(BeamParticleSuffix);
+	}));
+	SetTimer(BeamFxLingerTime, (): void =>
+	{
+		RemoveEntities(Entities);
+	});
 }
 
 function RemoveEntities(Entities: readonly Entity[]): void

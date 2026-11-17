@@ -1,8 +1,9 @@
-import { Instance, Console, GameRules, CSRoundEndReason } from "cs_script/point_script";
+import { Instance, Console, GameRules, Entities, CSRoundEndReason, CSDamageFlags } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn } from "cs_script/point_script";
 import { bDebug, LogPrefix, TickInterval, ETeam, VectorMath, RotationMath, GetPlayerSlot, ForEachLivePawn } from "../bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "../bm_core";
 import { GameMode } from "../bm_gamemode";
+import type { FBotObjective } from "../bm_gamemode";
 import { ShowPayload } from "../bm_ui";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -24,6 +25,7 @@ export interface FPayloadSettings
 	readonly PusherHealPerSecond: number;
 	readonly TurnBlendDistance: number;
 	readonly BuyTime: number;
+	readonly HumiliationTime: number;
 }
 
 export interface FPayloadStatus
@@ -78,6 +80,7 @@ export const PayloadSettings: FPayloadSettings =
 	PusherHealPerSecond: 10,
 	TurnBlendDistance: 48,
 	BuyTime: 3,
+	HumiliationTime: 5,
 };
 
 const AttackingTeam: ETeam = ETeam.Terrorist;
@@ -97,6 +100,8 @@ let GLastAttendedTime: number = 0;
 let GbRoundTimerSet: boolean = false;
 let GbRoundOver: boolean = false;
 let GbDelivered: boolean = false;
+let GWinner: ETeam | undefined = undefined;
+let GRoundEndTime: number = 0;
 let GNextScanTime: number = 0;
 let GStatus: FPayloadStatus | undefined = undefined;
 let GLastScanReport: string = "";
@@ -107,6 +112,7 @@ const GHealAccumulators: Map<number, number> = new Map<number, number>();
 export class PayloadMode extends GameMode
 {
 	public override readonly DisplayName: string = "Payload";
+	public override readonly CommandName: string = "pl";
 
 	public override IsMapSetUp(): boolean
 	{
@@ -145,6 +151,15 @@ export class PayloadMode extends GameMode
 		}
 	}
 
+	public override GetBotObjective(Pawn: CSPlayerPawn): FBotObjective | undefined
+	{
+		if (GbRoundOver || !GCart || !GCart.Entity.IsValid())
+		{
+			return undefined;
+		}
+		return { Position: GCart.Entity.GetAbsOrigin(), Radius: PayloadSettings.PushRadius };
+	}
+
 	public override OnRoundStart(): void
 	{
 		ScanPayload();
@@ -154,6 +169,7 @@ export class PayloadMode extends GameMode
 		GbRoundTimerSet = false;
 		GbRoundOver = false;
 		GbDelivered = false;
+		GWinner = undefined;
 		GHealAccumulators.clear();
 		GStatus = undefined;
 		PlaceCart(true);
@@ -162,6 +178,7 @@ export class PayloadMode extends GameMode
 	public override OnRoundEnd(): void
 	{
 		GbRoundOver = true;
+		GWinner = undefined;
 	}
 
 	public override Tick(Now: number, DeltaTime: number): void
@@ -196,6 +213,10 @@ function TickPayload(Now: number, DeltaTime: number): void
 	if (bDebug)
 	{
 		DrawTrack(Track);
+	}
+	if (GWinner !== undefined)
+	{
+		TickHumiliation(GWinner, Now);
 	}
 	if (GbRoundOver || GameRules.IsWarmupPeriod() || GameRules.IsFreezePeriod())
 	{
@@ -235,11 +256,11 @@ function TickPayload(Now: number, DeltaTime: number): void
 	if (GDistance >= Track.Length)
 	{
 		GbDelivered = true;
-		EndRound(AttackingTeam);
+		WinRound(AttackingTeam, Now);
 	}
 	else if (bTimeUp && Crowd.Attackers.length === 0)
 	{
-		EndRound(DefendingTeam);
+		WinRound(DefendingTeam, Now);
 	}
 	GStatus = MakeStatus(Track, Pushers, bBlocked && !GbRoundOver, bRollingBack, bTimeUp && !GbRoundOver, Now);
 }
@@ -322,16 +343,47 @@ function ReachCheckpoints(Track: FPayloadTrack, Now: number): void
 	}
 }
 
-function EndRound(Winner: ETeam): void
+function WinRound(Winner: ETeam, Now: number): void
 {
 	if (GbRoundOver)
 	{
 		return;
 	}
 	GbRoundOver = true;
+	GWinner = Winner;
+	GRoundEndTime = Now + PayloadSettings.HumiliationTime;
+	const Loser: ETeam = GetOtherTeam(Winner);
+	Console.ServerCommand(`mp_respawn_on_death_${Loser === ETeam.Terrorist ? "t" : "ct"} 0`);
+	KillTeam(Loser);
+	Console.Log(`${LogPrefix} payload round won. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}, round ends in ${PayloadSettings.HumiliationTime}s`);
+}
+
+function TickHumiliation(Winner: ETeam, Now: number): void
+{
+	KillTeam(GetOtherTeam(Winner));
+	if (Now < GRoundEndTime)
+	{
+		return;
+	}
+	GWinner = undefined;
 	GameRules.AddTeamScore(Winner, 1);
 	GameRules.TerminateRound(Winner === ETeam.Terrorist ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
-	Console.Log(`${LogPrefix} payload round finished. ${Winner === AttackingTeam ? "Ts delivered the cart" : "CTs held"}`);
+}
+
+function KillTeam(Team: ETeam): void
+{
+	ForEachLivePawn((Pawn: CSPlayerPawn): void =>
+	{
+		if (Pawn.GetTeamNumber() === Team)
+		{
+			Pawn.TakeDamage({ damage: Pawn.GetHealth() + 1000, damageFlags: CSDamageFlags.FORCE_DEATH | CSDamageFlags.IGNORE_ARMOR });
+		}
+	});
+}
+
+function GetOtherTeam(Team: ETeam): ETeam
+{
+	return Team === ETeam.Terrorist ? ETeam.CounterTerrorist : ETeam.Terrorist;
 }
 
 function MakeStatus(Track: FPayloadTrack, Pushers: number, bBlocked: boolean, bRollingBack: boolean, bOvertime: boolean, Now: number): FPayloadStatus
@@ -388,7 +440,7 @@ function ScanPayload(): void
 
 function FindCartEntity(): Entity | undefined
 {
-	const Named: Entity | undefined = Instance.FindEntitiesByName(PayloadSettings.CartName).find((Ent: Entity): boolean =>
+	const Named: Entity | undefined = Entities.FindByName(PayloadSettings.CartName).find((Ent: Entity): boolean =>
 	{
 		return Ent.IsValid();
 	});
@@ -398,7 +450,7 @@ function FindCartEntity(): Entity | undefined
 	}
 	for (const ClassName of CartClasses)
 	{
-		for (const Ent of Instance.FindEntitiesByClass(ClassName))
+		for (const Ent of Entities.FindByClass(ClassName))
 		{
 			if (Ent.IsValid() && Ent.GetEntityName().includes(PayloadSettings.CartName))
 			{
@@ -411,10 +463,10 @@ function FindCartEntity(): Entity | undefined
 
 function FindPathPoints(): Entity[]
 {
-	const Candidates: Set<Entity> = new Set<Entity>(Instance.FindEntitiesByName(`${PayloadSettings.PathPrefix}*`));
+	const Candidates: Set<Entity> = new Set<Entity>(Entities.FindByName(`${PayloadSettings.PathPrefix}*`));
 	for (const ClassName of PathPointClasses)
 	{
-		for (const Ent of Instance.FindEntitiesByClass(ClassName))
+		for (const Ent of Entities.FindByClass(ClassName))
 		{
 			Candidates.add(Ent);
 		}
@@ -606,4 +658,4 @@ function DrawTrack(Track: FPayloadTrack): void
 	{
 		Instance.DebugSphere({ center: GetTrackPosition(Track, CheckpointDistance), radius: 16, duration: TickInterval * 2, color: CheckpointDebugColor });
 	}
-}
+}

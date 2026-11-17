@@ -1,8 +1,19 @@
 import type { CSPlayerPawn } from "cs_script/point_script";
+import type { FVector } from "./bm_core";
+
+// Where a mode wants a player to be: a cart to push or block, a point to hold. Within Radius of Position counts as being on it.
+export interface FBotObjective
+{
+	readonly Position: FVector;
+	readonly Radius: number;
+}
 
 export abstract class GameMode
 {
 	public abstract readonly DisplayName: string;
+	public abstract readonly CommandName: string;
+	// Whether picking a class changes it there and then, wherever the player is, rather than waiting for their spawn zone or next life
+	public readonly bInstantClassSwitch: boolean = false;
 
 	// Whether this map has what the mode needs. bm_main plays the first mode in GameModes that says yes.
 	public abstract IsMapSetUp(): boolean;
@@ -50,6 +61,12 @@ export abstract class GameMode
 	{
 	}
 
+	// What this mode would have a bot on this player's team look after right now, if anything
+	public GetBotObjective(Pawn: CSPlayerPawn): FBotObjective | undefined
+	{
+		return undefined;
+	}
+
 	public Tick(Now: number, DeltaTime: number): void
 	{
 	}
@@ -58,4 +75,4 @@ export abstract class GameMode
 	public TickPlayerHud(Pawn: CSPlayerPawn, Slot: number): void
 	{
 	}
-}
+}
