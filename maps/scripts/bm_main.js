@@ -3426,7 +3426,7 @@ var ShockerSettings = {
   BallKnockback: 500,
   BallLifetime: 5,
   BallStuckLifetime: 6,
-  BallStickDepth: 0,
+  BallStickDepth: -16,
   BallStuckHitRadius: 16,
   BallWeight: 0.5,
   BallKnockedGravityScale: 1,
