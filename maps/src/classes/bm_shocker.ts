@@ -1,8 +1,8 @@
 import { Instance, Console } from "cs_script/point_script";
 import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
-import { LogPrefix, VectorMath, GetPawnName, IsPlayerPawn, IsTeammate, GetChestPosition, ForEachLivePawn } from "../bm_core";
+import { LogPrefix, VectorMath, GetPawnName, GetTeamColor, IsPlayerPawn, IsTeammate, GetChestPosition, ForEachLivePawn } from "../bm_core";
 import type { FVector } from "../bm_core";
-import { LaunchProjectile, MoveProjectile, EmbedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, MakeShootable, Explode } from "../bm_combat";
+import { LaunchProjectile, MoveProjectile, EmbedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, MakeShootable, Explode, SetProjectileLit, IsBlinkOn } from "../bm_combat";
 import type { FProjectile } from "../bm_combat";
 import { GetTraceBuilding } from "../bm_buildings";
 import { PlayerClass, FireHitscanWeapon, GetHitscanBotShot, GetProjectileBotShot } from "../bm_classes";
@@ -16,7 +16,6 @@ export interface FShockerSettings extends FClassSettings
 	readonly BallSpeed: number;
 	readonly BallSize: number;
 	readonly BallDamage: number;
-	// A ball that strikes a player does this many times BallDamage to them, with nothing lost to the blast's own falloff
 	readonly BallDirectHitScale: number;
 	readonly BallRadius: number;
 	readonly BallKnockback: number;
@@ -26,6 +25,8 @@ export interface FShockerSettings extends FClassSettings
 	readonly BallStuckHitRadius: number;
 	readonly BallWeight: number;
 	readonly BallKnockedGravityScale: number;
+	readonly BallLightOnTime: number;
+	readonly BallLightPeriod: number;
 	readonly BallFxTemplate: string;
 	readonly ComboDamage: number;
 	readonly ComboRadius: number;
@@ -105,6 +106,8 @@ export const ShockerSettings: FShockerSettings =
 	BallStuckHitRadius: 16,
 	BallWeight: 0.5,
 	BallKnockedGravityScale: 1,
+	BallLightOnTime: 0.15,
+	BallLightPeriod: 1,
 	BallFxTemplate: "shock_ball_explode_template",
 
 	ComboDamage: 125,
@@ -198,6 +201,10 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 		if (Ball.bDestroyed)
 		{
 			return false;
+		}
+		if (Ball.Owner.IsValid())
+		{
+			SetProjectileLit(Ball, IsBlinkOn(Now - Ball.SpawnedAt, this.Settings.BallLightOnTime, this.Settings.BallLightPeriod), GetTeamColor(Ball.Owner));
 		}
 		if (Ball.StuckAt !== undefined)
 		{

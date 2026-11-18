@@ -107,9 +107,9 @@ export const GunnerSettings: FGunnerSettings =
 		LockSound: "bm.turret.lock",
 		Gun:
 		{
-			Damage: 40,
+			Damage: 44,
 			HeadshotMultiplier: 1,
-			Range: 1600,
+			Range: 1200,
 			Spread: 0,
 			Pellets: 1,
 			bPierces: false,
@@ -147,7 +147,7 @@ export const GunnerSettings: FGunnerSettings =
 		{
 			Damage: 4,
 			HeadshotMultiplier: 1,
-			Range: 1200,
+			Range: 800,
 			Spread: 2,
 			Pellets: 1,
 			bPierces: false,

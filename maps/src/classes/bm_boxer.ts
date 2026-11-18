@@ -1,8 +1,8 @@
 import { Console } from "cs_script/point_script";
 import type { CSPlayerPawn } from "cs_script/point_script";
-import { LogPrefix, VectorMath, GetPawnName, IsTeammate } from "../bm_core";
+import { LogPrefix, VectorMath, GetPawnName, GetTeamColor, IsTeammate } from "../bm_core";
 import type { FVector, FColor } from "../bm_core";
-import { EProjectileShape, LaunchProjectile, MovePiercingProjectile, MovePhasedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, EvaluateDamageCurve, ApplyKnockback } from "../bm_combat";
+import { EProjectileShape, LaunchProjectile, MovePiercingProjectile, MovePhasedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, LightProjectile, SetProjectileLit, EvaluateDamageCurve, ApplyKnockback } from "../bm_combat";
 import type { FProjectile, FPiercingProjectile, FPiercingStep, FPhasedHit, FDamageCurve } from "../bm_combat";
 import { GetTraceBuilding, DamageTracedBuilding } from "../bm_buildings";
 import { SpawnBloodSplatter } from "../bm_effects";
@@ -20,9 +20,9 @@ export interface FBoxerSettings extends FClassSettings
 	readonly CubeFalloff: FDamageCurve;
 	readonly CubeKnockback: number;
 	readonly CubeLifetime: number;
-	// A cube goes on through walls. Once it has, it turns this colour and its damage is multiplied by CubeThroughWallDamageScale.
+	// A cube goes on through walls. Once it has, its team colour is darkened to CubeThroughWallShade and its damage is multiplied by CubeThroughWallDamageScale.
 	readonly CubeThroughWallDamageScale: number;
-	readonly CubeThroughWallColor: FColor;
+	readonly CubeThroughWallShade: number;
 	readonly Shotgun: FHitscanWeaponSettings;
 }
 
@@ -81,7 +81,7 @@ export const BoxerSettings: FBoxerSettings =
 	CubeKnockback: 300,
 	CubeLifetime: 5,
 	CubeThroughWallDamageScale: 0.5,
-	CubeThroughWallColor: { r: 150, g: 60, b: 255 },
+	CubeThroughWallShade: 0.5,
 
 	Shotgun:
 	{
@@ -127,6 +127,7 @@ export class BoxerClass extends PlayerClass<FBoxerSettings>
 	public override OnPrimaryFire(Pawn: CSPlayerPawn, Slot: number, Now: number): void
 	{
 		const Projectile: FProjectile = LaunchProjectile(Pawn, this.Settings.CubeSpeed, 0, this.Settings.CubeGravityScale, CubeTemplateName, this.Settings.CubeRadius, EProjectileShape.Box);
+		SetProjectileLit(Projectile, true, GetTeamColor(Pawn));
 		this.Cubes.push({ ...Projectile, HitPlayers: new Set<CSPlayerPawn>(), bThroughWall: false });
 	}
 
@@ -183,7 +184,11 @@ export class BoxerClass extends PlayerClass<FBoxerSettings>
 		if (Step.WorldHit)
 		{
 			Cube.bThroughWall = true;
-			TintProjectile(Cube, this.Settings.CubeThroughWallColor);
+			const Team: FColor = GetTeamColor(Cube.Owner);
+			const Shade: number = this.Settings.CubeThroughWallShade;
+			const Dark: FColor = { r: Math.round(Team.r * Shade), g: Math.round(Team.g * Shade), b: Math.round(Team.b * Shade) };
+			TintProjectile(Cube, Dark);
+			LightProjectile(Cube, Dark);
 		}
 
 		DrawMissingProjectile(Cube);

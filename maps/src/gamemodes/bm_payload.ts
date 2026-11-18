@@ -1,8 +1,8 @@
 import { Instance, Console, GameRules, Entities, CSRoundEndReason, CSDamageFlags } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn } from "cs_script/point_script";
-import { bDebug, LogPrefix, TickInterval, ETeam, VectorMath, RotationMath, GetPlayerSlot, ForEachLivePawn } from "../bm_core";
+import { bDebug, LogPrefix, TickInterval, INDEX_NONE, ETeam, VectorMath, RotationMath, GetPlayerSlot, ForEachLivePawn } from "../bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "../bm_core";
-import { GameMode } from "../bm_gamemode";
+import { GameMode, DamageLeaderboard } from "../bm_gamemode";
 import type { FBotObjective } from "../bm_gamemode";
 import { ShowPayload } from "../bm_ui";
 
@@ -26,6 +26,7 @@ export interface FPayloadSettings
 	readonly TurnBlendDistance: number;
 	readonly BuyTime: number;
 	readonly HumiliationTime: number;
+	readonly LeaderboardRows: number;
 }
 
 export interface FPayloadStatus
@@ -81,6 +82,7 @@ export const PayloadSettings: FPayloadSettings =
 	TurnBlendDistance: 48,
 	BuyTime: 3,
 	HumiliationTime: 5,
+	LeaderboardRows: 3,
 };
 
 const AttackingTeam: ETeam = ETeam.Terrorist;
@@ -99,6 +101,7 @@ let GCheckpointsReached: number = 0;
 let GLastAttendedTime: number = 0;
 let GbRoundTimerSet: boolean = false;
 let GbRoundOver: boolean = false;
+const GLeaderboard: DamageLeaderboard = new DamageLeaderboard(PayloadSettings.LeaderboardRows);
 let GbDelivered: boolean = false;
 let GWinner: ETeam | undefined = undefined;
 let GRoundEndTime: number = 0;
@@ -113,6 +116,7 @@ export class PayloadMode extends GameMode
 {
 	public override readonly DisplayName: string = "Payload";
 	public override readonly CommandName: string = "pl";
+	public override readonly bSwapTeamsEachRound: boolean = true;
 
 	public override IsMapSetUp(): boolean
 	{
@@ -134,6 +138,8 @@ export class PayloadMode extends GameMode
 			`mp_roundtime ${Minutes}`,
 			`mp_roundtime_defuse ${Minutes}`,
 			`mp_roundtime_hostage ${Minutes}`,
+			"mp_autoteambalance 1",
+			"mp_limitteams 2",
 			"bot_stop 0",
 		];
 	}
@@ -149,6 +155,7 @@ export class PayloadMode extends GameMode
 		{
 			ShowPayload(Controller.GetPlayerSlot(), undefined);
 		}
+		GLeaderboard.Hide();
 	}
 
 	public override GetBotObjective(Pawn: CSPlayerPawn): FBotObjective | undefined
@@ -172,6 +179,7 @@ export class PayloadMode extends GameMode
 		GWinner = undefined;
 		GHealAccumulators.clear();
 		GStatus = undefined;
+		GLeaderboard.Clear();
 		PlaceCart(true);
 	}
 
@@ -181,9 +189,31 @@ export class PayloadMode extends GameMode
 		GWinner = undefined;
 	}
 
+	public override OnPlayerDamage(VictimSlot: number, AttackerSlot: number, Damage: number): void
+	{
+		if (IsCounting())
+		{
+			GLeaderboard.AddDamage(AttackerSlot, Damage);
+		}
+	}
+
+	public override OnPlayerKill(VictimSlot: number, AttackerSlot: number): void
+	{
+		if (AttackerSlot !== INDEX_NONE && IsCounting())
+		{
+			GLeaderboard.AddKill(AttackerSlot);
+		}
+	}
+
+	public override OnPlayerLeave(Slot: number): void
+	{
+		GLeaderboard.Forget(Slot);
+	}
+
 	public override Tick(Now: number, DeltaTime: number): void
 	{
 		TickPayload(Now, DeltaTime);
+		GLeaderboard.Show();
 	}
 
 	public override TickPlayerHud(Pawn: CSPlayerPawn, Slot: number): void
@@ -368,6 +398,12 @@ function TickHumiliation(Winner: ETeam, Now: number): void
 	GWinner = undefined;
 	GameRules.AddTeamScore(Winner, 1);
 	GameRules.TerminateRound(Winner === ETeam.Terrorist ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
+}
+
+// Whether damage and kills go on the board: not in warmup, or once the round has been won
+function IsCounting(): boolean
+{
+	return !GbRoundOver && !GameRules.IsWarmupPeriod();
 }
 
 function KillTeam(Team: ETeam): void

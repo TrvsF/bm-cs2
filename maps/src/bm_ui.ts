@@ -57,15 +57,16 @@ const CounterLabelId: string = "CounterLabel";
 const CounterValueId: string = "CounterValue";
 const CounterMaxId: string = "CounterMax";
 const ChargeBarId: string = "ChargeBar";
+const ChargeBarDelay: number = 0.05;
 const ReloadBarId: string = "ReloadBar";
-const BarSteps: number = 24;
+const BarSteps: number = 96;
 const BarCharacter: string = "0";
 const HiddenBar: number = -1;
 const PayloadBarId: string = "PayloadBar";
 const PayloadSectionPrefix: string = "PayloadSection";
 const PayloadTickPrefix: string = "PayloadTick";
 const PayloadPushersLabelId: string = "PayloadPushers";
-const PayloadBarSteps: number = 60;
+const PayloadBarSteps: number = 240;
 const MaxPayloadTicks: number = 5;
 const PayloadStateClasses: readonly string[] = ["Pushing", "Blocked", "RollingBack", "Overtime", "Delivered"];
 const HurtHealthFraction: number = 0.5;
@@ -249,7 +250,7 @@ export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass, IsT:
 
 export function ShowAmmo(Slot: number, Ammo: FLauncherAmmo | undefined): void
 {
-	ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeFraction > 0 ? Ammo.ChargeFraction : undefined);
+	ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeHeld >= ChargeBarDelay ? Ammo.ChargeFraction : undefined);
 	ShowBar(Slot, ReloadBarId, Ammo && Ammo.bReloading ? Ammo.ReloadFraction : undefined);
 
 	const Key: string = Ammo ? `${Ammo.Clip}|${Ammo.MaxClip}|${Ammo.bReloading}` : "";
@@ -587,7 +588,7 @@ export function ShowPayload(Slot: number, Status: FPayloadStatus | undefined): v
 	{
 		SetPayloadClass(Ui, Slot, Sent, PayloadBarId, StateClass, StateClass === State);
 	}
-	SendPayloadText(Ui, Slot, Sent, PayloadPushersLabelId, "pushers", State === "Pushing" ? `x${Status.Pushers}` : "");
+	SendPayloadText(Ui, Slot, Sent, PayloadPushersLabelId, "pushers", State === "Pushing" ? `x${Status.Pushers}` : State === "RollingBack" ? "<" : "");
 	SetPayloadClass(Ui, Slot, Sent, PayloadBarId, "Shown", true);
 }
 

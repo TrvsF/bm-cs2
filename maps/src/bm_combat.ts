@@ -26,6 +26,7 @@ export interface FProjectile
 	SpawnedAt: number;
 	Models: FProjectileModel[];
 	bDestroyed: boolean;
+	bLightOn: boolean;
 }
 
 interface FShootable
@@ -127,6 +128,7 @@ const SurfaceGap: number = 2;
 const MinGroundNormalZ: number = 0.7;
 const GroundProbeDistance: number = 8;
 const MinFacingSpeed: number = 1;
+const LightClassPrefix: string = "light_";
 const MissingProjectileRadius: number = 3;
 const AimPointPasses: number = 3;
 const PlayerHalfWidth: number = 16;
@@ -153,6 +155,7 @@ export function LaunchProjectile(Owner: CSPlayerPawn, Speed: number, UpSpeed: nu
 		SpawnedAt: Instance.GetGameTime(),
 		Models: TemplateName !== undefined ? SpawnProjectileModels(TemplateName, Start) : [],
 		bDestroyed: false,
+		bLightOn: false,
 	};
 	PlaceProjectileModels(Projectile, true);
 	TintProjectile(Projectile, GetTeamColor(Owner));
@@ -522,6 +525,41 @@ export function TintProjectile(Projectile: FProjectile, Color: FColor): void
 			Model.Ent.SetColor(Color);
 		}
 	}
+}
+
+export function LightProjectile(Projectile: FProjectile, Color: FColor | undefined): void
+{
+	for (const Model of Projectile.Models)
+	{
+		if (!Model.Ent.IsValid() || !Model.Ent.GetClassName().startsWith(LightClassPrefix))
+		{
+			continue;
+		}
+		if (Color)
+		{
+			Model.Ent.FireInput({ input: "SetColor", value: `${Color.r} ${Color.g} ${Color.b}` });
+			Model.Ent.FireInput({ input: "Enable" });
+		}
+		else
+		{
+			Model.Ent.FireInput({ input: "Disable" });
+		}
+	}
+}
+
+export function SetProjectileLit(Projectile: FProjectile, bLit: boolean, Color: FColor): void
+{
+	if (bLit === Projectile.bLightOn)
+	{
+		return;
+	}
+	Projectile.bLightOn = bLit;
+	LightProjectile(Projectile, bLit ? Color : undefined);
+}
+
+export function IsBlinkOn(Age: number, OnTime: number, Period: number): boolean
+{
+	return Age >= 0 && (Period <= 0 ? Age < OnTime : Age % Period < OnTime);
 }
 
 function SpawnProjectileModels(TemplateName: string, Position: FVector): FProjectileModel[]

@@ -36,6 +36,7 @@ export interface FLauncherAmmo
 	readonly MaxClip: number;
 	readonly bReloading: boolean;
 	readonly ChargeFraction: number;
+	readonly ChargeHeld: number;
 	readonly ReloadFraction: number;
 }
 
@@ -137,6 +138,7 @@ export function GetLauncherAmmo(Pawn: CSPlayerPawn, Slot: number): FLauncherAmmo
 				MaxClip: State.MaxClip,
 				bReloading: State.NextReloadTime !== undefined,
 				ChargeFraction: GetChargeFraction(State),
+				ChargeHeld: State.ChargeStartTime !== undefined && State.Settings.ChargeTime > 0 ? Instance.GetGameTime() - State.ChargeStartTime : 0,
 				ReloadFraction: GetReloadFraction(State),
 			};
 			return Ammo;

@@ -1,6 +1,6 @@
-import { Instance, Console, GameRules, Entities, CSDamageTypes, CSDamageFlags, CSGearSlot } from "cs_script/point_script";
+import { Instance, Console, GameRules, Entities, CSDamageTypes, CSDamageFlags, CSGearSlot, CSRoundEndReason } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPlayerController, CSWeaponBase, CSWeaponData, TraceResult } from "cs_script/point_script";
-import { bDebug, ToggleDebugDraw, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn } from "./bm_core";
+import { bDebug, ToggleDebugDraw, TickInterval, LogPrefix, ChatCommandPrefix, INDEX_NONE, ETeam, VectorMath, GetPlayerSlot, GetPawnName, IsPlayerPawn, IsTeammate, IsWeapon, SetTimer, TickTimers, ForEachLivePawn, ForEachPlayer } from "./bm_core";
 import type
 {
 	FPlayerChatEvent,
@@ -74,6 +74,13 @@ let GChosenMode: GameMode | undefined = undefined;
 const GClassBySlot: Map<number, EPlayableClass> = new Map<number, EPlayableClass>();
 const GPendingClassBySlot: Map<number, EPlayerClass> = new Map<number, EPlayerClass>();
 let GLastThinkTime: number = 0;
+// In modes that swap sides, teams are swapped this long after a round ends: just inside CS2's default 7 second mp_round_restart_delay,
+// so as little of the break as possible is spent on the wrong side. If the next round starts first, they're swapped then.
+const SwapTeamsDelay: number = 6.5;
+// Deaths this soon after a swap are from changing sides
+const SwapTeamsDeathWindow: number = 0.5;
+let GbSwapTeamsPending: boolean = false;
+let GSwappedTeamsAt: number = -Infinity;
 
 // Main ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -266,14 +273,18 @@ function HandlePlayerKill(Event: FPlayerKillEvent): void
 	const Slot: number = GetPlayerSlot(Event.player);
 	if (Slot !== INDEX_NONE)
 	{
+		const KillerSlot: number = GetPlayerSlot(Event.attacker);
+		const bChangedSides: boolean = Instance.GetGameTime() - GSwappedTeamsAt < SwapTeamsDeathWindow && (KillerSlot === INDEX_NONE || KillerSlot === Slot);
 		const PlayerClass: EPlayableClass | undefined = GClassBySlot.get(Slot);
-		if (PlayerClass !== undefined && ClassDefinitions[PlayerClass].Settings.Model !== "")
+		if (!bChangedSides && PlayerClass !== undefined && ClassDefinitions[PlayerClass].Settings.Model !== "")
 		{
 			SpawnGibs(Event.player);
 			HideBody(Event.player);
 		}
-		const KillerSlot: number = GetPlayerSlot(Event.attacker);
-		GActiveMode.OnPlayerKill(Slot, KillerSlot !== Slot ? KillerSlot : INDEX_NONE);
+		if (!bChangedSides)
+		{
+			GActiveMode.OnPlayerKill(Slot, KillerSlot !== Slot ? KillerSlot : INDEX_NONE);
+		}
 		ClearPlayer(Slot);
 		RemoveBuildings(Slot);
 		ForgetSpawnZonePlayer(Slot);
@@ -299,6 +310,7 @@ function HandlePlayerDisconnect(Event: FPlayerDisconnectEvent): void
 
 function HandleRoundStart(): void
 {
+	SwapTeams();
 	for (const Definition of Object.values(ClassDefinitions))
 	{
 		Definition.OnRoundStart();
@@ -313,9 +325,43 @@ function HandleRoundStart(): void
 	Console.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
 }
 
-function HandleRoundEnd(): void
+function HandleRoundEnd(Event: { winningTeam: number, reason: CSRoundEndReason }): void
 {
 	GActiveMode.OnRoundEnd();
+	// Only after a round someone won; not when the game commences as players first join, or when warmup ends
+	const bWon: boolean = Event.reason === CSRoundEndReason.TERRORISTS_WIN || Event.reason === CSRoundEndReason.CTS_WIN;
+	if (GActiveMode.bSwapTeamsEachRound && bWon)
+	{
+		// Balancing would fight the swap; the mode's own settings come back at the next round start
+		Console.ServerCommand("mp_autoteambalance 0");
+		Console.ServerCommand("mp_limitteams 0");
+		GbSwapTeamsPending = true;
+		SetTimer(SwapTeamsDelay, SwapTeams);
+	}
+}
+
+// Everyone changes sides, and each side's score goes with its players
+function SwapTeams(): void
+{
+	if (!GbSwapTeamsPending)
+	{
+		return;
+	}
+	GbSwapTeamsPending = false;
+	GSwappedTeamsAt = Instance.GetGameTime();
+	ForEachPlayer((Controller: CSPlayerController): void =>
+	{
+		const Team: number = Controller.GetTeamNumber();
+		if (Team === ETeam.Terrorist || Team === ETeam.CounterTerrorist)
+		{
+			Controller.JoinTeam(Team === ETeam.Terrorist ? ETeam.CounterTerrorist : ETeam.Terrorist);
+		}
+	});
+	const TerroristScore: number = GameRules.GetTeamScore(ETeam.Terrorist);
+	const CounterTerroristScore: number = GameRules.GetTeamScore(ETeam.CounterTerrorist);
+	GameRules.AddTeamScore(ETeam.Terrorist, CounterTerroristScore - TerroristScore);
+	GameRules.AddTeamScore(ETeam.CounterTerrorist, TerroristScore - CounterTerroristScore);
+	Console.Log(`${LogPrefix} teams swapped`);
 }
 
 function HandleGunFire(Event: FGunFireEvent): void

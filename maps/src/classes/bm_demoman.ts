@@ -3,7 +3,7 @@ import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
 import { bDebug, TickInterval, GetTeamColor, GetOrCreate, IsTeammate, IsPlayerPawn, IsInputDown, ForEachLivePawn, DrawDebugSphere } from "../bm_core";
 import { VectorMath } from "../bm_core";
 import type { FVector, FColor } from "../bm_core";
-import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, MakeShootable, Explode } from "../bm_combat";
+import { LaunchProjectile, MoveProjectile, MoveBouncingProjectile, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, TintProjectile, SetProjectileLit, IsBlinkOn, MakeShootable, Explode } from "../bm_combat";
 import type { FProjectile, FBouncingProjectile, FBounceSettings, FDamageFalloff } from "../bm_combat";
 import { TF2PipeFalloff, PlayerClass, GetProjectileBotShot } from "../bm_classes";
 import type { FClassSettings, FHudCounter, FBotShot } from "../bm_classes";
@@ -16,7 +16,6 @@ export interface FDemoSettings extends FClassSettings
 	readonly PipeLaunchUp: number,
 	readonly PipeRadius: number,
 	readonly PipeDamage: number,
-	// A pipe that strikes a player before bouncing does this many times PipeDamage to them, with nothing lost to the blast's own falloff
 	readonly PipeDirectHitScale: number,
 	readonly PipeRolledDamageScale: number,
 	readonly PipeKnockback: number,
@@ -36,6 +35,7 @@ export interface FDemoSettings extends FClassSettings
 	readonly StickyFalloffTime: number;
 	readonly StickyShootRadius: number;
 	readonly StickyWeight: number;
+	readonly StickyLightFlashTime: number;
 }
 
 export interface FPipe extends FBouncingProjectile
@@ -105,6 +105,7 @@ export const DemoSettings: FDemoSettings =
 	StickyFalloffTime: 5,
 	StickyShootRadius: 12,
 	StickyWeight: 1,
+	StickyLightFlashTime: 0.15,
 	PipeLaunchSpeed: 1337,
 	PipeLaunchUp: 150,
 	PipeRadius: 160,
@@ -244,12 +245,14 @@ export class DemomanClass extends PlayerClass<FDemoSettings>
 			if (Sticky.Models.length === 0)
 			{
 				DrawDebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: bArmed ? GetTeamColor(Pawn) : UnarmedStickyColor });
+				continue;
 			}
-			else if (bArmed && !Sticky.bTintedArmed)
+			if (bArmed && !Sticky.bTintedArmed)
 			{
 				TintProjectile(Sticky, GetTeamColor(Pawn));
 				Sticky.bTintedArmed = true;
 			}
+			SetProjectileLit(Sticky, IsBlinkOn(Now - Sticky.ArmedAt, this.Settings.StickyLightFlashTime, 0), GetTeamColor(Pawn));
 		}
 
 		// Held, not pressed: stickies still arming when the key went down go off as soon as they are armed

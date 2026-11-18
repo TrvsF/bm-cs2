@@ -1,5 +1,5 @@
 // src/bm_main.ts
-import { Instance as Instance14, Console as Console17, GameRules as GameRules5, Entities as Entities7, CSDamageTypes as CSDamageTypes4, CSDamageFlags as CSDamageFlags4, CSGearSlot as CSGearSlot6 } from "cs_script/point_script";
+import { Instance as Instance14, Console as Console17, GameRules as GameRules5, Entities as Entities7, CSDamageTypes as CSDamageTypes4, CSDamageFlags as CSDamageFlags4, CSGearSlot as CSGearSlot6, CSRoundEndReason as CSRoundEndReason3 } from "cs_script/point_script";
 
 // src/bm_core.ts
 import { Instance, Console, Entities, CSWeaponType } from "cs_script/point_script";
@@ -1393,6 +1393,7 @@ var SurfaceGap = 2;
 var MinGroundNormalZ2 = 0.7;
 var GroundProbeDistance = 8;
 var MinFacingSpeed = 1;
+var LightClassPrefix = "light_";
 var MissingProjectileRadius = 3;
 var AimPointPasses = 3;
 var PlayerHalfWidth = 16;
@@ -1412,7 +1413,8 @@ function LaunchProjectile(Owner, Speed, UpSpeed, GravityScale, TemplateName, Rad
     GravityScale,
     SpawnedAt: Instance5.GetGameTime(),
     Models: TemplateName !== void 0 ? SpawnProjectileModels(TemplateName, Start) : [],
-    bDestroyed: false
+    bDestroyed: false,
+    bLightOn: false
   };
   PlaceProjectileModels(Projectile, true);
   TintProjectile(Projectile, GetTeamColor(Owner));
@@ -1685,6 +1687,29 @@ function TintProjectile(Projectile, Color) {
     }
   }
 }
+function LightProjectile(Projectile, Color) {
+  for (const Model of Projectile.Models) {
+    if (!Model.Ent.IsValid() || !Model.Ent.GetClassName().startsWith(LightClassPrefix)) {
+      continue;
+    }
+    if (Color) {
+      Model.Ent.FireInput({ input: "SetColor", value: `${Color.r} ${Color.g} ${Color.b}` });
+      Model.Ent.FireInput({ input: "Enable" });
+    } else {
+      Model.Ent.FireInput({ input: "Disable" });
+    }
+  }
+}
+function SetProjectileLit(Projectile, bLit, Color) {
+  if (bLit === Projectile.bLightOn) {
+    return;
+  }
+  Projectile.bLightOn = bLit;
+  LightProjectile(Projectile, bLit ? Color : void 0);
+}
+function IsBlinkOn(Age, OnTime, Period) {
+  return Age >= 0 && (Period <= 0 ? Age < OnTime : Age % Period < OnTime);
+}
 function SpawnProjectileModels(TemplateName, Position) {
   const Models = [];
   for (const Ent of SpawnTemplateEntities(TemplateName, Position, void 0)) {
@@ -1952,6 +1977,7 @@ function GetLauncherAmmo(Pawn, Slot) {
         MaxClip: State.MaxClip,
         bReloading: State.NextReloadTime !== void 0,
         ChargeFraction: GetChargeFraction(State),
+        ChargeHeld: State.ChargeStartTime !== void 0 && State.Settings.ChargeTime > 0 ? Instance6.GetGameTime() - State.ChargeStartTime : 0,
         ReloadFraction: GetReloadFraction(State)
       };
       return Ammo;
@@ -2515,6 +2541,7 @@ var DemoSettings = {
   StickyFalloffTime: 5,
   StickyShootRadius: 12,
   StickyWeight: 1,
+  StickyLightFlashTime: 0.15,
   PipeLaunchSpeed: 1337,
   PipeLaunchUp: 150,
   PipeRadius: 160,
@@ -2614,10 +2641,13 @@ var DemomanClass = class extends PlayerClass {
       const bArmed = Now >= Sticky.ArmedAt;
       if (Sticky.Models.length === 0) {
         DrawDebugSphere({ center: Sticky.Position, radius: 4, duration: TickInterval * 2, color: bArmed ? GetTeamColor(Pawn) : UnarmedStickyColor });
-      } else if (bArmed && !Sticky.bTintedArmed) {
+        continue;
+      }
+      if (bArmed && !Sticky.bTintedArmed) {
         TintProjectile(Sticky, GetTeamColor(Pawn));
         Sticky.bTintedArmed = true;
       }
+      SetProjectileLit(Sticky, IsBlinkOn(Now - Sticky.ArmedAt, this.Settings.StickyLightFlashTime, 0), GetTeamColor(Pawn));
     }
     if (!IsInputDown(Pawn, this.Settings.StickyDetonateKey)) {
       return;
@@ -3276,7 +3306,7 @@ var BoxerSettings = {
   CubeKnockback: 300,
   CubeLifetime: 5,
   CubeThroughWallDamageScale: 0.5,
-  CubeThroughWallColor: { r: 150, g: 60, b: 255 },
+  CubeThroughWallShade: 0.5,
   Shotgun: {
     Damage: 8,
     HeadshotMultiplier: 1,
@@ -3307,6 +3337,7 @@ var BoxerClass = class extends PlayerClass {
   }
   OnPrimaryFire(Pawn, Slot, Now) {
     const Projectile = LaunchProjectile(Pawn, this.Settings.CubeSpeed, 0, this.Settings.CubeGravityScale, CubeTemplateName, this.Settings.CubeRadius, "box" /* Box */);
+    SetProjectileLit(Projectile, true, GetTeamColor(Pawn));
     this.Cubes.push({ ...Projectile, HitPlayers: /* @__PURE__ */ new Set(), bThroughWall: false });
   }
   OnSecondaryFire(Pawn, Slot, Now) {
@@ -3345,7 +3376,11 @@ var BoxerClass = class extends PlayerClass {
     }
     if (Step.WorldHit) {
       Cube.bThroughWall = true;
-      TintProjectile(Cube, this.Settings.CubeThroughWallColor);
+      const Team = GetTeamColor(Cube.Owner);
+      const Shade = this.Settings.CubeThroughWallShade;
+      const Dark = { r: Math.round(Team.r * Shade), g: Math.round(Team.g * Shade), b: Math.round(Team.b * Shade) };
+      TintProjectile(Cube, Dark);
+      LightProjectile(Cube, Dark);
     }
     DrawMissingProjectile(Cube);
     return true;
@@ -3430,6 +3465,8 @@ var ShockerSettings = {
   BallStuckHitRadius: 16,
   BallWeight: 0.5,
   BallKnockedGravityScale: 1,
+  BallLightOnTime: 0.15,
+  BallLightPeriod: 1,
   BallFxTemplate: "shock_ball_explode_template",
   ComboDamage: 125,
   ComboRadius: 240,
@@ -3489,6 +3526,9 @@ var ShockerClass = class extends PlayerClass {
   StepBall(Ball, Now, DeltaTime) {
     if (Ball.bDestroyed) {
       return false;
+    }
+    if (Ball.Owner.IsValid()) {
+      SetProjectileLit(Ball, IsBlinkOn(Now - Ball.SpawnedAt, this.Settings.BallLightOnTime, this.Settings.BallLightPeriod), GetTeamColor(Ball.Owner));
     }
     if (Ball.StuckAt !== void 0) {
       if (!Ball.Owner.IsValid() || Now - Ball.StuckAt >= this.Settings.BallStuckLifetime) {
@@ -3924,9 +3964,9 @@ var GunnerSettings = {
     AimTolerance: 8,
     LockSound: "bm.turret.lock",
     Gun: {
-      Damage: 40,
+      Damage: 44,
       HeadshotMultiplier: 1,
-      Range: 1600,
+      Range: 1200,
       Spread: 0,
       Pellets: 1,
       bPierces: false,
@@ -3961,7 +4001,7 @@ var GunnerSettings = {
     Gun: {
       Damage: 4,
       HeadshotMultiplier: 1,
-      Range: 1200,
+      Range: 800,
       Spread: 2,
       Pellets: 1,
       bPierces: false,
@@ -4159,15 +4199,16 @@ var CounterLabelId = "CounterLabel";
 var CounterValueId = "CounterValue";
 var CounterMaxId = "CounterMax";
 var ChargeBarId = "ChargeBar";
+var ChargeBarDelay = 0.05;
 var ReloadBarId = "ReloadBar";
-var BarSteps = 24;
+var BarSteps = 96;
 var BarCharacter = "0";
 var HiddenBar = -1;
 var PayloadBarId = "PayloadBar";
 var PayloadSectionPrefix = "PayloadSection";
 var PayloadTickPrefix = "PayloadTick";
 var PayloadPushersLabelId = "PayloadPushers";
-var PayloadBarSteps = 60;
+var PayloadBarSteps = 240;
 var MaxPayloadTicks = 5;
 var PayloadStateClasses = ["Pushing", "Blocked", "RollingBack", "Overtime", "Delivered"];
 var HurtHealthFraction = 0.5;
@@ -4301,7 +4342,7 @@ function ShowClassIndicator(Slot, PlayerClass3, IsT) {
   }
 }
 function ShowAmmo(Slot, Ammo) {
-  ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeFraction > 0 ? Ammo.ChargeFraction : void 0);
+  ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeHeld >= ChargeBarDelay ? Ammo.ChargeFraction : void 0);
   ShowBar(Slot, ReloadBarId, Ammo && Ammo.bReloading ? Ammo.ReloadFraction : void 0);
   const Key = Ammo ? `${Ammo.Clip}|${Ammo.MaxClip}|${Ammo.bReloading}` : "";
   if ((GShownAmmo.get(Slot) ?? "") === Key) {
@@ -4561,7 +4602,7 @@ function ShowPayload(Slot, Status) {
   for (const StateClass of PayloadStateClasses) {
     SetPayloadClass(Ui, Slot, Sent, PayloadBarId, StateClass, StateClass === State);
   }
-  SendPayloadText(Ui, Slot, Sent, PayloadPushersLabelId, "pushers", State === "Pushing" ? `x${Status.Pushers}` : "");
+  SendPayloadText(Ui, Slot, Sent, PayloadPushersLabelId, "pushers", State === "Pushing" ? `x${Status.Pushers}` : State === "RollingBack" ? "<" : "");
   SetPayloadClass(Ui, Slot, Sent, PayloadBarId, "Shown", true);
 }
 function GetPayloadState(Status) {
@@ -5664,6 +5705,8 @@ function Block(Pawn, Visitor, Zone) {
 var GameMode = class {
   // Whether picking a class changes it there and then, wherever the player is, rather than waiting for their spawn zone or next life
   bInstantClassSwitch = false;
+  // Whether everyone changes sides (T and CT) between rounds
+  bSwapTeamsEachRound = false;
   // Server settings for this mode, applied at each round start after the shared ones
   GetMatchCommands() {
     return [];
@@ -5697,6 +5740,56 @@ var GameMode = class {
   }
   // Called every tick for each human player, for this mode's part of the HUD
   TickPlayerHud(Pawn, Slot) {
+  }
+};
+var DamageLeaderboard = class {
+  MaxRows;
+  Scores = /* @__PURE__ */ new Map();
+  constructor(MaxRows) {
+    this.MaxRows = MaxRows;
+  }
+  Clear() {
+    this.Scores.clear();
+  }
+  AddDamage(Slot, Damage) {
+    this.GetScore(Slot).Damage += Damage;
+  }
+  AddKill(Slot) {
+    this.GetScore(Slot).Kills++;
+  }
+  Forget(Slot) {
+    this.Scores.delete(Slot);
+  }
+  Show() {
+    const Rows = this.BuildRows();
+    ShowLeaderboard(Rows, this.MaxRows);
+    ForEachPlayer((Controller, Slot) => {
+      if (!Controller.IsBot()) {
+        ShowLeaderboardYou(Slot, Rows, this.MaxRows);
+      }
+    });
+  }
+  Hide() {
+    ShowLeaderboard(void 0);
+  }
+  GetScore(Slot) {
+    return GetOrCreate(this.Scores, Slot, () => {
+      return { Kills: 0, Damage: 0 };
+    });
+  }
+  BuildRows() {
+    const Rows = [];
+    ForEachPlayer((Controller, Slot) => {
+      const Team = Controller.GetTeamNumber();
+      if (Team !== 2 /* Terrorist */ && Team !== 3 /* CounterTerrorist */) {
+        return;
+      }
+      const Score = this.Scores.get(Slot);
+      Rows.push({ Slot, Name: Controller.GetPlayerName(), Kills: Score ? Score.Kills : 0, Damage: Score ? Math.round(Score.Damage) : 0 });
+    });
+    return Rows.sort((A, B) => {
+      return B.Damage - A.Damage || B.Kills - A.Kills || A.Slot - B.Slot;
+    });
   }
 };
 
@@ -5795,7 +5888,8 @@ var PayloadSettings = {
   PusherHealPerSecond: 10,
   TurnBlendDistance: 48,
   BuyTime: 3,
-  HumiliationTime: 5
+  HumiliationTime: 5,
+  LeaderboardRows: 3
 };
 var AttackingTeam = 2 /* Terrorist */;
 var DefendingTeam = 3 /* CounterTerrorist */;
@@ -5812,6 +5906,7 @@ var GCheckpointsReached = 0;
 var GLastAttendedTime = 0;
 var GbRoundTimerSet = false;
 var GbRoundOver = false;
+var GLeaderboard = new DamageLeaderboard(PayloadSettings.LeaderboardRows);
 var GbDelivered = false;
 var GWinner = void 0;
 var GRoundEndTime = 0;
@@ -5822,6 +5917,7 @@ var GHealAccumulators = /* @__PURE__ */ new Map();
 var PayloadMode = class extends GameMode {
   DisplayName = "Payload";
   CommandName = "pl";
+  bSwapTeamsEachRound = true;
   IsMapSetUp() {
     ScanPayload();
     return IsPayloadReady();
@@ -5839,6 +5935,8 @@ var PayloadMode = class extends GameMode {
       `mp_roundtime ${Minutes}`,
       `mp_roundtime_defuse ${Minutes}`,
       `mp_roundtime_hostage ${Minutes}`,
+      "mp_autoteambalance 1",
+      "mp_limitteams 2",
       "bot_stop 0"
     ];
   }
@@ -5849,6 +5947,7 @@ var PayloadMode = class extends GameMode {
     for (const Controller of Instance12.GetAllPlayerControllers()) {
       ShowPayload(Controller.GetPlayerSlot(), void 0);
     }
+    GLeaderboard.Hide();
   }
   GetBotObjective(Pawn) {
     if (GbRoundOver || !GCart || !GCart.Entity.IsValid()) {
@@ -5867,14 +5966,29 @@ var PayloadMode = class extends GameMode {
     GWinner = void 0;
     GHealAccumulators.clear();
     GStatus = void 0;
+    GLeaderboard.Clear();
     PlaceCart(true);
   }
   OnRoundEnd() {
     GbRoundOver = true;
     GWinner = void 0;
   }
+  OnPlayerDamage(VictimSlot, AttackerSlot, Damage) {
+    if (IsCounting()) {
+      GLeaderboard.AddDamage(AttackerSlot, Damage);
+    }
+  }
+  OnPlayerKill(VictimSlot, AttackerSlot) {
+    if (AttackerSlot !== INDEX_NONE && IsCounting()) {
+      GLeaderboard.AddKill(AttackerSlot);
+    }
+  }
+  OnPlayerLeave(Slot) {
+    GLeaderboard.Forget(Slot);
+  }
   Tick(Now, DeltaTime) {
     TickPayload(Now, DeltaTime);
+    GLeaderboard.Show();
   }
   TickPlayerHud(Pawn, Slot) {
     ShowPayload(Slot, IsPayloadReady() ? GStatus : void 0);
@@ -6011,6 +6125,9 @@ function TickHumiliation(Winner, Now) {
   GWinner = void 0;
   GameRules3.AddTeamScore(Winner, 1);
   GameRules3.TerminateRound(Winner === 2 /* Terrorist */ ? CSRoundEndReason.TERRORISTS_WIN : CSRoundEndReason.CTS_WIN);
+}
+function IsCounting() {
+  return !GbRoundOver && !GameRules3.IsWarmupPeriod();
 }
 function KillTeam(Team) {
   ForEachLivePawn((Pawn) => {
@@ -6274,13 +6391,14 @@ var TeamDeathmatchSettings = {
   LeaderboardRows: 3,
   TeamSize: 8
 };
-var GScores2 = /* @__PURE__ */ new Map();
+var GLeaderboard2 = new DamageLeaderboard(TeamDeathmatchSettings.LeaderboardRows);
 var GTeamKills = /* @__PURE__ */ new Map();
 var GWinner2 = void 0;
 var GbRoundEnded = false;
 var TeamDeathmatchMode = class extends GameMode {
   DisplayName = "Team deathmatch";
   CommandName = "tdm";
+  bSwapTeamsEachRound = true;
   IsMapSetUp() {
     return true;
   }
@@ -6307,10 +6425,10 @@ var TeamDeathmatchMode = class extends GameMode {
     ];
   }
   OnDeactivated() {
-    ShowLeaderboard(void 0);
+    GLeaderboard2.Hide();
   }
   OnRoundStart() {
-    GScores2.clear();
+    GLeaderboard2.Clear();
     GTeamKills.clear();
     for (const Team of [2 /* Terrorist */, 3 /* CounterTerrorist */]) {
       GameRules4.AddTeamScore(Team, -GameRules4.GetTeamScore(Team));
@@ -6319,19 +6437,19 @@ var TeamDeathmatchMode = class extends GameMode {
     GbRoundEnded = false;
   }
   OnPlayerDamage(VictimSlot, AttackerSlot, Damage) {
-    if (IsCounting()) {
-      GetScore2(AttackerSlot).Damage += Damage;
+    if (IsCounting2()) {
+      GLeaderboard2.AddDamage(AttackerSlot, Damage);
     }
   }
   OnPlayerKill(VictimSlot, AttackerSlot) {
-    if (AttackerSlot === INDEX_NONE || !IsCounting()) {
+    if (AttackerSlot === INDEX_NONE || !IsCounting2()) {
       return;
     }
     const Team = Instance13.GetPlayerController(AttackerSlot)?.GetTeamNumber();
     if (Team !== 2 /* Terrorist */ && Team !== 3 /* CounterTerrorist */) {
       return;
     }
-    GetScore2(AttackerSlot).Kills++;
+    GLeaderboard2.AddKill(AttackerSlot);
     const TeamKills = (GTeamKills.get(Team) ?? 0) + 1;
     GTeamKills.set(Team, TeamKills);
     GameRules4.AddTeamScore(Team, 1);
@@ -6340,22 +6458,16 @@ var TeamDeathmatchMode = class extends GameMode {
     }
   }
   OnPlayerLeave(Slot) {
-    GScores2.delete(Slot);
+    GLeaderboard2.Forget(Slot);
   }
   Tick(Now, DeltaTime) {
     if (GWinner2 !== void 0 && !GbRoundEnded) {
       EndRound(GWinner2);
     }
-    const Rows = BuildLeaderboard2();
-    ShowLeaderboard(Rows, TeamDeathmatchSettings.LeaderboardRows);
-    ForEachPlayer((Controller, Slot) => {
-      if (!Controller.IsBot()) {
-        ShowLeaderboardYou(Slot, Rows, TeamDeathmatchSettings.LeaderboardRows);
-      }
-    });
+    GLeaderboard2.Show();
   }
 };
-function IsCounting() {
+function IsCounting2() {
   return GWinner2 === void 0 && !GameRules4.IsWarmupPeriod();
 }
 function EndRound(Winner) {
@@ -6363,25 +6475,6 @@ function EndRound(Winner) {
   const bTerrorists = Winner === 2 /* Terrorist */;
   Console16.Log(`${LogPrefix} ${bTerrorists ? "terrorists" : "counter-terrorists"} reached ${TeamDeathmatchSettings.KillsToWin} kills and win`);
   GameRules4.TerminateRound(bTerrorists ? CSRoundEndReason2.TERRORISTS_WIN : CSRoundEndReason2.CTS_WIN);
-}
-function GetScore2(Slot) {
-  return GetOrCreate(GScores2, Slot, () => {
-    return { Kills: 0, Damage: 0 };
-  });
-}
-function BuildLeaderboard2() {
-  const Rows = [];
-  ForEachPlayer((Controller, Slot) => {
-    const Team = Controller.GetTeamNumber();
-    if (Team !== 2 /* Terrorist */ && Team !== 3 /* CounterTerrorist */) {
-      return;
-    }
-    const Score = GScores2.get(Slot);
-    Rows.push({ Slot, Name: Controller.GetPlayerName(), Kills: Score ? Score.Kills : 0, Damage: Score ? Math.round(Score.Damage) : 0 });
-  });
-  return Rows.sort((A, B) => {
-    return B.Damage - A.Damage || B.Kills - A.Kills || A.Slot - B.Slot;
-  });
 }
 
 // src/bm_main.ts
@@ -6400,6 +6493,10 @@ var GChosenMode = void 0;
 var GClassBySlot = /* @__PURE__ */ new Map();
 var GPendingClassBySlot = /* @__PURE__ */ new Map();
 var GLastThinkTime = 0;
+var SwapTeamsDelay = 6.5;
+var SwapTeamsDeathWindow = 0.5;
+var GbSwapTeamsPending = false;
+var GSwappedTeamsAt = -Infinity;
 function Tick() {
   const Now = Instance14.GetGameTime();
   Instance14.SetNextThink(Now + TickInterval);
@@ -6532,13 +6629,16 @@ function HandlePlayerReset(Event) {
 function HandlePlayerKill(Event) {
   const Slot = GetPlayerSlot(Event.player);
   if (Slot !== INDEX_NONE) {
+    const KillerSlot = GetPlayerSlot(Event.attacker);
+    const bChangedSides = Instance14.GetGameTime() - GSwappedTeamsAt < SwapTeamsDeathWindow && (KillerSlot === INDEX_NONE || KillerSlot === Slot);
     const PlayerClass3 = GClassBySlot.get(Slot);
-    if (PlayerClass3 !== void 0 && ClassDefinitions[PlayerClass3].Settings.Model !== "") {
+    if (!bChangedSides && PlayerClass3 !== void 0 && ClassDefinitions[PlayerClass3].Settings.Model !== "") {
       SpawnGibs(Event.player);
       HideBody(Event.player);
     }
-    const KillerSlot = GetPlayerSlot(Event.attacker);
-    GActiveMode.OnPlayerKill(Slot, KillerSlot !== Slot ? KillerSlot : INDEX_NONE);
+    if (!bChangedSides) {
+      GActiveMode.OnPlayerKill(Slot, KillerSlot !== Slot ? KillerSlot : INDEX_NONE);
+    }
     ClearPlayer(Slot);
     RemoveBuildings(Slot);
     ForgetSpawnZonePlayer(Slot);
@@ -6559,6 +6659,7 @@ function HandlePlayerDisconnect(Event) {
   GPendingClassBySlot.delete(Event.playerSlot);
 }
 function HandleRoundStart() {
+  SwapTeams();
   for (const Definition of Object.values(ClassDefinitions)) {
     Definition.OnRoundStart();
   }
@@ -6571,8 +6672,33 @@ function HandleRoundStart() {
   ApplyMatchSettings();
   Console17.Log(`${LogPrefix} round has started [${GActiveMode.DisplayName}]`);
 }
-function HandleRoundEnd() {
+function HandleRoundEnd(Event) {
   GActiveMode.OnRoundEnd();
+  const bWon = Event.reason === CSRoundEndReason3.TERRORISTS_WIN || Event.reason === CSRoundEndReason3.CTS_WIN;
+  if (GActiveMode.bSwapTeamsEachRound && bWon) {
+    Console17.ServerCommand("mp_autoteambalance 0");
+    Console17.ServerCommand("mp_limitteams 0");
+    GbSwapTeamsPending = true;
+    SetTimer(SwapTeamsDelay, SwapTeams);
+  }
+}
+function SwapTeams() {
+  if (!GbSwapTeamsPending) {
+    return;
+  }
+  GbSwapTeamsPending = false;
+  GSwappedTeamsAt = Instance14.GetGameTime();
+  ForEachPlayer((Controller) => {
+    const Team = Controller.GetTeamNumber();
+    if (Team === 2 /* Terrorist */ || Team === 3 /* CounterTerrorist */) {
+      Controller.JoinTeam(Team === 2 /* Terrorist */ ? 3 /* CounterTerrorist */ : 2 /* Terrorist */);
+    }
+  });
+  const TerroristScore = GameRules5.GetTeamScore(2 /* Terrorist */);
+  const CounterTerroristScore = GameRules5.GetTeamScore(3 /* CounterTerrorist */);
+  GameRules5.AddTeamScore(2 /* Terrorist */, CounterTerroristScore - TerroristScore);
+  GameRules5.AddTeamScore(3 /* CounterTerrorist */, TerroristScore - CounterTerroristScore);
+  Console17.Log(`${LogPrefix} teams swapped`);
 }
 function HandleGunFire(Event) {
   const Weapon = Event.weapon;
