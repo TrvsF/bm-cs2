@@ -208,12 +208,14 @@ export function StepImpactProjectile(Projectile: FProjectile, Now: number, Delta
 	return true;
 }
 
-export function EmbedProjectile(Projectile: FProjectile, Hit: TraceResult, Depth: number): void
+export function SinkProjectile(Projectile: FProjectile, Hit: TraceResult, Depth: number, MaxDistance: number): void
 {
-	const Contact: FVector = VectorMath.Subtract(Hit.end, VectorMath.Scale(Hit.normal, Projectile.Radius));
-	const Embedded: FVector = VectorMath.Add(Contact, VectorMath.Scale(VectorMath.GetSafeNormal(Projectile.Velocity), Depth));
-	PlaceProjectileModels({ ...Projectile, Position: Embedded }, false);
+	const Direction: FVector = VectorMath.GetSafeNormal(Projectile.Velocity);
+	const Into: number = -VectorMath.Dot(Direction, Hit.normal);
+	const Distance: number = Into > 0 ? Math.min(Depth / Into, MaxDistance) : 0;
+	Projectile.Position = VectorMath.Add(Projectile.Position, VectorMath.Scale(Direction, Distance));
 	Projectile.Velocity = { x: 0, y: 0, z: 0 };
+	PlaceProjectileModels(Projectile, false);
 }
 
 export function IsProjectileExpired(Projectile: FProjectile, Now: number, Lifetime: number): boolean

@@ -211,6 +211,19 @@ function SpawnTemplateEntities(TemplateName, Position, Rotation) {
   const Spawned = Rotation ? Template.ForceSpawn(Position, Rotation) : Template.ForceSpawn(Position);
   return Spawned ?? [];
 }
+function LightEntities(Ents, Color) {
+  for (const Ent of Ents) {
+    if (!Ent.IsValid() || !Ent.GetClassName().startsWith("light_")) {
+      continue;
+    }
+    if (Color) {
+      Ent.FireInput({ input: "SetColor", value: `${Color.r} ${Color.g} ${Color.b}` });
+      Ent.FireInput({ input: "Enable" });
+    } else {
+      Ent.FireInput({ input: "Disable" });
+    }
+  }
+}
 function IsModelEntity(Ent) {
   return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
 }
@@ -1454,11 +1467,13 @@ function StepImpactProjectile(Projectile, Now, DeltaTime, Lifetime, OnImpact) {
   DrawMissingProjectile(Projectile);
   return true;
 }
-function EmbedProjectile(Projectile, Hit, Depth) {
-  const Contact = VectorMath.Subtract(Hit.end, VectorMath.Scale(Hit.normal, Projectile.Radius));
-  const Embedded = VectorMath.Add(Contact, VectorMath.Scale(VectorMath.GetSafeNormal(Projectile.Velocity), Depth));
-  PlaceProjectileModels({ ...Projectile, Position: Embedded }, false);
+function SinkProjectile(Projectile, Hit, Depth, MaxDistance) {
+  const Direction = VectorMath.GetSafeNormal(Projectile.Velocity);
+  const Into = -VectorMath.Dot(Direction, Hit.normal);
+  const Distance = Into > 0 ? Math.min(Depth / Into, MaxDistance) : 0;
+  Projectile.Position = VectorMath.Add(Projectile.Position, VectorMath.Scale(Direction, Distance));
   Projectile.Velocity = { x: 0, y: 0, z: 0 };
+  PlaceProjectileModels(Projectile, false);
 }
 function IsProjectileExpired(Projectile, Now, Lifetime) {
   return !Projectile.Owner.IsValid() || Now - Projectile.SpawnedAt > Lifetime;
@@ -3461,7 +3476,8 @@ var ShockerSettings = {
   BallKnockback: 500,
   BallLifetime: 5,
   BallStuckLifetime: 6,
-  BallStickDepth: -16,
+  BallStickDepth: 16,
+  BallStickMaxDistance: 128,
   BallStuckHitRadius: 16,
   BallWeight: 0.5,
   BallKnockedGravityScale: 1,
@@ -3550,7 +3566,7 @@ var ShockerClass = class extends PlayerClass {
       return true;
     }
     if (!GetTraceBuilding(Hit) && (Hit.hitEntity === void 0 || Hit.hitEntity.IsWorld())) {
-      EmbedProjectile(Ball, Hit, this.Settings.BallStickDepth);
+      SinkProjectile(Ball, Hit, this.Settings.BallStickDepth, this.Settings.BallStickMaxDistance);
       Ball.StuckAt = Now;
       return true;
     }
@@ -3753,7 +3769,7 @@ var TeleporterKind = class extends BuildingKind {
     return this.bEntrance ? 1 /* AtSpawn */ : 2 /* AwayFromSpawn */;
   }
   OnPlaced(Building, Now) {
-    this.States.set(Building, { ReadyAt: Now });
+    this.States.set(Building, { ReadyAt: Now, bLightOn: false });
   }
   OnRemoved(Building) {
     this.States.delete(Building);
@@ -3767,6 +3783,9 @@ var TeleporterKind = class extends BuildingKind {
   Tick(Building, Now, DeltaTime) {
     const Exit = this.FindPartner(Building);
     const State = this.States.get(Building);
+    if (this.bEntrance && State) {
+      this.SetLit(Building, State, Exit !== void 0 && Now >= State.ReadyAt);
+    }
     if (!this.bEntrance || !Exit || !State) {
       return;
     }
@@ -3789,7 +3808,13 @@ var TeleporterKind = class extends BuildingKind {
     }
     return this.IsRecharging(Building, Now) ? "Recharging" : "Ready";
   }
-  // Both ends count as recharging after a trip, since the wait is kept on the entrance
+  SetLit(Building, State, bLit) {
+    if (bLit === State.bLightOn) {
+      return;
+    }
+    State.bLightOn = bLit;
+    LightEntities(GetBuildingEntities(Building), bLit ? GetColorForTeam(Building.Team) : void 0);
+  }
   IsRecharging(Building, Now) {
     const Entrance = this.bEntrance ? Building : this.FindPartner(Building);
     const EntranceKind = this.bEntrance ? this : this.Partner;
@@ -4710,7 +4735,7 @@ function IsCustomHudLayout2(Ent) {
 }
 
 // src/bm_botcombat.ts
-import { Instance as Instance11, Console as Console13, GameRules as GameRules2, CSInputs as CSInputs8, CSGearSlot as CSGearSlot5 } from "cs_script/point_script";
+import { Instance as Instance11, Console as Console13, CSInputs as CSInputs8, CSGearSlot as CSGearSlot5 } from "cs_script/point_script";
 
 // src/bm_bots.ts
 import { Instance as Instance10, Entities as Entities3 } from "cs_script/point_script";
@@ -5088,10 +5113,6 @@ function TickBotCombat(Pawn, Slot, Now, Definition, Objective = void 0) {
   }
   Fighter.LastTickTime = Now;
   GBotClassInputs = 0;
-  if (GameRules2.IsFreezePeriod()) {
-    IdleBot(Pawn, Slot, Fighter, Weapons);
-    return;
-  }
   if (TickBotJump(Pawn, Slot, Now, Definition, Fighter)) {
     return;
   }
