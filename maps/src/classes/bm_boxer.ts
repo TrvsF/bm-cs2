@@ -88,8 +88,9 @@ export const BoxerSettings: FBoxerSettings =
 		Damage: 8,
 		HeadshotMultiplier: 1,
 		Range: 2048,
-		Spread: 6,
+		Spread: 4,
 		Pellets: 8,
+		Recoil: { Up: 2, Side: 0, MaxUp: 3, Recovery: 0.66 },
 		bPierces: false,
 		Falloff: TF2HitscanFalloff,
 		Knockback: 300,
@@ -101,6 +102,7 @@ export const BoxerSettings: FBoxerSettings =
 		BeamLifetime: 0.06,
 		ImpactTemplate: "",
 		ImpactLifetime: 0,
+		bBulletHoles: true,
 	},
 };
 

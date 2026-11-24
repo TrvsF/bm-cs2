@@ -79,6 +79,7 @@ export const RailerSettings: FRailerSettings =
 		Range: 4096,
 		Spread: 2,
 		Pellets: 1,
+		Recoil: { Up: 1, Side: 1.2, MaxUp: 6, Recovery: 2 },
 		bPierces: false,
 		Falloff: RailerShotFalloff,
 		Knockback: 400,
@@ -90,6 +91,7 @@ export const RailerSettings: FRailerSettings =
 		BeamLifetime: 0.06,
 		ImpactTemplate: "",
 		ImpactLifetime: 0,
+		bBulletHoles: true,
 	},
 
 	Railgun:

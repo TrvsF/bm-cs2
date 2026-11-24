@@ -108,6 +108,7 @@ export interface FHitscanResult
 	readonly Hits: FHitscanHit[];
 	readonly End: FVector;
 	readonly HitBuilding: FBuilding | undefined;
+	readonly Wall: TraceResult | undefined;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,12 +209,14 @@ export function StepImpactProjectile(Projectile: FProjectile, Now: number, Delta
 	return true;
 }
 
-export function EmbedProjectile(Projectile: FProjectile, Hit: TraceResult, Depth: number): void
+export function SinkProjectile(Projectile: FProjectile, Hit: TraceResult, Depth: number, MaxDistance: number): void
 {
-	const Contact: FVector = VectorMath.Subtract(Hit.end, VectorMath.Scale(Hit.normal, Projectile.Radius));
-	const Embedded: FVector = VectorMath.Add(Contact, VectorMath.Scale(VectorMath.GetSafeNormal(Projectile.Velocity), Depth));
-	PlaceProjectileModels({ ...Projectile, Position: Embedded }, false);
+	const Direction: FVector = VectorMath.GetSafeNormal(Projectile.Velocity);
+	const Into: number = -VectorMath.Dot(Direction, Hit.normal);
+	const Distance: number = Into > 0 ? Math.min(Depth / Into, MaxDistance) : 0;
+	Projectile.Position = VectorMath.Add(Projectile.Position, VectorMath.Scale(Direction, Distance));
 	Projectile.Velocity = { x: 0, y: 0, z: 0 };
+	PlaceProjectileModels(Projectile, false);
 }
 
 export function IsProjectileExpired(Projectile: FProjectile, Now: number, Lifetime: number): boolean
@@ -761,20 +764,36 @@ export function TraceHitscan(Shooter: CSPlayerPawn, Start: FVector, End: FVector
 	ShootDownProjectiles(Shooter, Start, Building ? Building.Point : StopPoint);
 	if (!Building)
 	{
-		return { Hits: Hits, End: StopPoint, HitBuilding: undefined };
+		const bWall: boolean = WorldTrace !== undefined && (WorldTrace.hitEntity === undefined || WorldTrace.hitEntity.IsWorld());
+		return { Hits: Hits, End: StopPoint, HitBuilding: undefined, Wall: bWall ? WorldTrace : undefined };
 	}
 	const Reach: number = VectorMath.Size(VectorMath.Subtract(Building.Point, Start));
 	const HitsBefore: FHitscanHit[] = Hits.filter((Hit: FHitscanHit): boolean =>
 	{
 		return VectorMath.Size(VectorMath.Subtract(Hit.Trace.end, Start)) <= Reach;
 	});
-	return { Hits: HitsBefore, End: Building.Point, HitBuilding: Building.Building };
+	return { Hits: HitsBefore, End: Building.Point, HitBuilding: Building.Building, Wall: undefined };
 }
 
 export function GetSpreadDirection(Aim: FRotator, SpreadDegrees: number): FVector
 {
 	const Radius: number = SpreadDegrees * Math.sqrt(Math.random());
 	const Around: number = Math.random() * Math.PI * 2;
+	return VectorMath.GetForwardVector(
+	{
+		pitch: Aim.pitch + Radius * Math.sin(Around),
+		yaw: Aim.yaw + Radius * Math.cos(Around),
+		roll: 0,
+	});
+}
+
+export function GetRingDirection(Aim: FRotator, Radius: number, Index: number, Count: number): FVector
+{
+	if (Index === 0)
+	{
+		return VectorMath.GetForwardVector(Aim);
+	}
+	const Around: number = ((Index - 1) / (Count - 1)) * Math.PI * 2;
 	return VectorMath.GetForwardVector(
 	{
 		pitch: Aim.pitch + Radius * Math.sin(Around),

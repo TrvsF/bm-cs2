@@ -1,10 +1,10 @@
-import { Console, CSGearSlot, CSDamageTypes, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
+import { Instance, Console, CSGearSlot, CSDamageTypes, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
 import { LogPrefix, VectorMath, GetTeamColor, GetPlayerSlot, GetOrCreate, GetAimAngles, IsWeapon, IsKnife } from "./bm_core";
 import type { FVector, FRotator, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
-import { EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, ApplyKnockback } from "./bm_combat";
+import { EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, GetRingDirection, ApplyKnockback } from "./bm_combat";
 import type { FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult, FBallistics } from "./bm_combat";
-import { SpawnBloodSplatter, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
+import { SpawnBloodSplatter, SpawnBulletHole, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
 import { DamageBuilding } from "./bm_buildings";
 import type { FBuildKeys } from "./bm_buildings";
@@ -37,7 +37,6 @@ export interface FClassSettings
 	readonly Melee: string;
 	readonly Health: number;
 	readonly SizeScale: number;
-	// "" keeps the player's own model. The map has to load it: a prop_dynamic using it, somewhere out of sight.
 	readonly Model: string;
 	readonly PrimaryLauncher: FLauncherSettings | undefined;
 	readonly SecondaryLauncher: FLauncherSettings | undefined;
@@ -54,6 +53,14 @@ export interface FHudCounter
 	readonly Max: number;
 }
 
+export interface FRecoilSettings
+{
+	readonly Up: number;
+	readonly Side: number;
+	readonly MaxUp: number;
+	readonly Recovery: number;
+}
+
 export interface FHitscanWeaponSettings
 {
 	readonly Damage: number;
@@ -61,6 +68,7 @@ export interface FHitscanWeaponSettings
 	readonly Range: number;
 	readonly Spread: number;
 	readonly Pellets: number;
+	readonly Recoil?: FRecoilSettings;
 	readonly bPierces: boolean;
 	readonly Falloff: FDamageCurve;
 	readonly Knockback: number;
@@ -72,9 +80,9 @@ export interface FHitscanWeaponSettings
 	readonly BeamLifetime: number;
 	readonly ImpactTemplate: string;
 	readonly ImpactLifetime: number;
+	readonly bBulletHoles?: boolean;
 }
 
-// What one shot of a weapon does, for bots to rate their targets with
 export interface FBotTrickShot
 {
 	readonly WeaponName: string;
@@ -88,10 +96,16 @@ export interface FBotShot
 	readonly Range: number;
 	readonly Falloff: FDamageCurve;
 	readonly BlastRadius: number;
-	// How hard firing it throws its own shooter (recoil, or its own blast). Above 0, bots jump with it.
 	readonly SelfPush: number;
-	// How its projectile flies, for leading and lobbing. undefined = it hits at once.
 	readonly Ballistics: FBallistics | undefined;
+}
+
+interface FRecoilState
+{
+	Settings: FHitscanWeaponSettings;
+	Up: number;
+	Side: number;
+	Time: number;
 }
 
 // Data ////////////////////////////////////////////////////////////////////////////////////////////
@@ -126,6 +140,7 @@ const GOwnModels: Map<number, Map<number, string>> = new Map<number, Map<number,
 const GClassModels: Set<string> = new Set<string>();
 const GWarnedModels: Set<string> = new Set<string>();
 const UntintedColor: FColor = { r: 255, g: 255, b: 255 };
+const GRecoilBySlot: Map<number, FRecoilState> = new Map<number, FRecoilState>();
 
 export const BeamStartDrop: FVector = { x: 0, y: 0, z: 12 };
 
@@ -464,7 +479,12 @@ export function FireHitscanWeapon(Shooter: CSPlayerPawn, Settings: FHitscanWeapo
 {
 	const Start: FVector = Shooter.GetEyePosition();
 	const Aim: FRotator = GetAimAngles(Shooter);
-	FireHitscan(Shooter, Settings, Weapon, Start, Aim, VectorMath.Subtract(Start, BeamStartDrop), Intercept);
+	const Recoil: FRecoilState = GetRecoil(Shooter, Settings);
+	const bPellets: boolean = Settings.Pellets > 1;
+	const Kicked: FRotator = bPellets ? Aim : { pitch: Aim.pitch - Recoil.Up, yaw: Aim.yaw + Recoil.Side, roll: 0 };
+	const Fired: FHitscanWeaponSettings = bPellets ? { ...Settings, Spread: Settings.Spread + Recoil.Up } : Settings;
+	FireHitscan(Shooter, Fired, Weapon, Start, Kicked, VectorMath.Subtract(Start, BeamStartDrop), Intercept);
+	KickRecoil(Recoil);
 
 	const Backwards: FVector = VectorMath.Scale(VectorMath.GetForwardVector(Aim), -1);
 	ApplyKnockback(Shooter, Backwards, Settings.Damage * Settings.Pellets, Settings.SelfKnockback, true);
@@ -475,7 +495,7 @@ export function FireHitscan(Attacker: CSPlayerPawn, Settings: FHitscanWeaponSett
 	let DamageTotal: number = 0;
 	for (let Pellet: number = 0; Pellet < Settings.Pellets; Pellet++)
 	{
-		const Direction: FVector = GetSpreadDirection(Aim, Settings.Spread);
+		const Direction: FVector = Settings.Pellets > 1 ? GetRingDirection(Aim, Settings.Spread, Pellet, Settings.Pellets) : GetSpreadDirection(Aim, Settings.Spread);
 		const Result: FHitscanResult = TraceHitscanWeapon(Attacker, Settings, Start, Direction);
 		const End: FVector = (Intercept ? Intercept(Start, Result.End) : undefined) ?? Result.End;
 		const MaxDistance: number = VectorMath.Size(VectorMath.Subtract(End, Start));
@@ -512,8 +532,42 @@ export function FireHitscan(Attacker: CSPlayerPawn, Settings: FHitscanWeaponSett
 		{
 			SpawnTemporaryTemplate(Settings.ImpactTemplate, End, Settings.ImpactLifetime);
 		}
+		if (Settings.bBulletHoles && Result.Wall)
+		{
+			SpawnBulletHole(Result.Wall.end, Result.Wall.normal);
+		}
 	}
 	return DamageTotal;
+}
+
+function GetRecoil(Shooter: CSPlayerPawn, Settings: FHitscanWeaponSettings): FRecoilState
+{
+	const Now: number = Instance.GetGameTime();
+	const Slot: number = GetPlayerSlot(Shooter);
+	let Recoil: FRecoilState | undefined = GRecoilBySlot.get(Slot);
+	if (!Recoil || Recoil.Settings !== Settings)
+	{
+		Recoil = { Settings: Settings, Up: 0, Side: 0, Time: Now };
+		GRecoilBySlot.set(Slot, Recoil);
+	}
+	const Settle: number = (Settings.Recoil ? Settings.Recoil.Recovery : 0) * (Now - Recoil.Time);
+	Recoil.Up = Math.max(0, Recoil.Up - Settle);
+	Recoil.Side = Math.sign(Recoil.Side) * Math.max(0, Math.abs(Recoil.Side) - Settle);
+	Recoil.Time = Now;
+	return Recoil;
+}
+
+function KickRecoil(Recoil: FRecoilState): void
+{
+	const Settings: FRecoilSettings | undefined = Recoil.Settings.Recoil;
+	if (!Settings || Settings.MaxUp <= 0)
+	{
+		return;
+	}
+	const Climb: number = Math.max(0, 1 - Recoil.Up / Settings.MaxUp);
+	const Jitter: number = Recoil.Settings.Pellets > 1 ? 1 : 0.5 + Math.random();
+	Recoil.Up += Settings.Up * Climb * Jitter;
+	Recoil.Side += Settings.Side * (Math.random() * 2 - 1);
 }
 
 export function GetHitscanBotShot(Settings: FHitscanWeaponSettings): FBotShot

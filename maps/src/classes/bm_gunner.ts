@@ -73,8 +73,9 @@ export const GunnerSettings: FGunnerSettings =
 		Damage: 10,
 		HeadshotMultiplier: 1,
 		Range: 2048,
-		Spread: 5,
+		Spread: 3.5,
 		Pellets: 8,
+		Recoil: { Up: 2, Side: 0, MaxUp: 3, Recovery: 0.66 },
 		bPierces: false,
 		Falloff: TF2HitscanFalloff,
 		Knockback: 250,
@@ -86,6 +87,7 @@ export const GunnerSettings: FGunnerSettings =
 		BeamLifetime: 0.06,
 		ImpactTemplate: "",
 		ImpactLifetime: 0,
+		bBulletHoles: true,
 	},
 
 	HeavyTurret:
@@ -123,6 +125,7 @@ export const GunnerSettings: FGunnerSettings =
 			BeamLifetime: 0.2,
 			ImpactTemplate: "",
 			ImpactLifetime: 0,
+			bBulletHoles: true,
 		},
 	},
 
@@ -161,6 +164,7 @@ export const GunnerSettings: FGunnerSettings =
 			BeamLifetime: 0.05,
 			ImpactTemplate: "",
 			ImpactLifetime: 0,
+			bBulletHoles: true,
 		},
 	},
 };

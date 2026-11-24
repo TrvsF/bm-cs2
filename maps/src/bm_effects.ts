@@ -1,6 +1,6 @@
 import { Instance, Console, Entities } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPrecache, PointTemplate, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, UpVector, FindPointTemplate, GetChestPosition, GetPlayerSlot, SetTimer, DrawDebugLine } from "./bm_core";
+import { TickInterval, LogPrefix, VectorMath, UpVector, FindPointTemplate, GetChestPosition, GetPlayerSlot, SetTimer, DrawDebugLine, GetOrCreate } from "./bm_core";
 import type { FVector, FRotator, FColor } from "./bm_core";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
@@ -27,6 +27,7 @@ export interface FHeldBeam
 
 const ScorchTemplateName: string = "scorch_template";
 const BloodTemplateName: string = "blood_template";
+const BulletHoleTemplateName: string = "bullet_hole_template";
 const MaxDecals: number = 48;
 const ScorchSearchDistance: number = 16;
 const BloodSplatterDistance: number = 128;
@@ -37,7 +38,7 @@ const GibFlingSpeed: number = 450;
 const RefiredBeamLifetime: number = 0.15;
 const BeamParticleSuffix: string = "_fx";
 const BeamFxLingerTime: number = 1;
-// Sound files loaded up front, so the first play doesn't stall. Add new ones here
+
 const SoundFiles: readonly string[] = [
 	"sounds/bm/shrinker_shrink.vsnd",
 	"sounds/bm/shrinker_grow.vsnd",
@@ -45,19 +46,16 @@ const SoundFiles: readonly string[] = [
 	"sounds/bm/turret_lock.vsnd",
 ];
 const SoundEntityClass: string = "point_soundevent";
-// One point_soundevent, no sound set and not started on spawn; the code picks the sound and starts it
 const SoundTemplateName: string = "bm_sound_template";
 const SpawnTestClasses: readonly string[] = ["point_soundevent", "info_target", "logic_relay", "info_particle_system", "prop_dynamic", "point_template"];
-// One-shot sounds clear up when they finish; this is only a backstop in case one never says so
 const OneShotSoundLifetime: number = 30;
 const StoppedSoundLifetime: number = 0.5;
-// A sound follows its source entity, found by name, so players without one are given this plus their slot
 const SoundSourcePrefix: string = "bm_player_";
 
 let GSoundPrecache: CSPrecache | undefined = undefined;
 let GbSoundSpawnFailed: boolean = false;
 
-let GDecals: Entity[][] = [];
+const GDecals: Map<string, Entity[][]> = new Map<string, Entity[][]>();
 
 // Decals //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,6 +66,11 @@ export function SpawnScorchMark(Position: FVector): void
 	{
 		SpawnDecal(ScorchTemplateName, Surface.end, Surface.normal);
 	}
+}
+
+export function SpawnBulletHole(Position: FVector, SurfaceNormal: FVector): void
+{
+	SpawnDecal(BulletHoleTemplateName, Position, SurfaceNormal);
 }
 
 export function SpawnBloodSplatter(ExplosionOrigin: FVector, Victim: CSPlayerPawn): void
@@ -440,11 +443,14 @@ function PlaceHeldBeam(Beam: FHeldBeam, Start: FVector, End: FVector, bTeleport:
 
 export function ClearDecals(): void
 {
-	for (const Decal of GDecals)
+	for (const Placed of GDecals.values())
 	{
-		RemoveEntities(Decal);
+		for (const Decal of Placed)
+		{
+			RemoveEntities(Decal);
+		}
 	}
-	GDecals = [];
+	GDecals.clear();
 }
 
 function SpawnDecal(TemplateName: string, Position: FVector, SurfaceNormal: FVector): void
@@ -462,10 +468,11 @@ function SpawnDecal(TemplateName: string, Position: FVector, SurfaceNormal: FVec
 		return;
 	}
 
-	GDecals.push(Spawned);
-	while (GDecals.length > MaxDecals)
+	const Placed: Entity[][] = GetOrCreate(GDecals, TemplateName, (): Entity[][] => []);
+	Placed.push(Spawned);
+	while (Placed.length > MaxDecals)
 	{
-		const Oldest: Entity[] | undefined = GDecals.shift();
+		const Oldest: Entity[] | undefined = Placed.shift();
 		if (Oldest)
 		{
 			RemoveEntities(Oldest);
