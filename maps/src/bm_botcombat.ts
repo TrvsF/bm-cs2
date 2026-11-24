@@ -249,13 +249,6 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 	Fighter.LastTickTime = Now;
 	GBotClassInputs = 0;
 
-	if (GameRules.IsFreezePeriod())
-	{
-		// Nothing to do yet: its hands are left alone, so it doesn't keep swapping weapons with the game's AI
-		IdleBot(Pawn, Slot, Fighter, Weapons);
-		return;
-	}
-
 	if (TickBotJump(Pawn, Slot, Now, Definition, Fighter))
 	{
 		return;
@@ -380,7 +373,6 @@ function StartBotJump(Pawn: CSPlayerPawn, Now: number, Definition: PlayerClass<F
 	Pawn.Teleport({ velocity: { x: Velocity.x, y: Velocity.y, z: BotCombatSettings.JumpSpeed } });
 }
 
-// Mid-jump: fires down and behind, so the blast or the recoil throws it up and onwards. Its real view isn't turned.
 function TickBotJump(Pawn: CSPlayerPawn, Slot: number, Now: number, Definition: PlayerClass<FClassSettings>, Fighter: FBotFighter): boolean
 {
 	if (Now >= Fighter.JumpUntil)
@@ -430,8 +422,6 @@ function TickBotStab(Pawn: CSPlayerPawn, Slot: number, Now: number, Fighter: FBo
 	ControlBot(Slot, 0, Knife, Aim);
 	return true;
 }
-
-// Nothing worth shooting or building: it counts as holding its gun, but the game's AI is left to what is really in its hands
 function IdleBot(Pawn: CSPlayerPawn, Slot: number, Fighter: FBotFighter, Weapons: string[]): void
 {
 	const WeaponName: string | undefined = Fighter.WeaponName ?? Weapons[0];

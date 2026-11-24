@@ -2,7 +2,7 @@ import { Instance, Console } from "cs_script/point_script";
 import type { CSPlayerPawn, TraceResult } from "cs_script/point_script";
 import { LogPrefix, VectorMath, GetPawnName, GetTeamColor, IsPlayerPawn, IsTeammate, GetChestPosition, ForEachLivePawn } from "../bm_core";
 import type { FVector } from "../bm_core";
-import { LaunchProjectile, MoveProjectile, EmbedProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, MakeShootable, Explode, SetProjectileLit, IsBlinkOn } from "../bm_combat";
+import { LaunchProjectile, MoveProjectile, SinkProjectile, IsProjectileExpired, DrawMissingProjectile, DestroyProjectile, DestroyProjectiles, MakeShootable, Explode, SetProjectileLit, IsBlinkOn } from "../bm_combat";
 import type { FProjectile } from "../bm_combat";
 import { GetTraceBuilding } from "../bm_buildings";
 import { PlayerClass, FireHitscanWeapon, GetHitscanBotShot, GetProjectileBotShot } from "../bm_classes";
@@ -22,6 +22,7 @@ export interface FShockerSettings extends FClassSettings
 	readonly BallLifetime: number;
 	readonly BallStuckLifetime: number;
 	readonly BallStickDepth: number;
+	readonly BallStickMaxDistance: number;
 	readonly BallStuckHitRadius: number;
 	readonly BallWeight: number;
 	readonly BallKnockedGravityScale: number;
@@ -102,7 +103,8 @@ export const ShockerSettings: FShockerSettings =
 	BallKnockback: 500,
 	BallLifetime: 5,
 	BallStuckLifetime: 6,
-	BallStickDepth: -16,
+	BallStickDepth: 16,
+	BallStickMaxDistance: 128,
 	BallStuckHitRadius: 16,
 	BallWeight: 0.5,
 	BallKnockedGravityScale: 1,
@@ -120,7 +122,6 @@ const ShockBallTemplateName: string = "shock_ball_template";
 
 // Shocker /////////////////////////////////////////////////////////////////////////////////////////
 
-// A bot sets off the combo once an enemy is within this much of its blast radius
 const BotComboTriggerScale: number = 0.6;
 
 export class ShockerClass extends PlayerClass<FShockerSettings>
@@ -233,7 +234,7 @@ export class ShockerClass extends PlayerClass<FShockerSettings>
 		}
 		if (!GetTraceBuilding(Hit) && (Hit.hitEntity === undefined || Hit.hitEntity.IsWorld()))
 		{
-			EmbedProjectile(Ball, Hit, this.Settings.BallStickDepth);
+			SinkProjectile(Ball, Hit, this.Settings.BallStickDepth, this.Settings.BallStickMaxDistance);
 			Ball.StuckAt = Now;
 			return true;
 		}

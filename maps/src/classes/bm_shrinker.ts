@@ -1,10 +1,10 @@
 import { Console, CSInputs, CSDamageTypes, CSDamageFlags } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetOrCreate, IsKnife, IsWeapon, ConsumePress, GetHeldWeapon, ForEachLivePawn, DrawDebugLine } from "../bm_core";
+import { TickInterval, LogPrefix, ZeroVector, VectorMath, GetPawnName, GetTeamColor, GetColorForTeam, GetOrCreate, IsKnife, IsWeapon, ConsumePress, GetHeldWeapon, ForEachLivePawn, LightEntities, DrawDebugLine } from "../bm_core";
 import type { FVector, FColor, FHeldInputs } from "../bm_core";
 import { Explode, SpawnExplosionFx } from "../bm_combat";
 import { SpawnTemporaryTemplate, PlaySoundOn } from "../bm_effects";
-import { BuildingKind, EBotBuildSite, FindOwnedBuilding, IsBuildingEnemy, IsStandingOn, GetBuildingCenter, TickBuildTool, CancelPlacement, RemoveBuilding, DestroyBuilding } from "../bm_buildings";
+import { BuildingKind, EBotBuildSite, FindOwnedBuilding, IsBuildingEnemy, IsStandingOn, GetBuildingCenter, GetBuildingEntities, TickBuildTool, CancelPlacement, RemoveBuilding, DestroyBuilding } from "../bm_buildings";
 import type { FBuilding, FBuildingSettings, FBuildKeys } from "../bm_buildings";
 import { PlayerClass } from "../bm_classes";
 import type { FClassSettings, FHudCounter } from "../bm_classes";
@@ -42,7 +42,6 @@ export interface FShrinkerSettings extends FClassSettings
 	readonly ShrunkDuration: number;
 	readonly RechargeTime: number;
 	readonly MinShrinkCharge: number;
-	// Sound events, played as the shrink or grow starts
 	readonly ShrinkSound: string;
 	readonly GrowSound: string;
 	readonly Trap: FTrapSettings;
@@ -58,6 +57,7 @@ interface FTrapState
 interface FTeleporterState
 {
 	ReadyAt: number;
+	bLightOn: boolean;
 }
 
 interface FShrinkerPlayerState
@@ -272,7 +272,7 @@ export class TeleporterKind extends BuildingKind<FTeleporterSettings>
 
 	public override OnPlaced(Building: FBuilding, Now: number): void
 	{
-		this.States.set(Building, { ReadyAt: Now });
+		this.States.set(Building, { ReadyAt: Now, bLightOn: false });
 	}
 
 	public override OnRemoved(Building: FBuilding): void
@@ -293,6 +293,10 @@ export class TeleporterKind extends BuildingKind<FTeleporterSettings>
 	{
 		const Exit: FBuilding | undefined = this.FindPartner(Building);
 		const State: FTeleporterState | undefined = this.States.get(Building);
+		if (this.bEntrance && State)
+		{
+			this.SetLit(Building, State, Exit !== undefined && Now >= State.ReadyAt);
+		}
 		if (!this.bEntrance || !Exit || !State)
 		{
 			return;
@@ -324,7 +328,16 @@ export class TeleporterKind extends BuildingKind<FTeleporterSettings>
 		return this.IsRecharging(Building, Now) ? "Recharging" : "Ready";
 	}
 
-	// Both ends count as recharging after a trip, since the wait is kept on the entrance
+	private SetLit(Building: FBuilding, State: FTeleporterState, bLit: boolean): void
+	{
+		if (bLit === State.bLightOn)
+		{
+			return;
+		}
+		State.bLightOn = bLit;
+		LightEntities(GetBuildingEntities(Building), bLit ? GetColorForTeam(Building.Team) : undefined);
+	}
+
 	private IsRecharging(Building: FBuilding, Now: number): boolean
 	{
 		const Entrance: FBuilding | undefined = this.bEntrance ? Building : this.FindPartner(Building);

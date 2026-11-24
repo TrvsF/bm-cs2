@@ -379,6 +379,26 @@ export function SpawnTemplateEntities(TemplateName: string, Position: FVector, R
 	return Spawned ?? [];
 }
 
+export function LightEntities(Ents: readonly Entity[], Color: FColor | undefined): void
+{
+	for (const Ent of Ents)
+	{
+		if (!Ent.IsValid() || !Ent.GetClassName().startsWith("light_"))
+		{
+			continue;
+		}
+		if (Color)
+		{
+			Ent.FireInput({ input: "SetColor", value: `${Color.r} ${Color.g} ${Color.b}` });
+			Ent.FireInput({ input: "Enable" });
+		}
+		else
+		{
+			Ent.FireInput({ input: "Disable" });
+		}
+	}
+}
+
 export function IsModelEntity(Ent: Entity): Ent is BaseModelEntity
 {
 	return "SetModelScale" in Ent && typeof Ent.SetModelScale === "function";
