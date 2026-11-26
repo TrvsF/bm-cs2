@@ -2,7 +2,7 @@ import { Instance, Console, CSDamageTypes } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, TraceResult, BaseTraceConfig } from "cs_script/point_script";
 import { TickInterval, LogPrefix, UpVector, ZeroVector, VectorMath, RotationMath, IsPlayerPawn, IsModelEntity, IsTeammate, GetPawnName, GetTeamColor, GetChestPosition, GetAimAngles, SpawnTemplateEntities, ForEachLivePawn, DrawDebugBox, DrawDebugSphere } from "./bm_core";
 import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
-import { SpawnScorchMark, SpawnBloodSplatter, SpawnTemporaryTemplate } from "./bm_effects";
+import { SpawnScorchMark, SpawnBloodSplatter, SpawnBloodHit, SpawnTemporaryTemplate } from "./bm_effects";
 import { GetOwnedBuildingEntities, FindBuildingOnLine, ClipTraceToBuildings, GetTraceBuilding, DamageBuildingsInRadius, IntersectSegmentBox } from "./bm_buildings";
 import type { FBuilding, FBuildingHit, FBoxHit } from "./bm_buildings";
 
@@ -657,6 +657,7 @@ export function Explode(Position: FVector, Attacker: CSPlayerPawn, Radius: numbe
 		if (!bIsSelf && DamageDealt > 0)
 		{
 			DamageTotal += DamageDealt;
+			SpawnBloodHit(GetChestPosition(Victim), Origin);
 			SpawnBloodSplatter(Origin, Victim);
 		}
 

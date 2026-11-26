@@ -639,14 +639,14 @@
 .ReloadBar .BarFill
 {
 	height: 4px;
-	font-size: 1.75px;
+	font-size: 2.5px;
 	background-color: #f0d080;
 }
 
 .ReloadBar .BarEmpty
 {
 	height: 4px;
-	font-size: 1.75px;
+	font-size: 2.5px;
 	background-color: #ffffff30;
 }
 

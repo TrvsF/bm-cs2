@@ -249,6 +249,12 @@ export function TickBotCombat(Pawn: CSPlayerPawn, Slot: number, Now: number, Def
 	Fighter.LastTickTime = Now;
 	GBotClassInputs = 0;
 
+	if (GameRules.IsFreezePeriod())
+	{
+		IdleBot(Pawn, Slot, Fighter, Weapons);
+		return;
+	}
+
 	if (TickBotJump(Pawn, Slot, Now, Definition, Fighter))
 	{
 		return;
@@ -428,8 +434,6 @@ function IdleBot(Pawn: CSPlayerPawn, Slot: number, Fighter: FBotFighter, Weapons
 	ControlBot(Slot, 0, WeaponName !== undefined ? Pawn.FindWeapon(WeaponName) : undefined, Pawn.GetEyeAngles());
 }
 
-// Gets a bot with nobody to fight walking: to the mode's objective when it's looking after that, otherwise
-// (once it has hung about one spot, or always for an aggressive one) towards the nearest enemy
 function RoamBot(Pawn: CSPlayerPawn, Now: number, Fighter: FBotFighter, Personality: FBotPersonality, Objective: FBotObjective | undefined): void
 {
 	const Origin: FVector = Pawn.GetAbsOrigin();

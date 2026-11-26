@@ -1,10 +1,10 @@
 import { Instance, Console, CSGearSlot, CSDamageTypes, CSDamageFlags, CSHitGroup } from "cs_script/point_script";
 import type { CSPlayerPawn, CSWeaponBase } from "cs_script/point_script";
-import { LogPrefix, VectorMath, GetTeamColor, GetPlayerSlot, GetOrCreate, GetAimAngles, IsWeapon, IsKnife } from "./bm_core";
+import { LogPrefix, VectorMath, GetTeamColor, GetPlayerSlot, GetOrCreate, GetAimAngles, GetChestPosition, IsWeapon, IsKnife } from "./bm_core";
 import type { FVector, FRotator, FColor, FModifyDamageEvent, FModifyDamageResult } from "./bm_core";
 import { EvaluateDamageCurve, TraceHitscan, GetSpreadDirection, GetRingDirection, ApplyKnockback } from "./bm_combat";
 import type { FDamageFalloff, FDamageCurve, FHitscanHit, FHitscanResult, FBallistics } from "./bm_combat";
-import { SpawnBloodSplatter, SpawnBulletHole, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
+import { SpawnBloodSplatter, SpawnBloodHit, SpawnBulletHole, SpawnBeam, SpawnTemporaryTemplate } from "./bm_effects";
 import { EquipLauncher } from "./bm_launcher";
 import { DamageBuilding } from "./bm_buildings";
 import type { FBuildKeys } from "./bm_buildings";
@@ -511,7 +511,7 @@ export function FireHitscan(Attacker: CSPlayerPawn, Settings: FHitscanWeaponSett
 			const Damage: number = Settings.Damage * RangeScale * (bHeadshot ? Settings.HeadshotMultiplier : 1);
 
 			ApplyKnockback(Hit.Victim, Direction, Damage, Settings.Knockback, false);
-			const DamageDealt: number = DealShockDamage(Attacker, Hit.Victim, Damage, Weapon);
+			const DamageDealt: number = DealShockDamage(Attacker, Hit.Victim, Damage, Weapon, Hit.Trace.end, Start);
 			DamageTotal += DamageDealt;
 			if (DamageDealt > 0 && Settings.bBloodSplatter)
 			{
@@ -591,9 +591,9 @@ function GetHitDistance(Hit: FHitscanHit, Start: FVector): number
 	return VectorMath.Size(VectorMath.Subtract(Hit.Trace.end, Start));
 }
 
-export function DealShockDamage(Shooter: CSPlayerPawn, Victim: CSPlayerPawn, Damage: number, Weapon: CSWeaponBase | undefined): number
+export function DealShockDamage(Shooter: CSPlayerPawn, Victim: CSPlayerPawn, Damage: number, Weapon: CSWeaponBase | undefined, HitPosition: FVector = GetChestPosition(Victim), From: FVector = Shooter.GetEyePosition()): number
 {
-	return Victim.TakeDamage(
+	const DamageDealt: number = Victim.TakeDamage(
 	{
 		damage: Damage,
 		damageTypes: CSDamageTypes.SHOCK,
@@ -602,6 +602,11 @@ export function DealShockDamage(Shooter: CSPlayerPawn, Victim: CSPlayerPawn, Dam
 		inflictor: Shooter,
 		weapon: Weapon,
 	});
+	if (DamageDealt > 0)
+	{
+		SpawnBloodHit(HitPosition, From);
+	}
+	return DamageDealt;
 }
 
 // Common //////////////////////////////////////////////////////////////////////////////////////////

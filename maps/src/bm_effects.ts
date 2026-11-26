@@ -1,7 +1,7 @@
 import { Instance, Console, Entities } from "cs_script/point_script";
 import type { Entity, CSPlayerPawn, CSPrecache, PointTemplate, TraceResult } from "cs_script/point_script";
-import { TickInterval, LogPrefix, VectorMath, UpVector, FindPointTemplate, GetChestPosition, GetPlayerSlot, SetTimer, DrawDebugLine, GetOrCreate } from "./bm_core";
-import type { FVector, FRotator, FColor } from "./bm_core";
+import { TickInterval, LogPrefix, VectorMath, RotationMath, UpVector, FindPointTemplate, GetChestPosition, GetPlayerSlot, SetTimer, DrawDebugLine, GetOrCreate } from "./bm_core";
+import type { FVector, FRotator, FRotationMatrix, FColor } from "./bm_core";
 
 // Types ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,6 +27,8 @@ export interface FHeldBeam
 
 const ScorchTemplateName: string = "scorch_template";
 const BloodTemplateName: string = "blood_template";
+const BloodHitTemplateName: string = "blood_hit_template";
+const BloodHitLifetime: number = 3;
 const BulletHoleTemplateName: string = "bullet_hole_template";
 const MaxDecals: number = 48;
 const ScorchSearchDistance: number = 16;
@@ -103,6 +105,11 @@ export function SpawnBloodSplatter(ExplosionOrigin: FVector, Victim: CSPlayerPaw
 
 // Gibs ////////////////////////////////////////////////////////////////////////////////////////////
 
+export function SpawnBloodHit(Position: FVector, From: FVector): void
+{
+	SpawnTemporaryTemplate(BloodHitTemplateName, Position, BloodHitLifetime, VectorMath.GetRotation(VectorMath.Subtract(From, Position)));
+}
+
 export function SpawnGibs(Victim: CSPlayerPawn): void
 {
 	const Chest: FVector = GetChestPosition(Victim);
@@ -123,14 +130,14 @@ export function SpawnGibs(Victim: CSPlayerPawn): void
 
 // Effects /////////////////////////////////////////////////////////////////////////////////////////
 
-export function SpawnTemporaryTemplate(TemplateName: string, Position: FVector, Lifetime: number): Entity[] | undefined
+export function SpawnTemporaryTemplate(TemplateName: string, Position: FVector, Lifetime: number, Rotation?: FRotator): Entity[] | undefined
 {
 	const Template: PointTemplate | undefined = FindPointTemplate(TemplateName);
 	if (!Template)
 	{
 		return undefined;
 	}
-	const Spawned: Entity[] | undefined = Template.ForceSpawn(Position);
+	const Spawned: Entity[] | undefined = Template.ForceSpawn(Position, Rotation);
 	if (Spawned && Spawned.length > 0)
 	{
 		SetTimer(Lifetime, (): void =>
@@ -461,7 +468,9 @@ function SpawnDecal(TemplateName: string, Position: FVector, SurfaceNormal: FVec
 		return;
 	}
 
-	const Rotation: FRotator = VectorMath.GetRotation(VectorMath.Scale(SurfaceNormal, -1), Math.random() * 360);
+	// env_decal projects down its up axis
+	const Facing: FRotationMatrix = RotationMath.FromRotator(VectorMath.GetRotation(SurfaceNormal, Math.random() * 360));
+	const Rotation: FRotator = RotationMath.ToRotator({ Forward: VectorMath.Scale(Facing.Up, -1), Left: Facing.Left, Up: Facing.Forward });
 	const Spawned: Entity[] | undefined = Template.ForceSpawn(Position, Rotation);
 	if (!Spawned || Spawned.length === 0)
 	{

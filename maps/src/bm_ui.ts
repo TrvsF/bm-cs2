@@ -60,6 +60,7 @@ const ChargeBarId: string = "ChargeBar";
 const ChargeBarDelay: number = 0.05;
 const ReloadBarId: string = "ReloadBar";
 const BarSteps: number = 96;
+const ReloadBarSteps: number = 67;
 const BarCharacter: string = "0";
 const HiddenBar: number = -1;
 const PayloadBarId: string = "PayloadBar";
@@ -251,7 +252,7 @@ export function ShowClassIndicator(Slot: number, PlayerClass: EPlayerClass, IsT:
 export function ShowAmmo(Slot: number, Ammo: FLauncherAmmo | undefined): void
 {
 	ShowBar(Slot, ChargeBarId, Ammo && Ammo.ChargeHeld >= ChargeBarDelay ? Ammo.ChargeFraction : undefined);
-	ShowBar(Slot, ReloadBarId, Ammo && Ammo.bReloading ? Ammo.ReloadFraction : undefined);
+	ShowBar(Slot, ReloadBarId, Ammo && Ammo.bReloading ? Ammo.ReloadFraction : undefined, ReloadBarSteps);
 
 	const Key: string = Ammo ? `${Ammo.Clip}|${Ammo.MaxClip}|${Ammo.bReloading}` : "";
 	if ((GShownAmmo.get(Slot) ?? "") === Key)
@@ -277,12 +278,9 @@ export function ShowAmmo(Slot: number, Ammo: FLauncherAmmo | undefined): void
 	Ui.SetHasClassForPlayer(Slot, AmmoPanelId, "Shown", true);
 }
 
-// The HUD can't be given a width, only text, so a bar is two labels side by side: <Id>Fill holding the filled part
-// and <Id>Empty the rest, each a run of BarCharacter. CSS hides the characters and colours the labels' backgrounds,
-// so the fill's width comes straight from Fraction. undefined hides the bar.
-function ShowBar(Slot: number, BarId: string, Fraction: number | undefined): void
+function ShowBar(Slot: number, BarId: string, Fraction: number | undefined, MaxSteps: number = BarSteps): void
 {
-	const Steps: number = Fraction === undefined ? HiddenBar : Math.floor(Math.min(1, Math.max(0, Fraction)) * BarSteps);
+	const Steps: number = Fraction === undefined ? HiddenBar : Math.floor(Math.min(1, Math.max(0, Fraction)) * MaxSteps);
 	let ShownBars: Map<string, number> | undefined = GShownBars.get(Slot);
 	if (!ShownBars)
 	{
@@ -307,7 +305,7 @@ function ShowBar(Slot: number, BarId: string, Fraction: number | undefined): voi
 		return;
 	}
 	Ui.SetDialogVariableStringForPlayer(Slot, `${BarId}Fill`, "fill", BarCharacter.repeat(Steps));
-	Ui.SetDialogVariableStringForPlayer(Slot, `${BarId}Empty`, "empty", BarCharacter.repeat(BarSteps - Steps));
+	Ui.SetDialogVariableStringForPlayer(Slot, `${BarId}Empty`, "empty", BarCharacter.repeat(MaxSteps - Steps));
 	if (LastSteps === HiddenBar)
 	{
 		Ui.SetHasClassForPlayer(Slot, BarId, "Shown", true);
