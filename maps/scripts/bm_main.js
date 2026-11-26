@@ -793,6 +793,7 @@ var PlacementGravity = 800;
 var PlacementStepTime = 1 / 32;
 var MaxPlacementSteps = 96;
 var MaxPlacementSlopeDegrees = 45;
+var MaxPlacementZOffset = 128;
 var MinGroundNormalZ = Math.cos(MaxPlacementSlopeDegrees * Math.PI / 180);
 var PlacementLift = 2;
 var PickUpRange = 150;
@@ -1199,7 +1200,7 @@ function UpdatePlacementSpot(Placement) {
   Placement.Path = Path;
   Placement.Position = Ground ? Ground.end : Position;
   Placement.Yaw = Aim.yaw;
-  Placement.bValid = Ground !== void 0 && HasRoom(Ground.end, Ground.normal, Settings, GetModelEntities(Placement.Preview)) && !OverlapsBuilding(Ground.end, Settings);
+  Placement.bValid = Ground !== void 0 && Math.abs(Owner.GetAbsOrigin().z - Ground.end.z) <= MaxPlacementZOffset && HasRoom(Ground.end, Ground.normal, Settings, GetModelEntities(Placement.Preview)) && !OverlapsBuilding(Ground.end, Settings);
 }
 function HasRoom(Position, GroundNormal, Settings, Ignored) {
   const SlopeRise = Settings.HalfWidth * Math.SQRT2 * Math.sqrt(Math.max(0, 1 - GroundNormal.z * GroundNormal.z)) / Math.max(0.01, GroundNormal.z);
@@ -2828,7 +2829,7 @@ var MedicSettings = {
   BoltHeal: 150,
   BoltRampUp: CrossbowRampUp,
   BoltLifetime: 5,
-  BoltStickTime: 3,
+  BoltStickTime: 15,
   Range: 450,
   BreakRange: 540,
   HealPerSec: 24,
@@ -3547,7 +3548,7 @@ var ShockerSettings = {
   BallKnockback: 500,
   BallLifetime: 5,
   BallStuckLifetime: 6,
-  BallStickDepth: 16,
+  BallStickDepth: 8,
   BallStickMaxDistance: 128,
   BallStuckHitRadius: 16,
   BallWeight: 0.5,

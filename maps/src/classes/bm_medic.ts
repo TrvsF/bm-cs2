@@ -84,7 +84,7 @@ export const MedicSettings: FMedicSettings =
 	BoltHeal: 150,
 	BoltRampUp: CrossbowRampUp,
 	BoltLifetime: 5,
-	BoltStickTime: 3,
+	BoltStickTime: 15,
 
 	Range: 450,
 	BreakRange: 540,

@@ -175,6 +175,7 @@ const PlacementGravity: number = 800;
 const PlacementStepTime: number = 1 / 32;
 const MaxPlacementSteps: number = 96;
 const MaxPlacementSlopeDegrees: number = 45;
+const MaxPlacementZOffset: number = 128;
 const MinGroundNormalZ: number = Math.cos((MaxPlacementSlopeDegrees * Math.PI) / 180);
 const PlacementLift: number = 2;
 const PickUpRange: number = 150;
@@ -735,11 +736,10 @@ function UpdatePlacementSpot(Placement: FPlacement): void
 	Placement.Path = Path;
 	Placement.Position = Ground ? Ground.end : Position;
 	Placement.Yaw = Aim.yaw;
-	Placement.bValid = Ground !== undefined && HasRoom(Ground.end, Ground.normal, Settings, GetModelEntities(Placement.Preview)) && !OverlapsBuilding(Ground.end, Settings);
+	Placement.bValid = Ground !== undefined && Math.abs(Owner.GetAbsOrigin().z - Ground.end.z) <= MaxPlacementZOffset
+		&& HasRoom(Ground.end, Ground.normal, Settings, GetModelEntities(Placement.Preview)) && !OverlapsBuilding(Ground.end, Settings);
 }
 
-// The box above the ground has to be clear of the world and players. On a slope only the part above the
-// uphill corner is checked, since the ground itself fills the rest.
 function HasRoom(Position: FVector, GroundNormal: FVector, Settings: FBuildingSettings, Ignored: Entity[]): boolean
 {
 	const SlopeRise: number = (Settings.HalfWidth * Math.SQRT2 * Math.sqrt(Math.max(0, 1 - GroundNormal.z * GroundNormal.z))) / Math.max(0.01, GroundNormal.z);

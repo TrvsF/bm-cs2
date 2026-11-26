@@ -103,7 +103,7 @@ export const ShockerSettings: FShockerSettings =
 	BallKnockback: 500,
 	BallLifetime: 5,
 	BallStuckLifetime: 6,
-	BallStickDepth: 16,
+	BallStickDepth: 8,
 	BallStickMaxDistance: 128,
 	BallStuckHitRadius: 16,
 	BallWeight: 0.5,
